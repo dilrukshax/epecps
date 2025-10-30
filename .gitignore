@@ -1,125 +1,27 @@
-# .NET Core
-bin/
-obj/
-*.user
-*.suo
-*.cache
-*.dll
-*.pdb
-*.exe
-*.log
-*.vspscc
-*.vssscc
-*.sln.docstates
-*.userprefs
-*.pidb
-*.testlog
-*.swp
-*~
-*.bak
-*.orig
-*.DotSettings.user
-
-# Visual Studio
+# --- Visual Studio / .NET ---
 .vs/
-*.suo
+**/bin/
+**/obj/
 *.user
-*.userosscache
-*.sln.docstates
-.vscode/
-.idea/
+*.rsuser
+*.suo
+*.userprefs
+# Optional: if you generate publish profiles
+*.pubxml
+*.publishproj
 
-# Build results
-[Dd]ebug/
-[Dd]ebugPublic/
-[Rr]elease/
-[Rr]eleases/
-x64/
-x86/
-build/
-bld/
-[Bb]in/
-[Oo]bj/
-msbuild.log
-msbuild.err
-msbuild.wrn
+# --- ASP.NET Core ---
+# Ignore local secrets & local-only configs
+appsettings.*.Development.json
 
-# NuGet Packages
-*.nupkg
-**/packages/*
-!**/packages/build/
-*.nuget.props
-*.nuget.targets
-project.lock.json
-project.fragment.lock.json
-artifacts/
-
-# Node (Angular/Frontend)
-node_modules/
-npm-debug.log
-yarn-error.log
-package-lock.json
-yarn.lock
-
-# Angular
-/frontend/epecps-web/dist
-/frontend/epecps-web/tmp
-/frontend/epecps-web/out-tsc
-/frontend/epecps-web/bazel-out
-/frontend/epecps-web/.angular/cache
-/frontend/epecps-web/.sass-cache/
-/frontend/epecps-web/connect.lock
-/frontend/epecps-web/coverage
-/frontend/epecps-web/libpeerconnection.log
-/frontend/epecps-web/testem.log
-/frontend/epecps-web/typings
-/frontend/epecps-web/__screenshots__/
-
-# IDEs and editors
-.idea/
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-.history/*
-
-# System files
-.DS_Store
-Thumbs.db
-*.swp
-*~
-.AppleDouble
-.LSOverride
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Environment files
-.env
-.env.local
-.env.*.local
-appsettings.Development.json
-appsettings.*.json
-!appsettings.json
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Misc
-*.pfx
-*.p12
-*.key
-*.cert
+# --- Angular / Node (epecps-web) ---
+/epecps-web/node_modules/
+/epecps-web/dist/
+/epecps-web/.angular/
+/epecps-web/.npm/
+epecps-web/npm-debug.log*
+epecps-web/yarn-error.log*
+# env files (keep an example)
+epecps-web/.env
+epecps-web/.env.* 
+!epecps-web/.env.example
