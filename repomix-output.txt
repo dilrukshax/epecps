@@ -112,6 +112,37 @@ Files
 ================================================================
 
 ================
+File: .gitattributes
+================
+* text=auto
+# Treat common text files as text
+*.cs   text
+*.ts   text
+*.html text
+*.css  text
+*.json text
+*.sln  text eol=crlf
+# Scripts
+*.sh   text eol=lf
+*.bat  text eol=crlf
+# Binary assets
+*.png binary
+*.jpg binary
+*.pdf binary
+
+================
+File: backend/Epecps.Api/appsettings.Development.json
+================
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
+
+================
 File: backend/Epecps.Api/Controllers/AuthController.cs
 ================
 using Microsoft.AspNetCore.Authorization;
@@ -169,55 +200,6 @@ public class ReviewsController : ControllerBase
 }
 
 ================
-File: .gitattributes
-================
-* text=auto
-# Treat common text files as text
-*.cs   text
-*.ts   text
-*.html text
-*.css  text
-*.json text
-*.sln  text eol=crlf
-# Scripts
-*.sh   text eol=lf
-*.bat  text eol=crlf
-# Binary assets
-*.png binary
-*.jpg binary
-*.pdf binary
-
-================
-File: backend/Epecps.Api/appsettings.Development.json
-================
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  }
-}
-
-================
-File: backend/Epecps.Api/appsettings.json
-================
-{
-  "AzureAd": {
-    "Instance": "https://login.microsoftonline.com/",
-    "TenantId": "2ecda83d-4ae0-41c7-aeef-0c37c3be6826",
-    "ClientId": "4ee96651-bdc5-40c6-a64a-49d53002ce9e",
-    "AppIdUri": "api://4ee96651-bdc5-40c6-a64a-49d53002ce9e",
-    "ValidIssuers": [
-      "https://login.microsoftonline.com/TENANT_ID_REPLACE_ME/v2.0",
-      "https://sts.windows.net/TENANT_ID_REPLACE_ME/"
-    ],
-    "Scopes": "Epecps.ReadWrite"
-  },
-  "AllowedHosts": "*"
-}
-
-================
 File: backend/Epecps.Api/Controllers/WeatherForecastController.cs
 ================
 using Microsoft.AspNetCore.Mvc;
@@ -255,29 +237,6 @@ namespace Epecps.Api.Controllers
 }
 
 ================
-File: backend/Epecps.Api/Epecps.Api.csproj
-================
-<Project Sdk="Microsoft.NET.Sdk.Web">
-
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Identity.Web" Version="4.0.1" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Epecps.Application\Epecps.Application.csproj" />
-    <ProjectReference Include="..\Epecps.Infrastructure\Epecps.Infrastructure.csproj" />
-  </ItemGroup>
-
-</Project>
-
-================
 File: backend/Epecps.Api/Epecps.Api.http
 ================
 @Epecps.Api_HostAddress = http://localhost:5019
@@ -286,92 +245,6 @@ GET {{Epecps.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
-
-================
-File: backend/Epecps.Api/Program.cs
-================
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.Identity.Web;
-using Microsoft.Identity.Web.Resource;
-
-var builder = WebApplication.CreateBuilder(args);
-var services = builder.Services;
-var config = builder.Configuration;
-
-builder.Logging.AddConsole();
-
-// CORS for Angular dev on 64291
-services.AddCors(opt =>
-{
-    opt.AddPolicy("SpaDev", p =>
-        p.WithOrigins("http://127.0.0.1:64291", "http://localhost:64291")
-         .AllowAnyHeader()
-         .AllowAnyMethod());
-});
-
-// Microsoft Entra ID (Azure AD) protection for this API
-services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddMicrosoftIdentityWebApi(
-        jwtOptions =>
-        {
-            // default scheme; nothing special
-        },
-        identityOptions =>
-        {
-            identityOptions.Instance = config["AzureAd:Instance"] ?? "";
-            identityOptions.TenantId = config["AzureAd:TenantId"] ?? "";
-            identityOptions.ClientId = config["AzureAd:ClientId"] ?? "";   // the API app's client id
-            // Note: Audience validation is handled automatically by Microsoft.Identity.Web
-            // using the ClientId. If you need custom audience validation, configure it via TokenValidationParameters
-        },
-        // Configuration section name (optional if you set above)
-        "AzureAd");
-
-// Make "roles" work with [Authorize(Roles="Admin")]
-services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
-{
-    options.TokenValidationParameters.RoleClaimType = "roles";     // Entra v2 places app roles in "roles"
-    options.TokenValidationParameters.NameClaimType = "name";
-});
-
-services.AddAuthorization(options =>
-{
-    // Policy to require the Epecps.ReadWrite scope (from OAuth)
-    options.AddPolicy("RequireEpecpsScope", policy =>
-        policy.Requirements.Add(new ScopeAuthorizationRequirement()
-        {
-            RequiredScopesConfigurationKey = "AzureAd:Scopes"
-        }));
-
-    // Optional: Role-based policies (require app roles created in API app registration)
-    options.AddPolicy("RequireRM", p => p.RequireRole("RM"));
-    options.AddPolicy("RequireHOD", p => p.RequireRole("HOD"));
-    // add the rest as needed...
-});
-
-services.AddControllers();
-services.AddEndpointsApiExplorer();
-services.AddSwaggerGen();
-
-var app = builder.Build();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-app.UseHttpsRedirection();
-app.UseCors("SpaDev");
-
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
 
 ================
 File: backend/Epecps.Api/Properties/launchSettings.json
@@ -1976,6 +1849,176 @@ epecps-web/yarn-error.log*
 epecps-web/.env
 epecps-web/.env.* 
 !epecps-web/.env.example
+
+================
+File: backend/Epecps.Api/appsettings.json
+================
+{
+  "AzureAd": {
+    "Instance": "https://login.microsoftonline.com/",
+    "TenantId": "2ecda83d-4ae0-41c7-aeef-0c37c3be6826",
+    "ClientId": "4ee96651-bdc5-40c6-a64a-49d53002ce9e",
+    "AppIdUri": "api://4ee96651-bdc5-40c6-a64a-49d53002ce9e",
+    "ValidIssuers": [
+      "https://login.microsoftonline.com/TENANT_ID_REPLACE_ME/v2.0",
+      "https://sts.windows.net/TENANT_ID_REPLACE_ME/"
+    ],
+    "Scopes": "Epecps.ReadWrite"
+  },
+  "AllowedHosts": "*"
+}
+
+================
+File: backend/Epecps.Api/Epecps.Api.csproj
+================
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Identity.Web" Version="4.0.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Epecps.Application\Epecps.Application.csproj" />
+    <ProjectReference Include="..\Epecps.Infrastructure\Epecps.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
+
+================
+File: backend/Epecps.Api/Program.cs
+================
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.Resource;
+using Microsoft.OpenApi.Models;
+
+var builder = WebApplication.CreateBuilder(args);
+var services = builder.Services;
+var config = builder.Configuration;
+
+// CORS for Angular dev on 64291
+services.AddCors(opt =>
+{
+    opt.AddPolicy("SpaDev", p =>
+        p.WithOrigins("http://127.0.0.1:64291", "http://localhost:64291")
+         .AllowAnyHeader()
+         .AllowAnyMethod());
+});
+
+// Microsoft Entra ID (Azure AD) protection for this API
+services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApi(config.GetSection("AzureAd"));
+
+// Make "roles" work with [Authorize(Roles="Admin")]
+services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.TokenValidationParameters.RoleClaimType = "roles";     // Entra v2 places app roles in "roles"
+    options.TokenValidationParameters.NameClaimType = "name";
+});
+
+services.AddAuthorization(options =>
+{
+    // Policy to require the Epecps.ReadWrite scope (from OAuth)
+    options.AddPolicy("RequireEpecpsScope", policy =>
+        policy.Requirements.Add(new ScopeAuthorizationRequirement()
+        {
+            RequiredScopesConfigurationKey = "AzureAd:Scopes"
+        }));
+
+    // Optional: Role-based policies (require app roles created in API app registration)
+    options.AddPolicy("RequireRM", p => p.RequireRole("RM"));
+    options.AddPolicy("RequireHOD", p => p.RequireRole("HOD"));
+    // add the rest as needed...
+});
+
+// ScopeAuthorizationHandler is registered automatically by AddMicrosoftIdentityWebApi
+// No need to register it manually
+
+services.AddControllers();
+services.AddEndpointsApiExplorer();
+
+// Configure Swagger with Azure AD OAuth2
+services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Epecps API",
+        Version = "v1",
+        Description = "Employee Performance Evaluation and Career Progression System API"
+    });
+
+    var tenantId = config["AzureAd:TenantId"];
+    var clientId = config["AzureAd:ClientId"];
+    var appIdUri = config["AzureAd:AppIdUri"];
+    var instance = config["AzureAd:Instance"];
+
+    // Define the OAuth2.0 scheme using Implicit flow (better compatibility with Swagger UI)
+    options.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.OAuth2,
+        Flows = new OpenApiOAuthFlows
+        {
+            Implicit = new OpenApiOAuthFlow
+            {
+                AuthorizationUrl = new Uri($"{instance}{tenantId}/oauth2/v2.0/authorize"),
+                Scopes = new Dictionary<string, string>
+                {
+                    { $"{appIdUri}/Epecps.ReadWrite", "Access the Epecps API" }
+                }
+            }
+        },
+        Description = "Azure AD OAuth2 Authentication"
+    });
+
+    // Make sure Swagger UI requires a Bearer token to be specified
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "oauth2"
+                }
+            },
+            new[] { $"{appIdUri}/Epecps.ReadWrite" }
+        }
+    });
+});
+
+var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Epecps API v1");
+        options.OAuthClientId(config["AzureAd:ClientId"]);
+        options.OAuthScopes($"{config["AzureAd:AppIdUri"]}/Epecps.ReadWrite");
+        options.OAuthScopeSeparator(" ");
+    });
+}
+
+app.UseHttpsRedirection();
+app.UseCors("SpaDev");
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
 
 
 
