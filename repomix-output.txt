@@ -1,0 +1,1986 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+
+================================================================
+Directory Structure
+================================================================
+.gitattributes
+.gitignore
+backend/Epecps.Api/appsettings.Development.json
+backend/Epecps.Api/appsettings.json
+backend/Epecps.Api/Controllers/AuthController.cs
+backend/Epecps.Api/Controllers/ReviewsController.cs
+backend/Epecps.Api/Controllers/WeatherForecastController.cs
+backend/Epecps.Api/Epecps.Api.csproj
+backend/Epecps.Api/Epecps.Api.http
+backend/Epecps.Api/Program.cs
+backend/Epecps.Api/Properties/launchSettings.json
+backend/Epecps.Api/WeatherForecast.cs
+backend/Epecps.Application/Class1.cs
+backend/Epecps.Application/Epecps.Application.csproj
+backend/Epecps.Domain/Entities/AuditLog.cs
+backend/Epecps.Domain/Entities/Competency.cs
+backend/Epecps.Domain/Entities/Cycle.cs
+backend/Epecps.Domain/Entities/Department.cs
+backend/Epecps.Domain/Entities/Document.cs
+backend/Epecps.Domain/Entities/EmployeeGoal.cs
+backend/Epecps.Domain/Entities/Evaluation.cs
+backend/Epecps.Domain/Entities/Notification.cs
+backend/Epecps.Domain/Entities/PeerAssignment.cs
+backend/Epecps.Domain/Entities/PromotionCase.cs
+backend/Epecps.Domain/Entities/Review.cs
+backend/Epecps.Domain/Entities/ReviewItem.cs
+backend/Epecps.Domain/Entities/Role.cs
+backend/Epecps.Domain/Entities/Template.cs
+backend/Epecps.Domain/Entities/TrainingMaterial.cs
+backend/Epecps.Domain/Entities/TrainingRecommendation.cs
+backend/Epecps.Domain/Entities/User.cs
+backend/Epecps.Domain/Entities/UserRole.cs
+backend/Epecps.Domain/Enums/DocumentType.cs
+backend/Epecps.Domain/Enums/PromotionDecision.cs
+backend/Epecps.Domain/Enums/ReviewerRole.cs
+backend/Epecps.Domain/Epecps.Domain.csproj
+backend/Epecps.Infrastructure/Class1.cs
+backend/Epecps.Infrastructure/Epecps.Infrastructure.csproj
+epecps.sln
+frontend/epecps-web/.editorconfig
+frontend/epecps-web/.gitignore
+frontend/epecps-web/.vscode/extensions.json
+frontend/epecps-web/.vscode/launch.json
+frontend/epecps-web/.vscode/tasks.json
+frontend/epecps-web/angular.json
+frontend/epecps-web/CHANGELOG.md
+frontend/epecps-web/epecps-web.esproj
+frontend/epecps-web/karma.conf.js
+frontend/epecps-web/package.json
+frontend/epecps-web/README.md
+frontend/epecps-web/src/app/app-module.ts
+frontend/epecps-web/src/app/app-routing-module.ts
+frontend/epecps-web/src/app/app.html
+frontend/epecps-web/src/app/app.spec.ts
+frontend/epecps-web/src/app/app.ts
+frontend/epecps-web/src/index.html
+frontend/epecps-web/src/main.ts
+frontend/epecps-web/src/styles.css
+frontend/epecps-web/tsconfig.app.json
+frontend/epecps-web/tsconfig.json
+frontend/epecps-web/tsconfig.spec.json
+
+================================================================
+Files
+================================================================
+
+================
+File: backend/Epecps.Api/Controllers/AuthController.cs
+================
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Identity.Web.Resource;
+using System.Linq;
+
+namespace Epecps.Api.Controllers;
+
+[ApiController]
+[Route("api/v1/auth")]
+public class AuthController : ControllerBase
+{
+    // Require valid token with our scope
+    [HttpGet("me")]
+    [Authorize]
+    [RequiredScope("Epecps.ReadWrite")]
+    public IActionResult Me()
+    {
+        var claims = User.Claims.Select(c => new { c.Type, c.Value }).ToList();
+        return Ok(new
+        {
+            Name = User.Identity?.Name,
+            UserId = User.FindFirst("oid")?.Value,      // Entra object id
+            Roles = User.FindAll("roles").Select(r => r.Value).ToArray(),
+            Claims = claims
+        });
+    }
+}
+
+================
+File: backend/Epecps.Api/Controllers/ReviewsController.cs
+================
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Identity.Web.Resource;
+
+namespace Epecps.Api.Controllers;
+
+[ApiController]
+[Route("api/v1/reviews")]
+public class ReviewsController : ControllerBase
+{
+    // Any signed-in user with API scope
+    [HttpGet("{evaluationId}")]
+    [Authorize]
+    [RequiredScope("Epecps.ReadWrite")]
+    public IActionResult Get(int evaluationId) => Ok(new { evaluationId });
+
+    // Only users who also have the RM app role
+    [HttpPost("{evaluationId}/submit-rm")]
+    [Authorize(Roles = "RM")]
+    [RequiredScope("Epecps.ReadWrite")]
+    public IActionResult SubmitByRM(int evaluationId) => NoContent();
+}
+
+================
+File: .gitattributes
+================
+* text=auto
+# Treat common text files as text
+*.cs   text
+*.ts   text
+*.html text
+*.css  text
+*.json text
+*.sln  text eol=crlf
+# Scripts
+*.sh   text eol=lf
+*.bat  text eol=crlf
+# Binary assets
+*.png binary
+*.jpg binary
+*.pdf binary
+
+================
+File: backend/Epecps.Api/appsettings.Development.json
+================
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
+
+================
+File: backend/Epecps.Api/appsettings.json
+================
+{
+  "AzureAd": {
+    "Instance": "https://login.microsoftonline.com/",
+    "TenantId": "2ecda83d-4ae0-41c7-aeef-0c37c3be6826",
+    "ClientId": "4ee96651-bdc5-40c6-a64a-49d53002ce9e",
+    "AppIdUri": "api://4ee96651-bdc5-40c6-a64a-49d53002ce9e",
+    "ValidIssuers": [
+      "https://login.microsoftonline.com/TENANT_ID_REPLACE_ME/v2.0",
+      "https://sts.windows.net/TENANT_ID_REPLACE_ME/"
+    ],
+    "Scopes": "Epecps.ReadWrite"
+  },
+  "AllowedHosts": "*"
+}
+
+================
+File: backend/Epecps.Api/Controllers/WeatherForecastController.cs
+================
+using Microsoft.AspNetCore.Mvc;
+
+namespace Epecps.Api.Controllers
+{
+    [ApiController]
+    [Route("[controller]")]
+    public class WeatherForecastController : ControllerBase
+    {
+        private static readonly string[] Summaries = new[]
+        {
+            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
+        };
+
+        private readonly ILogger<WeatherForecastController> _logger;
+
+        public WeatherForecastController(ILogger<WeatherForecastController> logger)
+        {
+            _logger = logger;
+        }
+
+        [HttpGet(Name = "GetWeatherForecast")]
+        public IEnumerable<WeatherForecast> Get()
+        {
+            return Enumerable.Range(1, 5).Select(index => new WeatherForecast
+            {
+                Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+                TemperatureC = Random.Shared.Next(-20, 55),
+                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
+            })
+            .ToArray();
+        }
+    }
+}
+
+================
+File: backend/Epecps.Api/Epecps.Api.csproj
+================
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Identity.Web" Version="4.0.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Epecps.Application\Epecps.Application.csproj" />
+    <ProjectReference Include="..\Epecps.Infrastructure\Epecps.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
+
+================
+File: backend/Epecps.Api/Epecps.Api.http
+================
+@Epecps.Api_HostAddress = http://localhost:5019
+
+GET {{Epecps.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+================
+File: backend/Epecps.Api/Program.cs
+================
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.Resource;
+
+var builder = WebApplication.CreateBuilder(args);
+var services = builder.Services;
+var config = builder.Configuration;
+
+builder.Logging.AddConsole();
+
+// CORS for Angular dev on 64291
+services.AddCors(opt =>
+{
+    opt.AddPolicy("SpaDev", p =>
+        p.WithOrigins("http://127.0.0.1:64291", "http://localhost:64291")
+         .AllowAnyHeader()
+         .AllowAnyMethod());
+});
+
+// Microsoft Entra ID (Azure AD) protection for this API
+services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApi(
+        jwtOptions =>
+        {
+            // default scheme; nothing special
+        },
+        identityOptions =>
+        {
+            identityOptions.Instance = config["AzureAd:Instance"] ?? "";
+            identityOptions.TenantId = config["AzureAd:TenantId"] ?? "";
+            identityOptions.ClientId = config["AzureAd:ClientId"] ?? "";   // the API app's client id
+            // Note: Audience validation is handled automatically by Microsoft.Identity.Web
+            // using the ClientId. If you need custom audience validation, configure it via TokenValidationParameters
+        },
+        // Configuration section name (optional if you set above)
+        "AzureAd");
+
+// Make "roles" work with [Authorize(Roles="Admin")]
+services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.TokenValidationParameters.RoleClaimType = "roles";     // Entra v2 places app roles in "roles"
+    options.TokenValidationParameters.NameClaimType = "name";
+});
+
+services.AddAuthorization(options =>
+{
+    // Policy to require the Epecps.ReadWrite scope (from OAuth)
+    options.AddPolicy("RequireEpecpsScope", policy =>
+        policy.Requirements.Add(new ScopeAuthorizationRequirement()
+        {
+            RequiredScopesConfigurationKey = "AzureAd:Scopes"
+        }));
+
+    // Optional: Role-based policies (require app roles created in API app registration)
+    options.AddPolicy("RequireRM", p => p.RequireRole("RM"));
+    options.AddPolicy("RequireHOD", p => p.RequireRole("HOD"));
+    // add the rest as needed...
+});
+
+services.AddControllers();
+services.AddEndpointsApiExplorer();
+services.AddSwaggerGen();
+
+var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+app.UseCors("SpaDev");
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+
+================
+File: backend/Epecps.Api/Properties/launchSettings.json
+================
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:19861",
+      "sslPort": 44309
+    }
+  },
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:5019",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "https://localhost:7275;http://localhost:5019",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "IIS Express": {
+      "commandName": "IISExpress",
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
+
+================
+File: backend/Epecps.Api/WeatherForecast.cs
+================
+namespace Epecps.Api
+{
+    public class WeatherForecast
+    {
+        public DateOnly Date { get; set; }
+
+        public int TemperatureC { get; set; }
+
+        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+
+        public string? Summary { get; set; }
+    }
+}
+
+================
+File: backend/Epecps.Application/Class1.cs
+================
+namespace Epecps.Application
+{
+    public class Class1
+    {
+
+    }
+}
+
+================
+File: backend/Epecps.Application/Epecps.Application.csproj
+================
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
+    <PackageReference Include="FluentValidation" Version="12.0.0" />
+    <PackageReference Include="MediatR" Version="13.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Epecps.Domain\Epecps.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
+
+================
+File: backend/Epecps.Domain/Entities/AuditLog.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class AuditLog
+{
+    public int AuditId { get; set; }
+    public int ActorUserId { get; set; }
+    public string EntityType { get; set; } = string.Empty;
+    public int EntityId { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string? BeforeJson { get; set; }
+    public string? AfterJson { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    // Navigation properties
+    public User ActorUser { get; set; } = null!;
+}
+
+================
+File: backend/Epecps.Domain/Entities/Competency.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class Competency
+{
+    public int CompetencyId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string TargetLevel { get; set; } = string.Empty;
+
+    // Navigation properties
+    public ICollection<ReviewItem> ReviewItems { get; set; } = new List<ReviewItem>();
+}
+
+================
+File: backend/Epecps.Domain/Entities/Cycle.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class Cycle
+{
+    public int CycleId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public string Status { get; set; } = string.Empty;
+
+    // Navigation properties
+    public ICollection<Evaluation> Evaluations { get; set; } = new List<Evaluation>();
+}
+
+================
+File: backend/Epecps.Domain/Entities/Department.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class Department
+{
+    public int DeptId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int? ParentDeptId { get; set; }
+
+    // Navigation properties
+    public Department? ParentDepartment { get; set; }
+    public ICollection<Department> SubDepartments { get; set; } = new List<Department>();
+    public ICollection<User> Users { get; set; } = new List<User>();
+}
+
+================
+File: backend/Epecps.Domain/Entities/Document.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class Document
+{
+    public int DocumentId { get; set; }
+    public int EvaluationId { get; set; }
+    public DocumentType Type { get; set; }
+    public string Uri { get; set; } = string.Empty;
+    public string Checksum { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+
+    // Navigation properties
+    public Evaluation Evaluation { get; set; } = null!;
+}
+
+================
+File: backend/Epecps.Domain/Entities/EmployeeGoal.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class EmployeeGoal
+{
+    public int GoalId { get; set; }
+    public int EvaluationId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public decimal WeightPct { get; set; }
+    public string? EvidenceUri { get; set; }
+
+    // Navigation properties
+    public Evaluation Evaluation { get; set; } = null!;
+    public ICollection<ReviewItem> ReviewItems { get; set; } = new List<ReviewItem>();
+}
+
+================
+File: backend/Epecps.Domain/Entities/Evaluation.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class Evaluation
+{
+    public int EvaluationId { get; set; }
+    public int CycleId { get; set; }
+    public int EmployeeId { get; set; }
+    public int ReportingManagerId { get; set; }
+    public int TeamLeadId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public decimal? OverallScore { get; set; }
+    public int? PreviousEvaluationId { get; set; }
+
+    // Navigation properties
+    public Cycle Cycle { get; set; } = null!;
+    public User Employee { get; set; } = null!;
+    public User ReportingManager { get; set; } = null!;
+    public User TeamLead { get; set; } = null!;
+    public Evaluation? PreviousEvaluation { get; set; }
+    public ICollection<Evaluation> NextEvaluations { get; set; } = new List<Evaluation>();
+    public ICollection<EmployeeGoal> EmployeeGoals { get; set; } = new List<EmployeeGoal>();
+    public ICollection<Review> Reviews { get; set; } = new List<Review>();
+    public ICollection<PeerAssignment> PeerAssignments { get; set; } = new List<PeerAssignment>();
+    public ICollection<PromotionCase> PromotionCases { get; set; } = new List<PromotionCase>();
+    public ICollection<TrainingRecommendation> TrainingRecommendations { get; set; } = new List<TrainingRecommendation>();
+    public ICollection<Document> Documents { get; set; } = new List<Document>();
+}
+
+================
+File: backend/Epecps.Domain/Entities/Notification.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class Notification
+{
+    public int NotificationId { get; set; }
+    public int UserId { get; set; }
+    public string Subject { get; set; } = string.Empty;
+    public string Channel { get; set; } = string.Empty;
+    public DateTime SentAt { get; set; }
+
+    // Navigation properties
+    public User User { get; set; } = null!;
+}
+
+================
+File: backend/Epecps.Domain/Entities/PeerAssignment.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class PeerAssignment
+{
+    public int PeerAssignmentId { get; set; }
+    public int EvaluationId { get; set; }
+    public int PeerUserId { get; set; }
+
+    // Navigation properties
+    public Evaluation Evaluation { get; set; } = null!;
+    public User PeerUser { get; set; } = null!;
+}
+
+================
+File: backend/Epecps.Domain/Entities/PromotionCase.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class PromotionCase
+{
+    public int PromotionCaseId { get; set; }
+    public int EvaluationId { get; set; }
+    public int? RecommendedByHodId { get; set; }
+    public DateTime? RecommendedAt { get; set; }
+    public PromotionDecision GmDecision { get; set; }
+    public int? GmDecidedById { get; set; }
+    public DateTime? GmDecidedAt { get; set; }
+    public string? DecisionReason { get; set; }
+
+    // Navigation properties
+    public Evaluation Evaluation { get; set; } = null!;
+    public User? RecommendedByHod { get; set; }
+    public User? GmDecidedBy { get; set; }
+}
+
+================
+File: backend/Epecps.Domain/Entities/Review.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class Review
+{
+    public int ReviewId { get; set; }
+    public int EvaluationId { get; set; }
+    public int ReviewerUserId { get; set; }
+    public ReviewerRole ReviewerRole { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? OverallComment { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+
+    // Navigation properties
+    public Evaluation Evaluation { get; set; } = null!;
+    public User Reviewer { get; set; } = null!;
+    public ICollection<ReviewItem> ReviewItems { get; set; } = new List<ReviewItem>();
+}
+
+================
+File: backend/Epecps.Domain/Entities/ReviewItem.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class ReviewItem
+{
+    public int ItemId { get; set; }
+    public int ReviewId { get; set; }
+    public int? GoalId { get; set; }
+    public int? CompetencyId { get; set; }
+    public decimal RatingValue { get; set; }
+    public string? Comment { get; set; }
+
+    // Navigation properties
+    public Review Review { get; set; } = null!;
+    public EmployeeGoal? Goal { get; set; }
+    public Competency? Competency { get; set; }
+}
+
+================
+File: backend/Epecps.Domain/Entities/Role.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class Role
+{
+    public int RoleId { get; set; }
+    public string Name { get; set; } = string.Empty; // Employee, Peer, TL, RM, HOD, GM, HR, Admin
+
+    // Navigation properties
+    public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+}
+
+================
+File: backend/Epecps.Domain/Entities/Template.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class Template
+{
+    public int TemplateId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string RoleName { get; set; } = string.Empty;
+    public string RatingScaleJson { get; set; } = string.Empty;
+    public int Version { get; set; }
+    public bool IsActive { get; set; }
+}
+
+================
+File: backend/Epecps.Domain/Entities/TrainingMaterial.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class TrainingMaterial
+{
+    public int TrainingMaterialId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Link { get; set; } = string.Empty;
+    public string? Tags { get; set; }
+
+    // Navigation properties
+    public ICollection<TrainingRecommendation> TrainingRecommendations { get; set; } = new List<TrainingRecommendation>();
+}
+
+================
+File: backend/Epecps.Domain/Entities/TrainingRecommendation.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class TrainingRecommendation
+{
+    public int TrainingRecId { get; set; }
+    public int EvaluationId { get; set; }
+    public int TrainingMaterialId { get; set; }
+    public string? Reason { get; set; }
+
+    // Navigation properties
+    public Evaluation Evaluation { get; set; } = null!;
+    public TrainingMaterial TrainingMaterial { get; set; } = null!;
+}
+
+================
+File: backend/Epecps.Domain/Entities/User.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class User
+{
+    public int UserId { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int DeptId { get; set; }
+
+    // Navigation properties
+    public Department Department { get; set; } = null!;
+    public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+    public ICollection<Evaluation> EvaluationsAsEmployee { get; set; } = new List<Evaluation>();
+    public ICollection<Evaluation> EvaluationsAsReportingManager { get; set; } = new List<Evaluation>();
+    public ICollection<Evaluation> EvaluationsAsTeamLead { get; set; } = new List<Evaluation>();
+    public ICollection<Review> Reviews { get; set; } = new List<Review>();
+    public ICollection<PeerAssignment> PeerAssignments { get; set; } = new List<PeerAssignment>();
+    public ICollection<PromotionCase> PromotionCasesRecommended { get; set; } = new List<PromotionCase>();
+    public ICollection<PromotionCase> PromotionCasesDecided { get; set; } = new List<PromotionCase>();
+    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+    public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+}
+
+================
+File: backend/Epecps.Domain/Entities/UserRole.cs
+================
+namespace Epecps.Domain.Entities;
+
+public class UserRole
+{
+    public int UserId { get; set; }
+    public int RoleId { get; set; }
+
+    // Navigation properties
+    public User User { get; set; } = null!;
+    public Role Role { get; set; } = null!;
+}
+
+================
+File: backend/Epecps.Domain/Enums/DocumentType.cs
+================
+namespace Epecps.Domain.Entities;
+
+public enum DocumentType
+{
+    FinalReport,
+    CsvExport
+}
+
+================
+File: backend/Epecps.Domain/Enums/PromotionDecision.cs
+================
+namespace Epecps.Domain.Entities;
+
+public enum PromotionDecision
+{
+    Pending,
+    Approved,
+    Rejected
+}
+
+================
+File: backend/Epecps.Domain/Enums/ReviewerRole.cs
+================
+namespace Epecps.Domain.Entities;
+
+public enum ReviewerRole
+{
+    Self,
+    Peer,
+    TL,
+    RM,
+    HOD,
+    GM
+}
+
+================
+File: backend/Epecps.Domain/Epecps.Domain.csproj
+================
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
+
+================
+File: backend/Epecps.Infrastructure/Class1.cs
+================
+namespace Epecps.Infrastructure
+{
+    public class Class1
+    {
+
+    }
+}
+
+================
+File: backend/Epecps.Infrastructure/Epecps.Infrastructure.csproj
+================
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Epecps.Application\Epecps.Application.csproj" />
+    <ProjectReference Include="..\Epecps.Domain\Epecps.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
+
+================
+File: epecps.sln
+================
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36603.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Epecps.Domain", "backend\Epecps.Domain\Epecps.Domain.csproj", "{2CB18EE6-4169-4A2C-AD03-991763BC681B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Epecps.Application", "backend\Epecps.Application\Epecps.Application.csproj", "{0F976520-8664-4EA4-A852-0CC57ECEB82D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Epecps.Infrastructure", "backend\Epecps.Infrastructure\Epecps.Infrastructure.csproj", "{AFBFF1EB-49AD-4FC7-AE3D-E18AD94D0D4A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Epecps.Api", "backend\Epecps.Api\Epecps.Api.csproj", "{EA1B4B14-0496-4C92-AE6A-F0B93E9357B4}"
+EndProject
+Project("{54A90642-561A-4BB1-A94E-469ADEE60C69}") = "epecps-web", "frontend\epecps-web\epecps-web.esproj", "{B61F9138-5354-2EA2-CD53-38A5EAD26DB6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2CB18EE6-4169-4A2C-AD03-991763BC681B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2CB18EE6-4169-4A2C-AD03-991763BC681B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2CB18EE6-4169-4A2C-AD03-991763BC681B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2CB18EE6-4169-4A2C-AD03-991763BC681B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0F976520-8664-4EA4-A852-0CC57ECEB82D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0F976520-8664-4EA4-A852-0CC57ECEB82D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0F976520-8664-4EA4-A852-0CC57ECEB82D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0F976520-8664-4EA4-A852-0CC57ECEB82D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AFBFF1EB-49AD-4FC7-AE3D-E18AD94D0D4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AFBFF1EB-49AD-4FC7-AE3D-E18AD94D0D4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AFBFF1EB-49AD-4FC7-AE3D-E18AD94D0D4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AFBFF1EB-49AD-4FC7-AE3D-E18AD94D0D4A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EA1B4B14-0496-4C92-AE6A-F0B93E9357B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EA1B4B14-0496-4C92-AE6A-F0B93E9357B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EA1B4B14-0496-4C92-AE6A-F0B93E9357B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EA1B4B14-0496-4C92-AE6A-F0B93E9357B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B61F9138-5354-2EA2-CD53-38A5EAD26DB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B61F9138-5354-2EA2-CD53-38A5EAD26DB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B61F9138-5354-2EA2-CD53-38A5EAD26DB6}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{B61F9138-5354-2EA2-CD53-38A5EAD26DB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B61F9138-5354-2EA2-CD53-38A5EAD26DB6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B61F9138-5354-2EA2-CD53-38A5EAD26DB6}.Release|Any CPU.Deploy.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F4382130-A600-4B46-8235-5591D874154F}
+	EndGlobalSection
+EndGlobal
+
+================
+File: frontend/epecps-web/.editorconfig
+================
+# Editor configuration, see https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.ts]
+quote_type = single
+ij_typescript_use_double_quotes = false
+
+[*.md]
+max_line_length = off
+trim_trailing_whitespace = false
+
+================
+File: frontend/epecps-web/.gitignore
+================
+# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# Compiled output
+/dist
+/tmp
+/out-tsc
+/bazel-out
+
+# Node
+/node_modules
+npm-debug.log
+yarn-error.log
+
+# IDEs and editors
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history/*
+
+# Miscellaneous
+/.angular/cache
+.sass-cache/
+/connect.lock
+/coverage
+/libpeerconnection.log
+testem.log
+/typings
+__screenshots__/
+
+# System files
+.DS_Store
+Thumbs.db
+
+================
+File: frontend/epecps-web/.vscode/extensions.json
+================
+{
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=827846
+  "recommendations": ["angular.ng-template"]
+}
+
+================
+File: frontend/epecps-web/.vscode/launch.json
+================
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "edge",
+      "request": "launch",
+      "name": "localhost (Edge)",
+      "url": "http://localhost:64291",
+      "webRoot": "${workspaceFolder}"
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "localhost (Chrome)",
+      "url": "http://localhost:64291",
+      "webRoot": "${workspaceFolder}"
+    }
+  ]
+}
+
+================
+File: frontend/epecps-web/.vscode/tasks.json
+================
+{
+  // For more information, visit: https://go.microsoft.com/fwlink/?LinkId=733558
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "start",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "(.*?)"
+          },
+          "endsPattern": {
+            "regexp": "bundle generation complete"
+          }
+        }
+      }
+    },
+    {
+      "type": "npm",
+      "script": "test",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "(.*?)"
+          },
+          "endsPattern": {
+            "regexp": "bundle generation complete"
+          }
+        }
+      }
+    }
+  ]
+}
+
+================
+File: frontend/epecps-web/angular.json
+================
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "epecps-web": {
+      "projectType": "application",
+      "schematics": {
+        "@schematics/angular:component": {
+          "standalone": false
+        },
+        "@schematics/angular:directive": {
+          "standalone": false
+        },
+        "@schematics/angular:pipe": {
+          "standalone": false
+        }
+      },
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              }
+            ],
+            "styles": [
+              "src/styles.css"
+            ]
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "epecps-web:build:production"
+            },
+            "development": {
+              "buildTarget": "epecps-web:build:development"
+            }
+          },
+          "defaultConfiguration": "development",
+          "options": {
+            "port": 64291
+          }
+        },
+        "extract-i18n": {
+          "builder": "@angular/build:extract-i18n"
+        },
+        "test": {
+          "builder": "@angular/build:karma",
+          "options": {
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
+            "tsConfig": "tsconfig.spec.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              }
+            ],
+            "styles": [
+              "src/styles.css"
+            ],
+            "karmaConfig": "karma.conf.js"
+          }
+        }
+      }
+    }
+  },
+  "cli": {
+    "analytics": "6e8e5538-a275-4956-ade7-7eb5f4c7500b"
+  }
+}
+
+================
+File: frontend/epecps-web/CHANGELOG.md
+================
+This file explains how Visual Studio created the project.
+
+The following tools were used to generate this project:
+- Angular CLI (ng)
+
+The following steps were used to generate this project:
+- Create Angular project with ng: `ng new epecps-web --defaults --skip-install --skip-git --no-standalone `.
+- Update angular.json with port.
+- Create project file (`epecps-web.esproj`).
+- Create `launch.json` to enable debugging.
+- Update package.json to add `jest-editor-support`.
+- Update `start` script in `package.json` to specify host.
+- Add `karma.conf.js` for unit tests.
+- Update `angular.json` to point to `karma.conf.js`.
+- Add project to solution.
+- Write this file.
+
+================
+File: frontend/epecps-web/epecps-web.esproj
+================
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.2752196">
+  <PropertyGroup>
+    <StartupCommand>npm start</StartupCommand>
+    <JavaScriptTestFramework>Jasmine</JavaScriptTestFramework>
+    <!-- Allows the build (or compile) script located on package.json to run on Build -->
+    <ShouldRunBuildScript>false</ShouldRunBuildScript>
+    <!-- Folder where production build objects will be placed -->
+    <BuildOutputFolder>$(MSBuildProjectDirectory)\dist\epecps-web\browser\</BuildOutputFolder>
+  </PropertyGroup>
+</Project>
+
+================
+File: frontend/epecps-web/karma.conf.js
+================
+module.exports = function (config) {
+  config.set({
+    basePath: '',
+    frameworks: ['jasmine', '@angular-devkit/build-angular'],
+    plugins: [
+      require('karma-jasmine'),
+      require('karma-chrome-launcher'),
+      require('karma-jasmine-html-reporter'),
+      require('karma-coverage'),
+      require('@angular-devkit/build-angular/plugins/karma')
+    ],
+    client: {
+      jasmine: {
+        // you can add configuration options for Jasmine here
+        // the possible options are listed at https://jasmine.github.io/api/edge/Configuration.html
+        // for example, you can disable the random execution with `random: false`
+        // or set a specific seed with `seed: 4321`
+      },
+      clearContext: false // leave Jasmine Spec Runner output visible in browser
+    },
+    jasmineHtmlReporter: {
+      suppressAll: true // removes the duplicated traces
+    },
+    coverageReporter: {
+      dir: require('path').join(__dirname, './coverage/'),
+      subdir: '.',
+      reporters: [
+        { type: 'html' },
+        { type: 'text-summary' }
+      ]
+    },
+    reporters: ['progress', 'kjhtml'],
+    port: 9876,
+    colors: true,
+    logLevel: config.LOG_INFO,
+    autoWatch: true,
+    browsers: ['Chrome'],
+    singleRun: false,
+    restartOnFileChange: true,
+    listenAddress: 'localhost',
+    hostname: 'localhost'
+  });
+};
+
+================
+File: frontend/epecps-web/package.json
+================
+{
+  "name": "epecps-web",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve --host=127.0.0.1",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/common": "^20.3.0",
+    "@angular/compiler": "^20.3.0",
+    "@angular/core": "^20.3.0",
+    "@angular/forms": "^20.3.0",
+    "@angular/platform-browser": "^20.3.0",
+    "@angular/router": "^20.3.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.15.0",
+    "jest-editor-support": "*"
+  },
+  "devDependencies": {
+    "@angular/build": "^20.3.8",
+    "@angular/cli": "^20.3.8",
+    "@angular/compiler-cli": "^20.3.0",
+    "@types/jasmine": "~5.1.0",
+    "jasmine-core": "~5.9.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "typescript": "~5.9.2"
+  }
+}
+
+================
+File: frontend/epecps-web/README.md
+================
+# EpecpsWeb
+
+This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.8.
+
+## Development server
+
+To start a local development server, run:
+
+```bash
+ng serve
+```
+
+Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+
+## Code scaffolding
+
+Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+
+```bash
+ng generate component component-name
+```
+
+For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+
+```bash
+ng generate --help
+```
+
+## Building
+
+To build the project run:
+
+```bash
+ng build
+```
+
+This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+
+## Running unit tests
+
+To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
+
+```bash
+ng test
+```
+
+## Running end-to-end tests
+
+For end-to-end (e2e) testing, run:
+
+```bash
+ng e2e
+```
+
+Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+
+## Additional Resources
+
+For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+
+================
+File: frontend/epecps-web/src/app/app-module.ts
+================
+import { NgModule, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+
+import { AppRoutingModule } from './app-routing-module';
+import { App } from './app';
+
+@NgModule({
+  declarations: [
+    App
+  ],
+  imports: [
+    BrowserModule,
+    AppRoutingModule
+  ],
+  providers: [
+    provideBrowserGlobalErrorListeners()
+  ],
+  bootstrap: [App]
+})
+export class AppModule { }
+
+================
+File: frontend/epecps-web/src/app/app-routing-module.ts
+================
+import { NgModule } from '@angular/core';
+import { RouterModule, Routes } from '@angular/router';
+
+const routes: Routes = [];
+
+@NgModule({
+  imports: [RouterModule.forRoot(routes)],
+  exports: [RouterModule]
+})
+export class AppRoutingModule { }
+
+================
+File: frontend/epecps-web/src/app/app.html
+================
+<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
+<!-- * * * * * * * * * * * The content below * * * * * * * * * * * -->
+<!-- * * * * * * * * * * is only a placeholder * * * * * * * * * * -->
+<!-- * * * * * * * * * * and can be replaced.  * * * * * * * * * * -->
+<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
+<!-- * * * * * * * * * Delete the template below * * * * * * * * * -->
+<!-- * * * * * * * to get started with your project! * * * * * * * -->
+<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
+
+<style>
+  :host {
+    --bright-blue: oklch(51.01% 0.274 263.83);
+    --electric-violet: oklch(53.18% 0.28 296.97);
+    --french-violet: oklch(47.66% 0.246 305.88);
+    --vivid-pink: oklch(69.02% 0.277 332.77);
+    --hot-red: oklch(61.42% 0.238 15.34);
+    --orange-red: oklch(63.32% 0.24 31.68);
+
+    --gray-900: oklch(19.37% 0.006 300.98);
+    --gray-700: oklch(36.98% 0.014 302.71);
+    --gray-400: oklch(70.9% 0.015 304.04);
+
+    --red-to-pink-to-purple-vertical-gradient: linear-gradient(
+      180deg,
+      var(--orange-red) 0%,
+      var(--vivid-pink) 50%,
+      var(--electric-violet) 100%
+    );
+
+    --red-to-pink-to-purple-horizontal-gradient: linear-gradient(
+      90deg,
+      var(--orange-red) 0%,
+      var(--vivid-pink) 50%,
+      var(--electric-violet) 100%
+    );
+
+    --pill-accent: var(--bright-blue);
+
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol";
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1 {
+    font-size: 3.125rem;
+    color: var(--gray-900);
+    font-weight: 500;
+    line-height: 100%;
+    letter-spacing: -0.125rem;
+    margin: 0;
+    font-family: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol";
+  }
+
+  p {
+    margin: 0;
+    color: var(--gray-700);
+  }
+
+  main {
+    width: 100%;
+    min-height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    box-sizing: inherit;
+    position: relative;
+  }
+
+  .angular-logo {
+    max-width: 9.2rem;
+  }
+
+  .content {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    max-width: 700px;
+    margin-bottom: 3rem;
+  }
+
+  .content h1 {
+    margin-top: 1.75rem;
+  }
+
+  .content p {
+    margin-top: 1.5rem;
+  }
+
+  .divider {
+    width: 1px;
+    background: var(--red-to-pink-to-purple-vertical-gradient);
+    margin-inline: 0.5rem;
+  }
+
+  .pill-group {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+  }
+
+  .pill {
+    display: flex;
+    align-items: center;
+    --pill-accent: var(--bright-blue);
+    background: color-mix(in srgb, var(--pill-accent) 5%, transparent);
+    color: var(--pill-accent);
+    padding-inline: 0.75rem;
+    padding-block: 0.375rem;
+    border-radius: 2.75rem;
+    border: 0;
+    transition: background 0.3s ease;
+    font-family: var(--inter-font);
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 1.4rem;
+    letter-spacing: -0.00875rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .pill:hover {
+    background: color-mix(in srgb, var(--pill-accent) 15%, transparent);
+  }
+
+  .pill-group .pill:nth-child(6n + 1) {
+    --pill-accent: var(--bright-blue);
+  }
+  .pill-group .pill:nth-child(6n + 2) {
+    --pill-accent: var(--electric-violet);
+  }
+  .pill-group .pill:nth-child(6n + 3) {
+    --pill-accent: var(--french-violet);
+  }
+
+  .pill-group .pill:nth-child(6n + 4),
+  .pill-group .pill:nth-child(6n + 5),
+  .pill-group .pill:nth-child(6n + 6) {
+    --pill-accent: var(--hot-red);
+  }
+
+  .pill-group svg {
+    margin-inline-start: 0.25rem;
+  }
+
+  .social-links {
+    display: flex;
+    align-items: center;
+    gap: 0.73rem;
+    margin-top: 1.5rem;
+  }
+
+  .social-links path {
+    transition: fill 0.3s ease;
+    fill: var(--gray-400);
+  }
+
+  .social-links a:hover svg path {
+    fill: var(--gray-900);
+  }
+
+  @media screen and (max-width: 650px) {
+    .content {
+      flex-direction: column;
+      width: max-content;
+    }
+
+    .divider {
+      height: 1px;
+      width: 100%;
+      background: var(--red-to-pink-to-purple-horizontal-gradient);
+      margin-block: 1.5rem;
+    }
+  }
+</style>
+
+<main class="main">
+  <div class="content">
+    <div class="left-side">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 982 239"
+        fill="none"
+        class="angular-logo"
+      >
+        <g clip-path="url(#a)">
+          <path
+            fill="url(#b)"
+            d="M388.676 191.625h30.849L363.31 31.828h-35.758l-56.215 159.797h30.848l13.174-39.356h60.061l13.256 39.356Zm-65.461-62.675 21.602-64.311h1.227l21.602 64.311h-44.431Zm126.831-7.527v70.202h-28.23V71.839h27.002v20.374h1.392c2.782-6.71 7.2-12.028 13.255-15.956 6.056-3.927 13.584-5.89 22.503-5.89 8.264 0 15.465 1.8 21.684 5.318 6.137 3.518 10.964 8.673 14.319 15.382 3.437 6.71 5.074 14.81 4.992 24.383v76.175h-28.23v-71.92c0-8.019-2.046-14.237-6.219-18.819-4.173-4.5-9.819-6.791-17.102-6.791-4.91 0-9.328 1.063-13.174 3.272-3.846 2.128-6.792 5.237-9.001 9.328-2.046 4.009-3.191 8.918-3.191 14.728ZM589.233 239c-10.147 0-18.82-1.391-26.103-4.091-7.282-2.7-13.092-6.382-17.511-10.964-4.418-4.582-7.528-9.655-9.164-15.219l25.448-6.136c1.145 2.372 2.782 4.663 4.991 6.954 2.209 2.291 5.155 4.255 8.837 5.81 3.683 1.554 8.428 2.291 14.074 2.291 8.019 0 14.647-1.964 19.884-5.81 5.237-3.845 7.856-10.227 7.856-19.064v-22.665h-1.391c-1.473 2.946-3.601 5.892-6.383 9.001-2.782 3.109-6.464 5.645-10.965 7.691-4.582 2.046-10.228 3.109-17.101 3.109-9.165 0-17.511-2.209-25.039-6.545-7.446-4.337-13.42-10.883-17.757-19.474-4.418-8.673-6.628-19.473-6.628-32.565 0-13.091 2.21-24.301 6.628-33.383 4.419-9.082 10.311-15.955 17.839-20.7 7.528-4.746 15.874-7.037 25.039-7.037 7.037 0 12.846 1.145 17.347 3.518 4.582 2.373 8.182 5.236 10.883 8.51 2.7 3.272 4.746 6.382 6.137 9.327h1.554v-19.8h27.821v121.749c0 10.228-2.454 18.737-7.364 25.447-4.91 6.709-11.538 11.7-20.048 15.055-8.509 3.355-18.165 4.991-28.884 4.991Zm.245-71.266c5.974 0 11.047-1.473 15.302-4.337 4.173-2.945 7.446-7.118 9.573-12.519 2.21-5.482 3.274-12.027 3.274-19.637 0-7.609-1.064-14.155-3.274-19.8-2.127-5.646-5.318-10.064-9.491-13.255-4.174-3.11-9.329-4.746-15.384-4.746s-11.537 1.636-15.792 4.91c-4.173 3.272-7.365 7.772-9.492 13.418-2.128 5.727-3.191 12.191-3.191 19.392 0 7.2 1.063 13.745 3.273 19.228 2.127 5.482 5.318 9.736 9.573 12.764 4.174 3.027 9.41 4.582 15.629 4.582Zm141.56-26.51V71.839h28.23v119.786h-27.412v-21.273h-1.227c-2.7 6.709-7.119 12.191-13.338 16.446-6.137 4.255-13.747 6.382-22.748 6.382-7.855 0-14.81-1.718-20.783-5.237-5.974-3.518-10.72-8.591-14.075-15.382-3.355-6.709-5.073-14.891-5.073-24.464V71.839h28.312v71.921c0 7.609 2.046 13.664 6.219 18.083 4.173 4.5 9.655 6.709 16.365 6.709 4.173 0 8.183-.982 12.111-3.028 3.927-2.045 7.118-5.072 9.655-9.082 2.537-4.091 3.764-9.164 3.764-15.218Zm65.707-109.395v159.796h-28.23V31.828h28.23Zm44.841 162.169c-7.61 0-14.402-1.391-20.457-4.091-6.055-2.7-10.883-6.791-14.32-12.109-3.518-5.319-5.237-11.946-5.237-19.801 0-6.791 1.228-12.355 3.765-16.773 2.536-4.419 5.891-7.937 10.228-10.637 4.337-2.618 9.164-4.664 14.647-6.055 5.4-1.391 11.046-2.373 16.856-3.027 7.037-.737 12.683-1.391 17.102-1.964 4.337-.573 7.528-1.555 9.574-2.782 1.963-1.309 3.027-3.273 3.027-5.973v-.491c0-5.891-1.718-10.391-5.237-13.664-3.518-3.191-8.51-4.828-15.056-4.828-6.955 0-12.356 1.473-16.447 4.5-4.009 3.028-6.71 6.546-8.183 10.719l-26.348-3.764c2.046-7.282 5.483-13.336 10.31-18.328 4.746-4.909 10.638-8.59 17.511-11.045 6.955-2.455 14.565-3.682 22.912-3.682 5.809 0 11.537.654 17.265 2.045s10.965 3.6 15.711 6.71c4.746 3.109 8.51 7.282 11.455 12.6 2.864 5.318 4.337 11.946 4.337 19.883v80.184h-27.166v-16.446h-.9c-1.719 3.355-4.092 6.464-7.201 9.328-3.109 2.864-6.955 5.237-11.619 6.955-4.828 1.718-10.229 2.536-16.529 2.536Zm7.364-20.701c5.646 0 10.556-1.145 14.729-3.354 4.173-2.291 7.364-5.237 9.655-9.001 2.292-3.763 3.355-7.854 3.355-12.273v-14.155c-.9.737-2.373 1.391-4.5 2.046-2.128.654-4.419 1.145-7.037 1.636-2.619.491-5.155.9-7.692 1.227-2.537.328-4.746.655-6.628.901-4.173.572-8.019 1.472-11.292 2.781-3.355 1.31-5.973 3.11-7.855 5.401-1.964 2.291-2.864 5.318-2.864 8.918 0 5.237 1.882 9.164 5.728 11.782 3.682 2.782 8.51 4.091 14.401 4.091Zm64.643 18.328V71.839h27.412v19.965h1.227c2.21-6.955 5.974-12.274 11.292-16.038 5.319-3.763 11.456-5.645 18.329-5.645 1.555 0 3.355.082 5.237.163 1.964.164 3.601.328 4.91.573v25.938c-1.227-.41-3.109-.819-5.646-1.146a58.814 58.814 0 0 0-7.446-.49c-5.155 0-9.738 1.145-13.829 3.354-4.091 2.209-7.282 5.236-9.655 9.164-2.373 3.927-3.519 8.427-3.519 13.5v70.448h-28.312ZM222.077 39.192l-8.019 125.923L137.387 0l84.69 39.192Zm-53.105 162.825-57.933 33.056-57.934-33.056 11.783-28.556h92.301l11.783 28.556ZM111.039 62.675l30.357 73.803H80.681l30.358-73.803ZM7.937 165.115 0 39.192 84.69 0 7.937 165.115Z"
+          />
+          <path
+            fill="url(#c)"
+            d="M388.676 191.625h30.849L363.31 31.828h-35.758l-56.215 159.797h30.848l13.174-39.356h60.061l13.256 39.356Zm-65.461-62.675 21.602-64.311h1.227l21.602 64.311h-44.431Zm126.831-7.527v70.202h-28.23V71.839h27.002v20.374h1.392c2.782-6.71 7.2-12.028 13.255-15.956 6.056-3.927 13.584-5.89 22.503-5.89 8.264 0 15.465 1.8 21.684 5.318 6.137 3.518 10.964 8.673 14.319 15.382 3.437 6.71 5.074 14.81 4.992 24.383v76.175h-28.23v-71.92c0-8.019-2.046-14.237-6.219-18.819-4.173-4.5-9.819-6.791-17.102-6.791-4.91 0-9.328 1.063-13.174 3.272-3.846 2.128-6.792 5.237-9.001 9.328-2.046 4.009-3.191 8.918-3.191 14.728ZM589.233 239c-10.147 0-18.82-1.391-26.103-4.091-7.282-2.7-13.092-6.382-17.511-10.964-4.418-4.582-7.528-9.655-9.164-15.219l25.448-6.136c1.145 2.372 2.782 4.663 4.991 6.954 2.209 2.291 5.155 4.255 8.837 5.81 3.683 1.554 8.428 2.291 14.074 2.291 8.019 0 14.647-1.964 19.884-5.81 5.237-3.845 7.856-10.227 7.856-19.064v-22.665h-1.391c-1.473 2.946-3.601 5.892-6.383 9.001-2.782 3.109-6.464 5.645-10.965 7.691-4.582 2.046-10.228 3.109-17.101 3.109-9.165 0-17.511-2.209-25.039-6.545-7.446-4.337-13.42-10.883-17.757-19.474-4.418-8.673-6.628-19.473-6.628-32.565 0-13.091 2.21-24.301 6.628-33.383 4.419-9.082 10.311-15.955 17.839-20.7 7.528-4.746 15.874-7.037 25.039-7.037 7.037 0 12.846 1.145 17.347 3.518 4.582 2.373 8.182 5.236 10.883 8.51 2.7 3.272 4.746 6.382 6.137 9.327h1.554v-19.8h27.821v121.749c0 10.228-2.454 18.737-7.364 25.447-4.91 6.709-11.538 11.7-20.048 15.055-8.509 3.355-18.165 4.991-28.884 4.991Zm.245-71.266c5.974 0 11.047-1.473 15.302-4.337 4.173-2.945 7.446-7.118 9.573-12.519 2.21-5.482 3.274-12.027 3.274-19.637 0-7.609-1.064-14.155-3.274-19.8-2.127-5.646-5.318-10.064-9.491-13.255-4.174-3.11-9.329-4.746-15.384-4.746s-11.537 1.636-15.792 4.91c-4.173 3.272-7.365 7.772-9.492 13.418-2.128 5.727-3.191 12.191-3.191 19.392 0 7.2 1.063 13.745 3.273 19.228 2.127 5.482 5.318 9.736 9.573 12.764 4.174 3.027 9.41 4.582 15.629 4.582Zm141.56-26.51V71.839h28.23v119.786h-27.412v-21.273h-1.227c-2.7 6.709-7.119 12.191-13.338 16.446-6.137 4.255-13.747 6.382-22.748 6.382-7.855 0-14.81-1.718-20.783-5.237-5.974-3.518-10.72-8.591-14.075-15.382-3.355-6.709-5.073-14.891-5.073-24.464V71.839h28.312v71.921c0 7.609 2.046 13.664 6.219 18.083 4.173 4.5 9.655 6.709 16.365 6.709 4.173 0 8.183-.982 12.111-3.028 3.927-2.045 7.118-5.072 9.655-9.082 2.537-4.091 3.764-9.164 3.764-15.218Zm65.707-109.395v159.796h-28.23V31.828h28.23Zm44.841 162.169c-7.61 0-14.402-1.391-20.457-4.091-6.055-2.7-10.883-6.791-14.32-12.109-3.518-5.319-5.237-11.946-5.237-19.801 0-6.791 1.228-12.355 3.765-16.773 2.536-4.419 5.891-7.937 10.228-10.637 4.337-2.618 9.164-4.664 14.647-6.055 5.4-1.391 11.046-2.373 16.856-3.027 7.037-.737 12.683-1.391 17.102-1.964 4.337-.573 7.528-1.555 9.574-2.782 1.963-1.309 3.027-3.273 3.027-5.973v-.491c0-5.891-1.718-10.391-5.237-13.664-3.518-3.191-8.51-4.828-15.056-4.828-6.955 0-12.356 1.473-16.447 4.5-4.009 3.028-6.71 6.546-8.183 10.719l-26.348-3.764c2.046-7.282 5.483-13.336 10.31-18.328 4.746-4.909 10.638-8.59 17.511-11.045 6.955-2.455 14.565-3.682 22.912-3.682 5.809 0 11.537.654 17.265 2.045s10.965 3.6 15.711 6.71c4.746 3.109 8.51 7.282 11.455 12.6 2.864 5.318 4.337 11.946 4.337 19.883v80.184h-27.166v-16.446h-.9c-1.719 3.355-4.092 6.464-7.201 9.328-3.109 2.864-6.955 5.237-11.619 6.955-4.828 1.718-10.229 2.536-16.529 2.536Zm7.364-20.701c5.646 0 10.556-1.145 14.729-3.354 4.173-2.291 7.364-5.237 9.655-9.001 2.292-3.763 3.355-7.854 3.355-12.273v-14.155c-.9.737-2.373 1.391-4.5 2.046-2.128.654-4.419 1.145-7.037 1.636-2.619.491-5.155.9-7.692 1.227-2.537.328-4.746.655-6.628.901-4.173.572-8.019 1.472-11.292 2.781-3.355 1.31-5.973 3.11-7.855 5.401-1.964 2.291-2.864 5.318-2.864 8.918 0 5.237 1.882 9.164 5.728 11.782 3.682 2.782 8.51 4.091 14.401 4.091Zm64.643 18.328V71.839h27.412v19.965h1.227c2.21-6.955 5.974-12.274 11.292-16.038 5.319-3.763 11.456-5.645 18.329-5.645 1.555 0 3.355.082 5.237.163 1.964.164 3.601.328 4.91.573v25.938c-1.227-.41-3.109-.819-5.646-1.146a58.814 58.814 0 0 0-7.446-.49c-5.155 0-9.738 1.145-13.829 3.354-4.091 2.209-7.282 5.236-9.655 9.164-2.373 3.927-3.519 8.427-3.519 13.5v70.448h-28.312ZM222.077 39.192l-8.019 125.923L137.387 0l84.69 39.192Zm-53.105 162.825-57.933 33.056-57.934-33.056 11.783-28.556h92.301l11.783 28.556ZM111.039 62.675l30.357 73.803H80.681l30.358-73.803ZM7.937 165.115 0 39.192 84.69 0 7.937 165.115Z"
+          />
+        </g>
+        <defs>
+          <radialGradient
+            id="c"
+            cx="0"
+            cy="0"
+            r="1"
+            gradientTransform="rotate(118.122 171.182 60.81) scale(205.794)"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stop-color="#FF41F8" />
+            <stop offset=".707" stop-color="#FF41F8" stop-opacity=".5" />
+            <stop offset="1" stop-color="#FF41F8" stop-opacity="0" />
+          </radialGradient>
+          <linearGradient
+            id="b"
+            x1="0"
+            x2="982"
+            y1="192"
+            y2="192"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stop-color="#F0060B" />
+            <stop offset="0" stop-color="#F0070C" />
+            <stop offset=".526" stop-color="#CC26D5" />
+            <stop offset="1" stop-color="#7702FF" />
+          </linearGradient>
+          <clipPath id="a"><path fill="#fff" d="M0 0h982v239H0z" /></clipPath>
+        </defs>
+      </svg>
+      <h1>Hello, {{ title() }}</h1>
+      <p>Congratulations! Your app is running. 🎉</p>
+    </div>
+    <div class="divider" role="separator" aria-label="Divider"></div>
+    <div class="right-side">
+      <div class="pill-group">
+        @for (item of [
+          { title: 'Explore the Docs', link: 'https://angular.dev' },
+          { title: 'Learn with Tutorials', link: 'https://angular.dev/tutorials' },
+          { title: 'Prompt and best practices for AI', link: 'https://angular.dev/ai/develop-with-ai'},
+          { title: 'CLI Docs', link: 'https://angular.dev/tools/cli' },
+          { title: 'Angular Language Service', link: 'https://angular.dev/tools/language-service' },
+          { title: 'Angular DevTools', link: 'https://angular.dev/tools/devtools' },
+        ]; track item.title) {
+          <a
+            class="pill"
+            [href]="item.link"
+            target="_blank"
+            rel="noopener"
+          >
+            <span>{{ item.title }}</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              height="14"
+              viewBox="0 -960 960 960"
+              width="14"
+              fill="currentColor"
+            >
+              <path
+                d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"
+              />
+            </svg>
+          </a>
+        }
+      </div>
+      <div class="social-links">
+        <a
+          href="https://github.com/angular/angular"
+          aria-label="Github"
+          target="_blank"
+          rel="noopener"
+        >
+          <svg
+            width="25"
+            height="24"
+            viewBox="0 0 25 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            alt="Github"
+          >
+            <path
+              d="M12.3047 0C5.50634 0 0 5.50942 0 12.3047C0 17.7423 3.52529 22.3535 8.41332 23.9787C9.02856 24.0946 9.25414 23.7142 9.25414 23.3871C9.25414 23.0949 9.24389 22.3207 9.23876 21.2953C5.81601 22.0377 5.09414 19.6444 5.09414 19.6444C4.53427 18.2243 3.72524 17.8449 3.72524 17.8449C2.61064 17.082 3.81137 17.0973 3.81137 17.0973C5.04697 17.1835 5.69604 18.3647 5.69604 18.3647C6.79321 20.2463 8.57636 19.7029 9.27978 19.3881C9.39052 18.5924 9.70736 18.0499 10.0591 17.7423C7.32641 17.4347 4.45429 16.3765 4.45429 11.6618C4.45429 10.3185 4.9311 9.22133 5.72065 8.36C5.58222 8.04931 5.16694 6.79833 5.82831 5.10337C5.82831 5.10337 6.85883 4.77319 9.2121 6.36459C10.1965 6.09082 11.2424 5.95546 12.2883 5.94931C13.3342 5.95546 14.3801 6.09082 15.3644 6.36459C17.7023 4.77319 18.7328 5.10337 18.7328 5.10337C19.3942 6.79833 18.9789 8.04931 18.8559 8.36C19.6403 9.22133 20.1171 10.3185 20.1171 11.6618C20.1171 16.3888 17.2409 17.4296 14.5031 17.7321C14.9338 18.1012 15.3337 18.8559 15.3337 20.0084C15.3337 21.6552 15.3183 22.978 15.3183 23.3779C15.3183 23.7009 15.5336 24.0854 16.1642 23.9623C21.0871 22.3484 24.6094 17.7341 24.6094 12.3047C24.6094 5.50942 19.0999 0 12.3047 0Z"
+            />
+          </svg>
+        </a>
+        <a
+          href="https://twitter.com/angular"
+          aria-label="Twitter"
+          target="_blank"
+          rel="noopener"
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            alt="Twitter"
+          >
+            <path
+              d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+            />
+          </svg>
+        </a>
+        <a
+          href="https://www.youtube.com/channel/UCbn1OgGei-DV7aSRo_HaAiw"
+          aria-label="Youtube"
+          target="_blank"
+          rel="noopener"
+        >
+          <svg
+            width="29"
+            height="20"
+            viewBox="0 0 29 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            alt="Youtube"
+          >
+            <path
+              fill-rule="evenodd"
+              clip-rule="evenodd"
+              d="M27.4896 1.52422C27.9301 1.96749 28.2463 2.51866 28.4068 3.12258C29.0004 5.35161 29.0004 10 29.0004 10C29.0004 10 29.0004 14.6484 28.4068 16.8774C28.2463 17.4813 27.9301 18.0325 27.4896 18.4758C27.0492 18.9191 26.5 19.2389 25.8972 19.4032C23.6778 20 14.8068 20 14.8068 20C14.8068 20 5.93586 20 3.71651 19.4032C3.11363 19.2389 2.56449 18.9191 2.12405 18.4758C1.68361 18.0325 1.36732 17.4813 1.20683 16.8774C0.613281 14.6484 0.613281 10 0.613281 10C0.613281 10 0.613281 5.35161 1.20683 3.12258C1.36732 2.51866 1.68361 1.96749 2.12405 1.52422C2.56449 1.08095 3.11363 0.76113 3.71651 0.596774C5.93586 0 14.8068 0 14.8068 0C14.8068 0 23.6778 0 25.8972 0.596774C26.5 0.76113 27.0492 1.08095 27.4896 1.52422ZM19.3229 10L11.9036 5.77905V14.221L19.3229 10Z"
+            />
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
+<!-- * * * * * * * * * * * The content above * * * * * * * * * * * * -->
+<!-- * * * * * * * * * * is only a placeholder * * * * * * * * * * * -->
+<!-- * * * * * * * * * * and can be replaced.  * * * * * * * * * * * -->
+<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
+<!-- * * * * * * * * * * End of Placeholder  * * * * * * * * * * * * -->
+<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
+
+
+<router-outlet />
+
+================
+File: frontend/epecps-web/src/app/app.spec.ts
+================
+import { TestBed } from '@angular/core/testing';
+import { RouterModule } from '@angular/router';
+import { App } from './app';
+
+describe('App', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [
+        RouterModule.forRoot([])
+      ],
+      declarations: [
+        App
+      ],
+    }).compileComponents();
+  });
+
+  it('should create the app', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    expect(app).toBeTruthy();
+  });
+
+  it('should render title', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, epecps-web');
+  });
+});
+
+================
+File: frontend/epecps-web/src/app/app.ts
+================
+import { Component, signal } from '@angular/core';
+
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.html',
+  standalone: false,
+  styleUrl: './app.css'
+})
+export class App {
+  protected readonly title = signal('epecps-web');
+}
+
+================
+File: frontend/epecps-web/src/index.html
+================
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EpecpsWeb</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+</head>
+<body>
+  <app-root></app-root>
+</body>
+</html>
+
+================
+File: frontend/epecps-web/src/main.ts
+================
+import { platformBrowser } from '@angular/platform-browser';
+import { AppModule } from './app/app-module';
+
+platformBrowser().bootstrapModule(AppModule, {
+  ngZoneEventCoalescing: true,
+})
+  .catch(err => console.error(err));
+
+================
+File: frontend/epecps-web/src/styles.css
+================
+/* You can add global styles to this file, and also import other style files */
+
+================
+File: frontend/epecps-web/tsconfig.app.json
+================
+/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
+/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/app",
+    "types": []
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/*.spec.ts"
+  ]
+}
+
+================
+File: frontend/epecps-web/tsconfig.json
+================
+/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
+/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "preserve"
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "typeCheckHostBindings": true,
+    "strictTemplates": true
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
+  ]
+}
+
+================
+File: frontend/epecps-web/tsconfig.spec.json
+================
+/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
+/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/spec",
+    "types": [
+      "jasmine"
+    ]
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}
+
+================
+File: .gitignore
+================
+# --- Visual Studio / .NET ---
+.vs/
+**/bin/
+**/obj/
+*.user
+*.rsuser
+*.suo
+*.userprefs
+# Optional: if you generate publish profiles
+*.pubxml
+*.publishproj
+
+# --- ASP.NET Core ---
+# Ignore local secrets & local-only configs
+appsettings.*.Development.json
+
+# --- Angular / Node (epecps-web) ---
+/epecps-web/node_modules/
+/epecps-web/dist/
+/epecps-web/.angular/
+/epecps-web/.npm/
+epecps-web/npm-debug.log*
+epecps-web/yarn-error.log*
+# env files (keep an example)
+epecps-web/.env
+epecps-web/.env.* 
+!epecps-web/.env.example
+
+
+
+
+
+================================================================
+End of Codebase
+================================================================
