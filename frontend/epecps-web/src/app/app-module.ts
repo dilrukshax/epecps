@@ -23,13 +23,26 @@ import {
   MSAL_INTERCEPTOR_TOKEN
 } from './core/auth/msal-config';
 
+import { SharedModule } from './shared/shared.module';
+import { DashboardComponent } from './pages/dashboard/dashboard.component';
+import { UnauthorizedComponent } from './pages/unauthorized/unauthorized.component';
+import { EvaluationsComponent } from './pages/evaluations/evaluations.component';
+import { ReviewsComponent } from './pages/reviews/reviews.component';
+
 @NgModule({
-  declarations: [App],
+  declarations: [
+    App,
+    DashboardComponent,
+    UnauthorizedComponent,
+    EvaluationsComponent,
+    ReviewsComponent
+  ],
   imports: [
     BrowserModule,
     HttpClientModule,
     AppRoutingModule,
-    MsalModule // registers MSAL Angular pieces
+    MsalModule,
+    SharedModule
   ],
   providers: [
     provideBrowserGlobalErrorListeners(),

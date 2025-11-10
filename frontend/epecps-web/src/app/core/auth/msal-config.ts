@@ -26,6 +26,7 @@ export const API_SCOPE = 'api://4ee96651-bdc5-40c6-a64a-49d53002ce9e/Epecps.Read
 
 // Redirect/post-logout URIs should match your dev host+port
 const REDIRECT_URI = `${window.location.origin}/auth-callback`;
+const POST_LOGOUT_REDIRECT_URI = `${window.location.origin}/login`;
 
 // Optional: default login request scopes
 export const DEFAULT_LOGIN_SCOPES = ['openid', 'profile', 'email', API_SCOPE];
@@ -37,7 +38,7 @@ export function MSALInstanceFactory(): IPublicClientApplication {
       clientId: SPA_CLIENT_ID,
       authority: `https://login.microsoftonline.com/${TENANT_ID}`,
       redirectUri: REDIRECT_URI,
-      postLogoutRedirectUri: REDIRECT_URI,
+      postLogoutRedirectUri: POST_LOGOUT_REDIRECT_URI,
       navigateToLoginRequestUrl: true
     },
     cache: {
@@ -57,7 +58,8 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     interactionType: InteractionType.Redirect,
     authRequest: {
       scopes: DEFAULT_LOGIN_SCOPES
-    }
+    },
+    loginFailedRoute: '/login'
   };
 }
 

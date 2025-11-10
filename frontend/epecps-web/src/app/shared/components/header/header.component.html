@@ -1,0 +1,124 @@
+<nav class="bg-white shadow-lg">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between h-16">
+      <!-- Logo and Brand -->
+      <div class="flex items-center">
+        <div class="flex-shrink-0 flex items-center">
+          <svg class="h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+          </svg>
+          <span class="ml-2 text-xl font-bold text-gray-900">EPECPS</span>
+        </div>
+        
+        <!-- Desktop Navigation -->
+        <div class="hidden md:ml-10 md:flex md:space-x-8" *ngIf="isUserLoggedIn">
+          <a (click)="navigateTo('/dashboard')" 
+             class="cursor-pointer border-transparent text-gray-500 hover:border-primary-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+            Dashboard
+          </a>
+          <a (click)="navigateTo('/evaluations')" 
+             class="cursor-pointer border-transparent text-gray-500 hover:border-primary-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+            Evaluations
+          </a>
+          <a (click)="navigateTo('/reviews')" 
+             class="cursor-pointer border-transparent text-gray-500 hover:border-primary-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+            Reviews
+          </a>
+        </div>
+      </div>
+
+      <!-- Right side: User menu or Login button -->
+      <div class="flex items-center">
+        <div class="flex-shrink-0" *ngIf="!isUserLoggedIn">
+          <button (click)="login()" 
+                  class="relative inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
+            <svg class="mr-2 -ml-1 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+            </svg>
+            Sign in with Microsoft
+          </button>
+        </div>
+
+        <!-- User Menu (when logged in) -->
+        <div class="hidden md:ml-4 md:flex md:items-center" *ngIf="isUserLoggedIn">
+          <div class="ml-3 relative">
+            <div class="flex items-center space-x-4">
+              <div class="flex flex-col items-end">
+                <span class="text-sm font-medium text-gray-700">{{ userName }}</span>
+                <span class="text-xs text-gray-500">{{ userEmail }}</span>
+              </div>
+              <div class="h-10 w-10 rounded-full bg-primary-600 flex items-center justify-center">
+                <span class="text-white font-semibold text-sm">{{ userName.charAt(0).toUpperCase() }}</span>
+              </div>
+              <button (click)="logout()" 
+                      class="ml-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
+                <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile menu button -->
+        <div class="flex items-center md:hidden">
+          <button (click)="toggleMobileMenu()" 
+                  type="button" 
+                  class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
+                  [attr.aria-expanded]="mobileMenuOpen">
+            <span class="sr-only">Open main menu</span>
+            <!-- Icon when menu is closed -->
+            <svg *ngIf="!mobileMenuOpen" class="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <!-- Icon when menu is open -->
+            <svg *ngIf="mobileMenuOpen" class="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile menu -->
+  <div class="md:hidden" [class.hidden]="!mobileMenuOpen">
+    <div class="pt-2 pb-3 space-y-1" *ngIf="isUserLoggedIn">
+      <a (click)="navigateTo('/dashboard')" 
+         class="cursor-pointer border-transparent text-gray-500 hover:bg-gray-50 hover:border-primary-500 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+        Dashboard
+      </a>
+      <a (click)="navigateTo('/evaluations')" 
+         class="cursor-pointer border-transparent text-gray-500 hover:bg-gray-50 hover:border-primary-500 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+        Evaluations
+      </a>
+      <a (click)="navigateTo('/reviews')" 
+         class="cursor-pointer border-transparent text-gray-500 hover:bg-gray-50 hover:border-primary-500 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+        Reviews
+      </a>
+    </div>
+    <div class="pt-4 pb-3 border-t border-gray-200" *ngIf="isUserLoggedIn">
+      <div class="flex items-center px-4">
+        <div class="flex-shrink-0">
+          <div class="h-10 w-10 rounded-full bg-primary-600 flex items-center justify-center">
+            <span class="text-white font-semibold">{{ userName.charAt(0).toUpperCase() }}</span>
+          </div>
+        </div>
+        <div class="ml-3">
+          <div class="text-base font-medium text-gray-800">{{ userName }}</div>
+          <div class="text-sm font-medium text-gray-500">{{ userEmail }}</div>
+        </div>
+      </div>
+      <div class="mt-3 space-y-1">
+        <button (click)="logout()" 
+                class="block w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
+          Sign out
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>

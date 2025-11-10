@@ -1,0 +1,86 @@
+<div class="min-h-screen bg-gray-50">
+  <app-header></app-header>
+  
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Page Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900">Evaluations</h1>
+      <p class="mt-2 text-gray-600">Manage and review employee performance evaluations.</p>
+    </div>
+
+    <!-- Action Bar -->
+    <div class="mb-6 flex justify-between items-center">
+      <div class="flex gap-4">
+        <select class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+          <option>All Cycles</option>
+          <option>Q4 2024</option>
+          <option>Q3 2024</option>
+          <option>Q2 2024</option>
+        </select>
+        
+        <select class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+          <option>All Status</option>
+          <option>In Progress</option>
+          <option>Completed</option>
+          <option>Pending</option>
+        </select>
+      </div>
+      
+      <button class="px-4 py-2 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors">
+        <svg class="inline-block mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        New Evaluation
+      </button>
+    </div>
+
+    <!-- Evaluations Table -->
+    <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cycle</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <tr *ngFor="let evaluation of evaluations" class="hover:bg-gray-50">
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="flex items-center">
+                <div class="h-10 w-10 rounded-full bg-primary-600 flex items-center justify-center">
+                  <span class="text-white font-semibold text-sm">{{ evaluation.employee.charAt(0) }}</span>
+                </div>
+                <div class="ml-4">
+                  <div class="text-sm font-medium text-gray-900">{{ evaluation.employee }}</div>
+                </div>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900">{{ evaluation.cycle }}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full"
+                    [ngClass]="{
+                      'bg-green-100 text-green-800': evaluation.status === 'Completed',
+                      'bg-yellow-100 text-yellow-800': evaluation.status === 'In Progress',
+                      'bg-gray-100 text-gray-800': evaluation.status === 'Pending'
+                    }">
+                {{ evaluation.status }}
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {{ evaluation.dueDate }}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <button class="text-primary-600 hover:text-primary-900 mr-4">View</button>
+              <button class="text-gray-600 hover:text-gray-900">Edit</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
