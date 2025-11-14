@@ -1,0 +1,86 @@
+<div class="category-list-container">
+  <div class="header">
+    <h2>Categories ({{ getActiveCategoriesCount() }})</h2>
+    <button 
+      class="btn btn-primary btn-sm" 
+      (click)="onCreateCategory()"
+      [disabled]="isPublished">
+      + Add Category
+    </button>
+  </div>
+
+  <div class="categories-list" *ngIf="categories.length > 0">
+    <div 
+      *ngFor="let category of categories; let i = index"
+      class="category-item"
+      [class.selected]="isCategorySelected(category)"
+      [class.inactive]="!category.isActive"
+      (click)="onSelectCategory(category)">
+      
+      <div class="category-header">
+        <div class="category-info">
+          <h3 class="category-name">{{ category.name }}</h3>
+          <span class="category-weight">{{ category.weightPercent }}%</span>
+        </div>
+        
+        <div class="category-actions" *ngIf="!isPublished">
+          <button 
+            class="btn-icon edit" 
+            (click)="onEditCategory(category, $event)"
+            title="Edit">
+            ✏️
+          </button>
+          <button 
+            class="btn-icon delete" 
+            (click)="onDeleteCategory(category, $event)"
+            title="Delete">
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      <div class="category-details">
+        <p class="category-description" *ngIf="category.description">
+          {{ category.description }}
+        </p>
+        <div class="category-meta">
+          <span class="meta-badge" *ngIf="category.maxScore">
+            Max: {{ category.maxScore }}
+          </span>
+          <span class="meta-badge inactive-badge" *ngIf="!category.isActive">
+            Inactive
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="empty-state" *ngIf="categories.length === 0">
+    <p>No categories yet.</p>
+    <button 
+      class="btn btn-primary" 
+      (click)="onCreateCategory()"
+      [disabled]="isPublished">
+      Create First Category
+    </button>
+  </div>
+</div>
+
+<!-- Create Category Dialog -->
+<app-category-form-dialog
+  *ngIf="showCreateDialog"
+  [mode]="'create'"
+  [templateId]="templateId"
+  (categoryCreated)="onCategoryCreated()"
+  (cancelled)="showCreateDialog = false">
+</app-category-form-dialog>
+
+<!-- Edit Category Dialog -->
+<app-category-form-dialog
+  *ngIf="showEditDialog && categoryToEdit"
+  [mode]="'edit'"
+  [templateId]="templateId"
+  [category]="categoryToEdit"
+  (categoryUpdated)="onCategoryUpdated()"
+  (cancelled)="showEditDialog = false; categoryToEdit = null">
+</app-category-form-dialog>

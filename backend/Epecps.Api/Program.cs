@@ -3,10 +3,23 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.Resource;
 using Microsoft.OpenApi.Models;
+using Microsoft.EntityFrameworkCore;
+using Epecps.Infrastructure.Persistence;
+using Epecps.Application.Interfaces;
+using Epecps.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
 var config = builder.Configuration;
+
+// Database Context
+services.AddDbContext<EpecpsDbContext>(options =>
+    options.UseSqlServer(config.GetConnectionString("DefaultConnection")));
+
+// Application Services
+services.AddScoped<IScoreTemplateService, ScoreTemplateService>();
+services.AddScoped<IScoreCategoryService, ScoreCategoryService>();
+services.AddScoped<IScoreItemService, ScoreItemService>();
 
 // CORS for Angular dev on 64291
 services.AddCors(opt =>

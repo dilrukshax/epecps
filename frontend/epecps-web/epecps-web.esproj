@@ -7,4 +7,8 @@
     <!-- Folder where production build objects will be placed -->
     <BuildOutputFolder>$(MSBuildProjectDirectory)\dist\epecps-web\browser\</BuildOutputFolder>
   </PropertyGroup>
+  <ItemGroup>
+    <Folder Include="src\app\admin\components\category-items\" />
+    <Folder Include="src\app\admin\components\item-form-dialog\" />
+  </ItemGroup>
 </Project>

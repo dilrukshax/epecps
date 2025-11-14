@@ -5,75 +5,20 @@
     <!-- Welcome Section -->
     <div class="mb-8">
       <h1 class="text-3xl font-bold text-gray-900">Welcome back, {{ userName }}!</h1>
-      <p class="mt-2 text-gray-600">Here's what's happening with your performance evaluations.</p>
-    </div>
-
-    <!-- Stats Grid -->
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-      <div *ngFor="let stat of stats" 
-           class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
-        <div class="p-6">
-          <div class="flex items-center">
-            <div class="flex-shrink-0 rounded-md p-3" [ngClass]="stat.bgColor">
-              <!-- Clock Icon -->
-              <svg *ngIf="stat.icon === 'clock'" class="h-6 w-6" [ngClass]="stat.color" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <!-- Check Icon -->
-              <svg *ngIf="stat.icon === 'check'" class="h-6 w-6" [ngClass]="stat.color" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <!-- Users Icon -->
-              <svg *ngIf="stat.icon === 'users'" class="h-6 w-6" [ngClass]="stat.color" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                      d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-              <!-- Target Icon -->
-              <svg *ngIf="stat.icon === 'target'" class="h-6 w-6" [ngClass]="stat.color" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                      d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">{{ stat.name }}</dt>
-                <dd class="text-3xl font-bold text-gray-900">{{ stat.value }}</dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
+      <p class="mt-2 text-gray-600">Here's your performance evaluation dashboard.</p>
     </div>
 
     <!-- Content Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <!-- Recent Activity -->
+      <!-- Main Content -->
       <div class="lg:col-span-2">
         <div class="bg-white shadow-lg rounded-lg overflow-hidden">
           <div class="px-6 py-5 border-b border-gray-200">
-            <h2 class="text-xl font-bold text-gray-900">Recent Activity</h2>
+            <h2 class="text-xl font-bold text-gray-900">Your Performance Overview</h2>
           </div>
-          <ul class="divide-y divide-gray-200">
-            <li *ngFor="let activity of recentActivities" class="px-6 py-4 hover:bg-gray-50 transition-colors">
-              <div class="flex items-start">
-                <div class="flex-shrink-0">
-                  <div class="h-2 w-2 rounded-full mt-2"
-                       [ngClass]="{
-                         'bg-green-500': activity.type === 'success',
-                         'bg-blue-500': activity.type === 'info',
-                         'bg-yellow-500': activity.type === 'warning'
-                       }">
-                  </div>
-                </div>
-                <div class="ml-4 flex-1">
-                  <p class="text-sm font-medium text-gray-900">{{ activity.action }}</p>
-                  <p class="text-sm text-gray-500">{{ activity.date }}</p>
-                </div>
-              </div>
-            </li>
-          </ul>
+          <div class="p-6">
+            <p class="text-gray-600">Your evaluation data will appear here.</p>
+          </div>
         </div>
       </div>
 

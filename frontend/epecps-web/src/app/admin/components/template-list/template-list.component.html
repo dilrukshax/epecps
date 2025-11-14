@@ -1,0 +1,169 @@
+<div class="min-h-screen bg-gray-50">
+  <app-header></app-header>
+  
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header Section -->
+    <div class="mb-8">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900">Score Templates</h1>
+          <p class="mt-2 text-gray-600">Manage score templates, categories, and items</p>
+        </div>
+        <div class="flex items-center space-x-4">
+          <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+            <input 
+              type="checkbox" 
+              [(ngModel)]="includeArchived" 
+              (change)="onToggleArchived()"
+              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+            <span>Show Archived</span>
+          </label>
+          <button 
+            (click)="onCreateTemplate()"
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
+            <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Create Template
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="loading" class="text-center py-12">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      <p class="mt-4 text-gray-600">Loading templates...</p>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="error && !loading" class="bg-red-50 border border-red-200 rounded-lg p-4 mb-8">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm text-red-800">{{ error }}</p>
+        </div>
+        <div class="ml-auto pl-3">
+          <button (click)="loadTemplates()" class="text-sm font-medium text-red-800 hover:text-red-900">
+            Retry
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Templates Table -->
+    <div *ngIf="!loading && !error" class="bg-white shadow-lg rounded-lg overflow-hidden">
+      <div *ngIf="templates.length > 0" class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Name
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Description
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Version
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Categories
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Created
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <tr *ngFor="let template of templates" 
+                (click)="onEditTemplate(template)"
+                class="hover:bg-gray-50 cursor-pointer transition-colors">
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm font-medium text-gray-900">{{ template.name }}</div>
+              </td>
+              <td class="px-6 py-4">
+                <div class="text-sm text-gray-500 max-w-xs truncate">{{ template.description || '-' }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-900">v{{ template.version }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-900">{{ template.categoryCount }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                      [ngClass]="getStatusClass(template)">
+                  {{ getStatusText(template) }}
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-500">{{ template.createdAt | date:'short' }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                <button 
+                  (click)="onEditTemplate(template)"
+                  class="text-primary-600 hover:text-primary-900">
+                  Edit
+                </button>
+                <button 
+                  *ngIf="!template.isPublished && !template.isArchived"
+                  (click)="onPublishTemplate(template, $event)"
+                  class="text-green-600 hover:text-green-900">
+                  Publish
+                </button>
+                <button 
+                  (click)="onCloneTemplate(template, $event)"
+                  class="text-blue-600 hover:text-blue-900">
+                  Clone
+                </button>
+                <button 
+                  *ngIf="!template.isArchived"
+                  (click)="onArchiveTemplate(template, $event)"
+                  class="text-red-600 hover:text-red-900">
+                  Archive
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="templates.length === 0" class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No templates found</h3>
+        <p class="mt-1 text-sm text-gray-500">Get started by creating a new template.</p>
+        <div class="mt-6">
+          <button 
+            (click)="onCreateTemplate()"
+            class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Create Template
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Create Template Dialog -->
+<app-template-form-dialog
+  *ngIf="showCreateDialog"
+  [mode]="'create'"
+  (templateCreated)="onTemplateCreated($event)"
+  (cancelled)="showCreateDialog = false">
+</app-template-form-dialog>

@@ -25,6 +25,14 @@
              class="cursor-pointer border-transparent text-gray-500 hover:border-primary-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
             Reviews
           </a>
+          <a (click)="navigateTo('/admin/dashboard')" 
+             class="cursor-pointer border-transparent text-gray-500 hover:border-primary-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+            Admin
+          </a>
+          <a (click)="navigateTo('/admin/templates')" 
+             class="cursor-pointer border-transparent text-gray-500 hover:border-primary-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+            Templates
+          </a>
         </div>
       </div>
 
@@ -99,6 +107,14 @@
       <a (click)="navigateTo('/reviews')" 
          class="cursor-pointer border-transparent text-gray-500 hover:bg-gray-50 hover:border-primary-500 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
         Reviews
+      </a>
+      <a (click)="navigateTo('/admin/dashboard')" 
+         class="cursor-pointer border-transparent text-gray-500 hover:bg-gray-50 hover:border-primary-500 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+        Admin
+      </a>
+      <a (click)="navigateTo('/admin/templates')" 
+         class="cursor-pointer border-transparent text-gray-500 hover:bg-gray-50 hover:border-primary-500 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+        Templates
       </a>
     </div>
     <div class="pt-4 pb-3 border-t border-gray-200" *ngIf="isUserLoggedIn">

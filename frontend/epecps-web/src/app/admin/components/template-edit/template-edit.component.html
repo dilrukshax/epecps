@@ -1,0 +1,87 @@
+<div class="template-edit-container">
+  <!-- Header -->
+  <div class="header">
+    <button class="btn btn-back" (click)="onBack()">
+      ? Back to Templates
+    </button>
+    <div class="header-actions" *ngIf="template">
+      <button 
+        class="btn btn-secondary" 
+        (click)="onEditTemplateInfo()"
+        [disabled]="template.isPublished">
+        Edit Info
+      </button>
+      <button 
+        *ngIf="!template.isPublished"
+        class="btn btn-success" 
+        (click)="onPublishTemplate()"
+        [disabled]="!isWeightValid()">
+        Publish Template
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-state">
+    <div class="spinner"></div>
+    <p>Loading template...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error && !loading" class="error-state">
+    <p>{{ error }}</p>
+    <button class="btn btn-secondary" (click)="onBack()">Go Back</button>
+  </div>
+
+  <!-- Template Content -->
+  <div *ngIf="template && !loading" class="template-content">
+    <!-- Template Info Card -->
+    <div class="template-info-card">
+      <h1>{{ template.name }}</h1>
+      <p class="description">{{ template.description || 'No description' }}</p>
+      
+      <div class="template-meta">
+        <div class="meta-item">
+          <span class="label">Version:</span>
+          <span class="value">v{{ template.version }}</span>
+        </div>
+        <div class="meta-item">
+          <span class="label">Status:</span>
+          <span class="badge" [ngClass]="template.isPublished ? 'badge-published' : 'badge-draft'">
+            {{ template.isPublished ? 'Published' : 'Draft' }}
+          </span>
+        </div>
+        <div class="meta-item">
+          <span class="label">Total Weight:</span>
+          <span class="value" [ngClass]="{'weight-invalid': !isWeightValid()}">
+            {{ getTotalWeight().toFixed(2) }}%
+            <span *ngIf="!isWeightValid()" class="weight-warning">
+              ⚠️ Must be 100%
+            </span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Single Panel Layout: Categories Only -->
+    <div class="single-panel-layout">
+      <app-category-list
+        [templateId]="template.id"
+        [categories]="template.categories"
+        [selectedCategory]="selectedCategory"
+        [isPublished]="template.isPublished"
+        (categorySelected)="onCategorySelected($event)"
+        (categoriesChanged)="onCategoriesChanged()">
+      </app-category-list>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Template Dialog -->
+<app-template-form-dialog
+  *ngIf="showTemplateEditDialog && template"
+  [mode]="'edit'"
+  [template]="template"
+  (templateUpdated)="onTemplateUpdated()"
+  (cancelled)="showTemplateEditDialog = false">
+</app-template-form-dialog>
