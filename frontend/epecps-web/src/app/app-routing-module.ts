@@ -4,8 +4,6 @@ import { MsalGuard, MsalRedirectComponent } from '@azure/msal-angular';
 import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { AdminDashboardComponent } from './pages/admin-dashboard/admin-dashboard.component';
 import { UnauthorizedComponent } from './pages/unauthorized/unauthorized.component';
-import { EvaluationsComponent } from './pages/evaluations/evaluations.component';
-import { ReviewsComponent } from './pages/reviews/reviews.component';
 
 const routes: Routes = [
   // MSAL processes the hash on this route after login
@@ -18,16 +16,6 @@ const routes: Routes = [
   { 
     path: 'dashboard', 
     component: DashboardComponent, 
-    canActivate: [MsalGuard] 
-  },
-  { 
-    path: 'evaluations', 
-    component: EvaluationsComponent, 
-    canActivate: [MsalGuard] 
-  },
-  { 
-    path: 'reviews', 
-    component: ReviewsComponent, 
     canActivate: [MsalGuard] 
   },
   

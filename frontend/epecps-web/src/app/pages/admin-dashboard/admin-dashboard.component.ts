@@ -50,22 +50,6 @@ export class AdminDashboardComponent implements OnInit {
     }
   ];
 
-  apiEndpoints = [
-    { method: 'GET', path: '/api/v1/admin/templates', description: 'Get all templates' },
-    { method: 'GET', path: '/api/v1/admin/templates/{id}', description: 'Get template details' },
-    { method: 'POST', path: '/api/v1/admin/templates', description: 'Create new template' },
-    { method: 'PUT', path: '/api/v1/admin/templates/{id}', description: 'Update template' },
-    { method: 'POST', path: '/api/v1/admin/templates/{id}/publish', description: 'Publish template' },
-    { method: 'POST', path: '/api/v1/admin/templates/{id}/clone', description: 'Clone template' },
-    { method: 'POST', path: '/api/v1/admin/templates/{id}/archive', description: 'Archive template' },
-    { method: 'POST', path: '/api/v1/admin/templates/{templateId}/categories', description: 'Create category' },
-    { method: 'PUT', path: '/api/v1/admin/categories/{categoryId}', description: 'Update category' },
-    { method: 'DELETE', path: '/api/v1/admin/categories/{categoryId}', description: 'Delete category' },
-    { method: 'POST', path: '/api/v1/admin/categories/{categoryId}/items', description: 'Create item' },
-    { method: 'PUT', path: '/api/v1/admin/items/{itemId}', description: 'Update item' },
-    { method: 'DELETE', path: '/api/v1/admin/items/{itemId}', description: 'Delete item' }
-  ];
-
   constructor(
     private templateService: ScoreTemplateService,
     private router: Router
@@ -98,16 +82,6 @@ export class AdminDashboardComponent implements OnInit {
   navigateTo(route: string): void {
     if (route !== '#') {
       this.router.navigate([route]);
-    }
-  }
-
-  getMethodColor(method: string): string {
-    switch (method) {
-      case 'GET': return 'text-green-600 bg-green-50';
-      case 'POST': return 'text-blue-600 bg-blue-50';
-      case 'PUT': return 'text-yellow-600 bg-yellow-50';
-      case 'DELETE': return 'text-red-600 bg-red-50';
-      default: return 'text-gray-600 bg-gray-50';
     }
   }
 }

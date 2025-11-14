@@ -27,17 +27,13 @@ import { SharedModule } from './shared/shared.module';
 import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { AdminDashboardComponent } from './pages/admin-dashboard/admin-dashboard.component';
 import { UnauthorizedComponent } from './pages/unauthorized/unauthorized.component';
-import { EvaluationsComponent } from './pages/evaluations/evaluations.component';
-import { ReviewsComponent } from './pages/reviews/reviews.component';
 
 @NgModule({
   declarations: [
     App,
     DashboardComponent,
     AdminDashboardComponent,
-    UnauthorizedComponent,
-    EvaluationsComponent,
-    ReviewsComponent
+    UnauthorizedComponent
   ],
   imports: [
     BrowserModule,

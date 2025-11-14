@@ -10,5 +10,6 @@
   <ItemGroup>
     <Folder Include="src\app\admin\components\category-items\" />
     <Folder Include="src\app\admin\components\item-form-dialog\" />
+    <Folder Include="src\app\pages\reviews\" />
   </ItemGroup>
 </Project>

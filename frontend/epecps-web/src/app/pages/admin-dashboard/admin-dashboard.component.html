@@ -94,70 +94,40 @@
       </div>
     </div>
 
-    <!-- Content Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <!-- Quick Actions -->
-      <div class="lg:col-span-2">
-        <div class="bg-white shadow-lg rounded-lg overflow-hidden">
-          <div class="px-6 py-5 border-b border-gray-200">
-            <h2 class="text-xl font-bold text-gray-900">Quick Actions</h2>
-          </div>
-          <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div *ngFor="let action of adminActions" 
-                 (click)="navigateTo(action.route)"
-                 class="border-2 border-gray-200 rounded-lg p-6 hover:border-primary-500 hover:shadow-md transition-all cursor-pointer">
-              <div class="flex items-start">
-                <div class="flex-shrink-0">
-                  <div class="h-10 w-10 rounded-lg flex items-center justify-center"
-                       [ngClass]="{
-                         'bg-blue-100': action.color === 'blue',
-                         'bg-green-100': action.color === 'green',
-                         'bg-purple-100': action.color === 'purple',
-                         'bg-gray-100': action.color === 'gray'
-                       }">
-                    <svg class="h-6 w-6"
-                         [ngClass]="{
-                           'text-blue-600': action.color === 'blue',
-                           'text-green-600': action.color === 'green',
-                           'text-purple-600': action.color === 'purple',
-                           'text-gray-600': action.color === 'gray'
-                         }"
-                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                </div>
-                <div class="ml-4 flex-1">
-                  <h3 class="text-lg font-semibold text-gray-900">{{ action.title }}</h3>
-                  <p class="mt-1 text-sm text-gray-500">{{ action.description }}</p>
-                </div>
+    <!-- Quick Actions -->
+    <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-200">
+        <h2 class="text-xl font-bold text-gray-900">Quick Actions</h2>
+      </div>
+      <div class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div *ngFor="let action of adminActions" 
+             (click)="navigateTo(action.route)"
+             class="border-2 border-gray-200 rounded-lg p-6 hover:border-primary-500 hover:shadow-md transition-all cursor-pointer">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <div class="h-10 w-10 rounded-lg flex items-center justify-center"
+                   [ngClass]="{
+                     'bg-blue-100': action.color === 'blue',
+                     'bg-green-100': action.color === 'green',
+                     'bg-purple-100': action.color === 'purple',
+                     'bg-gray-100': action.color === 'gray'
+                   }">
+                <svg class="h-6 w-6"
+                     [ngClass]="{
+                       'text-blue-600': action.color === 'blue',
+                       'text-green-600': action.color === 'green',
+                       'text-purple-600': action.color === 'purple',
+                       'text-gray-600': action.color === 'gray'
+                     }"
+                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- API Endpoints -->
-      <div class="lg:col-span-1">
-        <div class="bg-white shadow-lg rounded-lg overflow-hidden">
-          <div class="px-6 py-5 border-b border-gray-200">
-            <h2 class="text-xl font-bold text-gray-900">API Endpoints</h2>
-          </div>
-          <div class="max-h-96 overflow-y-auto">
-            <ul class="divide-y divide-gray-200">
-              <li *ngFor="let endpoint of apiEndpoints" class="px-6 py-3 hover:bg-gray-50">
-                <div class="flex items-start space-x-3">
-                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" 
-                        [ngClass]="getMethodColor(endpoint.method)">
-                    {{ endpoint.method }}
-                  </span>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-xs font-mono text-gray-900 truncate">{{ endpoint.path }}</p>
-                    <p class="text-xs text-gray-500">{{ endpoint.description }}</p>
-                  </div>
-                </div>
-              </li>
-            </ul>
+            <div class="ml-4 flex-1">
+              <h3 class="text-lg font-semibold text-gray-900">{{ action.title }}</h3>
+              <p class="mt-1 text-sm text-gray-500">{{ action.description }}</p>
+            </div>
           </div>
         </div>
       </div>

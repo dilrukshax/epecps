@@ -2,7 +2,7 @@
   <div class="dialog-content" (click)="$event.stopPropagation()">
     <div class="dialog-header">
       <h2>{{ getTitle() }}</h2>
-      <button class="btn-close" (click)="onCancel()">×</button>
+      <button class="btn-close" (click)="onCancel()">&times;</button>
     </div>
 
     <form [formGroup]="form" (ngSubmit)="onSubmit()">
