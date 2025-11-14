@@ -1,0 +1,170 @@
+<div class="dialog-overlay" (click)="onCancel()">
+  <div class="dialog-content" (click)="$event.stopPropagation()">
+    <div class="dialog-header">
+      <h2>{{ getTitle() }}</h2>
+      <button class="btn-close" (click)="onCancel()">&times;</button>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <div class="dialog-body">
+        <!-- Error Message -->
+        <div class="error-message" *ngIf="error">
+          {{ error }}
+        </div>
+
+        <!-- Name Field -->
+        <div class="form-group">
+          <label for="name">Item Name <span class="required">*</span></label>
+          <input 
+            type="text" 
+            id="name" 
+            formControlName="name" 
+            class="form-control"
+            [class.invalid]="getFieldError('name')"
+            placeholder="e.g., Complete UX Design Course">
+          <span class="error-text" *ngIf="getFieldError('name')">
+            {{ getFieldError('name') }}
+          </span>
+        </div>
+
+        <!-- Description Field -->
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea 
+            id="description" 
+            formControlName="description" 
+            class="form-control"
+            rows="3"
+            [class.invalid]="getFieldError('description')"
+            placeholder="Enter item description (optional)"></textarea>
+          <span class="error-text" *ngIf="getFieldError('description')">
+            {{ getFieldError('description') }}
+          </span>
+        </div>
+
+        <!-- Item Type Field -->
+        <div class="form-group">
+          <label for="itemType">Item Type <span class="required">*</span></label>
+          <select 
+            id="itemType" 
+            formControlName="itemType" 
+            class="form-control"
+            [class.invalid]="getFieldError('itemType')">
+            <option *ngFor="let type of itemTypes" [ngValue]="type.value">
+              {{ type.label }}
+            </option>
+          </select>
+          <span class="help-text">Checklist (Y/N), Rating (1-5), or Numeric (any number)</span>
+          <span class="error-text" *ngIf="getFieldError('itemType')">
+            {{ getFieldError('itemType') }}
+          </span>
+        </div>
+
+        <!-- Max Score Field -->
+        <div class="form-group">
+          <label for="maxScore">Maximum Score <span class="required">*</span></label>
+          <input 
+            type="number" 
+            id="maxScore" 
+            formControlName="maxScore" 
+            class="form-control"
+            [class.invalid]="getFieldError('maxScore')"
+            min="0"
+            step="0.01"
+            placeholder="0">
+          <span class="error-text" *ngIf="getFieldError('maxScore')">
+            {{ getFieldError('maxScore') }}
+          </span>
+        </div>
+
+        <!-- Weight Within Category Field -->
+        <div class="form-group">
+          <label for="weightWithinCategory">Weight Within Category (Optional)</label>
+          <input 
+            type="number" 
+            id="weightWithinCategory" 
+            formControlName="weightWithinCategory" 
+            class="form-control"
+            [class.invalid]="getFieldError('weightWithinCategory')"
+            min="0"
+            step="0.01"
+            placeholder="Leave empty for equal weight">
+          <span class="help-text">Optional weighting of this item within the category</span>
+          <span class="error-text" *ngIf="getFieldError('weightWithinCategory')">
+            {{ getFieldError('weightWithinCategory') }}
+          </span>
+        </div>
+
+        <!-- Display Order Field -->
+        <div class="form-group">
+          <label for="displayOrder">Display Order <span class="required">*</span></label>
+          <input 
+            type="number" 
+            id="displayOrder" 
+            formControlName="displayOrder" 
+            class="form-control"
+            [class.invalid]="getFieldError('displayOrder')"
+            min="0"
+            step="1"
+            placeholder="0">
+          <span class="error-text" *ngIf="getFieldError('displayOrder')">
+            {{ getFieldError('displayOrder') }}
+          </span>
+        </div>
+
+        <!-- Is Mandatory Field -->
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" formControlName="isMandatory">
+            Mandatory Item
+          </label>
+          <span class="help-text">Must be completed for evaluation</span>
+        </div>
+
+        <!-- Evidence Required Field -->
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" formControlName="evidenceRequired">
+            Evidence Required
+          </label>
+          <span class="help-text">Requires supporting evidence/documentation</span>
+        </div>
+
+        <!-- Evidence Hint Field -->
+        <div class="form-group" *ngIf="form.get('evidenceRequired')?.value">
+          <label for="evidenceHint">Evidence Hint</label>
+          <input 
+            type="text" 
+            id="evidenceHint" 
+            formControlName="evidenceHint" 
+            class="form-control"
+            [class.invalid]="getFieldError('evidenceHint')"
+            placeholder="e.g., Upload certificate or course completion proof">
+          <span class="help-text">Hint for what evidence is needed</span>
+          <span class="error-text" *ngIf="getFieldError('evidenceHint')">
+            {{ getFieldError('evidenceHint') }}
+          </span>
+        </div>
+
+        <!-- Is Active Field (only in edit mode) -->
+        <div class="form-group checkbox-group" *ngIf="mode === 'edit'">
+          <label>
+            <input type="checkbox" formControlName="isActive">
+            Active
+          </label>
+          <span class="help-text">Inactive items are excluded from evaluations</span>
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary" (click)="onCancel()" [disabled]="loading">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="loading">
+          <span *ngIf="loading">Saving...</span>
+          <span *ngIf="!loading">{{ mode === 'create' ? 'Create' : 'Update' }}</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

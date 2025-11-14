@@ -1,0 +1,100 @@
+<div class="items-container">
+  <div class="header">
+    <h2>Items for "{{ categoryName }}" ({{ getActiveItemsCount() }})</h2>
+    <button 
+      class="btn btn-primary btn-sm" 
+      (click)="onCreateItem()"
+      [disabled]="isPublished">
+      + Add Item
+    </button>
+  </div>
+
+  <div class="items-list" *ngIf="items.length > 0">
+    <div 
+      *ngFor="let item of items; let i = index"
+      class="item-card"
+      [class.inactive]="!item.isActive">
+      
+      <div class="item-header">
+        <div class="item-info">
+          <h3 class="item-name">{{ item.name }}</h3>
+        </div>
+        
+        <div class="item-actions" *ngIf="!isPublished">
+          <button 
+            class="btn-icon edit" 
+            (click)="onEditItem(item, $event)"
+            title="Edit">
+            Edit
+          </button>
+          <button 
+            class="btn-icon delete" 
+            (click)="onDeleteItem(item, $event)"
+            title="Delete">
+            Delete
+          </button>
+        </div>
+      </div>
+
+      <div class="item-body">
+        <p class="item-description" *ngIf="item.description">
+          {{ item.description }}
+        </p>
+
+        <div class="item-meta">
+          <span class="meta-badge">
+            Max Score: {{ item.maxScore }}
+          </span>
+          <span class="meta-badge" *ngIf="item.weightWithinCategory">
+            Weight: {{ item.weightWithinCategory }}
+          </span>
+          <span class="meta-badge type-badge">
+            {{ getItemTypeLabel(item.itemType) }}
+          </span>
+          <span class="meta-badge mandatory-badge" *ngIf="item.isMandatory">
+            Mandatory
+          </span>
+          <span class="meta-badge evidence-badge" *ngIf="item.evidenceRequired">
+            Evidence Required
+          </span>
+          <span class="meta-badge inactive-badge" *ngIf="!item.isActive">
+            Inactive
+          </span>
+        </div>
+
+        <div class="evidence-hint" *ngIf="item.evidenceRequired && item.evidenceHint">
+          <strong>Evidence Hint:</strong> {{ item.evidenceHint }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="empty-state" *ngIf="items.length === 0">
+    <p>No items in this category yet.</p>
+    <button 
+      class="btn btn-primary" 
+      (click)="onCreateItem()"
+      [disabled]="isPublished">
+      Create First Item
+    </button>
+  </div>
+</div>
+
+<!-- Create Item Dialog -->
+<app-item-form-dialog
+  *ngIf="showCreateDialog"
+  [mode]="'create'"
+  [categoryId]="categoryId"
+  (itemCreated)="onItemCreated()"
+  (cancelled)="showCreateDialog = false">
+</app-item-form-dialog>
+
+<!-- Edit Item Dialog -->
+<app-item-form-dialog
+  *ngIf="showEditDialog && itemToEdit"
+  [mode]="'edit'"
+  [categoryId]="categoryId"
+  [item]="itemToEdit"
+  (itemUpdated)="onItemUpdated()"
+  (cancelled)="showEditDialog = false; itemToEdit = null">
+</app-item-form-dialog>

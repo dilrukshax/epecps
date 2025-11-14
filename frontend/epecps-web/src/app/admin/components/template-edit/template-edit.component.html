@@ -63,16 +63,35 @@
       </div>
     </div>
 
-    <!-- Single Panel Layout: Categories Only -->
-    <div class="single-panel-layout">
-      <app-category-list
-        [templateId]="template.id"
-        [categories]="template.categories"
-        [selectedCategory]="selectedCategory"
-        [isPublished]="template.isPublished"
-        (categorySelected)="onCategorySelected($event)"
-        (categoriesChanged)="onCategoriesChanged()">
-      </app-category-list>
+    <!-- Two Panel Layout: Categories on left, Items on right -->
+    <div class="two-panel-layout">
+      <!-- Left Panel: Categories -->
+      <div class="left-panel">
+        <app-category-list
+          [templateId]="template.id"
+          [categories]="template.categories"
+          [selectedCategory]="selectedCategory"
+          [isPublished]="template.isPublished"
+          (categorySelected)="onCategorySelected($event)"
+          (categoriesChanged)="onCategoriesChanged()">
+        </app-category-list>
+      </div>
+
+      <!-- Right Panel: Items for selected category -->
+      <div class="right-panel">
+        <app-category-items
+          *ngIf="selectedCategory"
+          [categoryId]="selectedCategory.id"
+          [categoryName]="selectedCategory.name"
+          [items]="selectedCategory.items"
+          [isPublished]="template.isPublished"
+          (itemsChanged)="onItemsChanged()">
+        </app-category-items>
+        
+        <div *ngIf="!selectedCategory" class="no-category-selected">
+          <p>Select a category to view and manage its items</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>

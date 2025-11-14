@@ -7,12 +7,14 @@ import {
   CreateScoreTemplateDto,
   UpdateScoreTemplateDto,
   CreateScoreCategoryDto,
-  UpdateScoreCategoryDto
+  UpdateScoreCategoryDto,
+  CreateScoreItemDto,
+  UpdateScoreItemDto
 } from '../models/score-template.models';
 import { environment } from '../../environments/environment';
 
 /**
- * Service for managing score templates and categories
+ * Service for managing score templates, categories, and items
  * Communicates with the backend API
  */
 @Injectable({
@@ -113,5 +115,35 @@ export class ScoreTemplateService {
    */
   deleteCategory(categoryId: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/categories/${categoryId}`);
+  }
+
+  // ===========================
+  // Score Item Management
+  // ===========================
+
+  /**
+   * Create a new item within a category
+   * @param categoryId Category ID
+   * @param dto Item data
+   */
+  createItem(categoryId: string, dto: CreateScoreItemDto): Observable<string> {
+    return this.http.post<string>(`${this.apiUrl}/categories/${categoryId}/items`, dto);
+  }
+
+  /**
+   * Update an existing score item
+   * @param itemId Item ID
+   * @param dto Updated item data
+   */
+  updateItem(itemId: string, dto: UpdateScoreItemDto): Observable<void> {
+    return this.http.put<void>(`${this.apiUrl}/items/${itemId}`, dto);
+  }
+
+  /**
+   * Delete a score item (soft delete if template is published)
+   * @param itemId Item ID
+   */
+  deleteItem(itemId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/items/${itemId}`);
   }
 }

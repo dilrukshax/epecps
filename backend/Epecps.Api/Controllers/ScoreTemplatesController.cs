@@ -20,13 +20,16 @@ public class ScoreTemplatesController : ControllerBase
 {
     private readonly IScoreTemplateService _templateService;
     private readonly IScoreCategoryService _categoryService;
+    private readonly IScoreItemService _itemService;
 
     public ScoreTemplatesController(
         IScoreTemplateService templateService,
-        IScoreCategoryService categoryService)
+        IScoreCategoryService categoryService,
+        IScoreItemService itemService)
     {
         _templateService = templateService;
         _categoryService = categoryService;
+        _itemService = itemService;
     }
 
     #region Template Management
@@ -254,6 +257,90 @@ public class ScoreTemplatesController : ControllerBase
         catch (NotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Score Item Management
+
+    /// <summary>
+    /// Create a new item within a category
+    /// </summary>
+    [HttpPost("categories/{categoryId:guid}/items")]
+    [ProducesResponseType(typeof(Guid), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<Guid>> CreateItem(Guid categoryId, [FromBody] CreateScoreItemDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var userId = GetCurrentUserId();
+            var itemId = await _itemService.CreateItemAsync(categoryId, dto, userId);
+            return Created($"/api/v1/admin/items/{itemId}", itemId);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Update an existing score item
+    /// </summary>
+    [HttpPut("items/{itemId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateItem(Guid itemId, [FromBody] UpdateScoreItemDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var userId = GetCurrentUserId();
+            await _itemService.UpdateItemAsync(itemId, dto, userId);
+            return NoContent();
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Delete a score item (soft delete if template is published)
+    /// </summary>
+    [HttpDelete("items/{itemId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteItem(Guid itemId)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            await _itemService.DeleteItemAsync(itemId, userId);
+            return NoContent();
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
     }
 

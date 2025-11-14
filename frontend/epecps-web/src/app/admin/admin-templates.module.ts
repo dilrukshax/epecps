@@ -7,8 +7,10 @@ import { MsalGuard } from '@azure/msal-angular';
 import { TemplateListComponent } from './components/template-list/template-list.component';
 import { TemplateEditComponent } from './components/template-edit/template-edit.component';
 import { CategoryListComponent } from './components/category-list/category-list.component';
+import { CategoryItemsComponent } from './components/category-items/category-items.component';
 import { TemplateFormDialogComponent } from './components/template-form-dialog/template-form-dialog.component';
 import { CategoryFormDialogComponent } from './components/category-form-dialog/category-form-dialog.component';
+import { ItemFormDialogComponent } from './components/item-form-dialog/item-form-dialog.component';
 import { SharedModule } from '../shared/shared.module';
 
 const routes: Routes = [
@@ -29,8 +31,10 @@ const routes: Routes = [
     TemplateListComponent,
     TemplateEditComponent,
     CategoryListComponent,
+    CategoryItemsComponent,
     TemplateFormDialogComponent,
-    CategoryFormDialogComponent
+    CategoryFormDialogComponent,
+    ItemFormDialogComponent
   ],
   imports: [
     CommonModule,

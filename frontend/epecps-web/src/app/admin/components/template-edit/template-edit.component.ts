@@ -5,7 +5,7 @@ import { ScoreTemplateDetailDto, ScoreCategoryDto } from '../../../models/score-
 
 /**
  * Component for editing a score template
- * Manages template information and categories
+ * Manages template information, categories, and items
  */
 @Component({
   selector: 'app-template-edit',
@@ -50,6 +50,9 @@ export class TemplateEditComponent implements OnInit {
         // Auto-select first category if available
         if (template.categories.length > 0 && !this.selectedCategory) {
           this.selectedCategory = template.categories[0];
+        } else if (this.selectedCategory) {
+          // Update selected category with latest data
+          this.selectedCategory = template.categories.find(c => c.id === this.selectedCategory!.id) || null;
         }
       },
       error: (err) => {
@@ -88,6 +91,15 @@ export class TemplateEditComponent implements OnInit {
    * Handle category changes (create/update/delete)
    */
   onCategoriesChanged(): void {
+    if (this.template) {
+      this.loadTemplate(this.template.id);
+    }
+  }
+
+  /**
+   * Handle items changed (create/update/delete)
+   */
+  onItemsChanged(): void {
     if (this.template) {
       this.loadTemplate(this.template.id);
     }
