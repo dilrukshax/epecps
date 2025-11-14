@@ -28,8 +28,11 @@ export const API_SCOPE = 'api://4ee96651-bdc5-40c6-a64a-49d53002ce9e/Epecps.Read
 const REDIRECT_URI = `${window.location.origin}/auth-callback`;
 const POST_LOGOUT_REDIRECT_URI = `${window.location.origin}/login`;
 
+// Microsoft Graph scopes for user profile and photo
+export const GRAPH_SCOPES = ['User.Read', 'User.ReadBasic.All'];
+
 // Optional: default login request scopes
-export const DEFAULT_LOGIN_SCOPES = ['openid', 'profile', 'email', API_SCOPE];
+export const DEFAULT_LOGIN_SCOPES = ['openid', 'profile', 'email', API_SCOPE, ...GRAPH_SCOPES];
 export const API_SCOPES = [API_SCOPE];
 
 export function MSALInstanceFactory(): IPublicClientApplication {
@@ -67,6 +70,7 @@ export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
   // Any call whose URL starts with this key will get a token for the mapped scopes
   const protectedResourceMap = new Map<string, Array<string>>();
   protectedResourceMap.set('https://localhost:7275/api', API_SCOPES); // your API
+  protectedResourceMap.set('https://graph.microsoft.com/v1.0', GRAPH_SCOPES); // Microsoft Graph
   return {
     interactionType: InteractionType.Redirect,
     protectedResourceMap

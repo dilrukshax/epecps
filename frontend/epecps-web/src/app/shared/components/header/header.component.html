@@ -49,9 +49,18 @@
                 <span class="text-sm font-medium text-gray-700">{{ userName }}</span>
                 <span class="text-xs text-gray-500">{{ userEmail }}</span>
               </div>
-              <div class="h-10 w-10 rounded-full bg-primary-600 flex items-center justify-center">
-                <span class="text-white font-semibold text-sm">{{ userName.charAt(0).toUpperCase() }}</span>
+              
+              <!-- Profile Photo or Initials -->
+              <div class="h-10 w-10 rounded-full overflow-hidden bg-primary-600 flex items-center justify-center border-2 border-primary-200">
+                <img *ngIf="userPhotoUrl" 
+                     [src]="userPhotoUrl" 
+                     [alt]="userName"
+                     class="h-full w-full object-cover">
+                <span *ngIf="!userPhotoUrl" class="text-white font-semibold text-sm">
+                  {{ getUserInitials() }}
+                </span>
               </div>
+              
               <button (click)="logout()" 
                       class="ml-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
                 <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -104,8 +113,15 @@
     <div class="pt-4 pb-3 border-t border-gray-200" *ngIf="isUserLoggedIn">
       <div class="flex items-center px-4">
         <div class="flex-shrink-0">
-          <div class="h-10 w-10 rounded-full bg-primary-600 flex items-center justify-center">
-            <span class="text-white font-semibold">{{ userName.charAt(0).toUpperCase() }}</span>
+          <!-- Profile Photo or Initials (Mobile) -->
+          <div class="h-10 w-10 rounded-full overflow-hidden bg-primary-600 flex items-center justify-center border-2 border-primary-200">
+            <img *ngIf="userPhotoUrl" 
+                 [src]="userPhotoUrl" 
+                 [alt]="userName"
+                 class="h-full w-full object-cover">
+            <span *ngIf="!userPhotoUrl" class="text-white font-semibold">
+              {{ getUserInitials() }}
+            </span>
           </div>
         </div>
         <div class="ml-3">

@@ -104,7 +104,7 @@ export class ScoreTemplateService {
    * @param dto Updated category data
    */
   updateCategory(categoryId: string, dto: UpdateScoreCategoryDto): Observable<void> {
-    return this.http.put<void>(`${environment.apiUrl}/api/v1/admin/categories/${categoryId}`, dto);
+    return this.http.put<void>(`${this.apiUrl}/categories/${categoryId}`, dto);
   }
 
   /**
@@ -112,6 +112,6 @@ export class ScoreTemplateService {
    * @param categoryId Category ID
    */
   deleteCategory(categoryId: string): Observable<void> {
-    return this.http.delete<void>(`${environment.apiUrl}/api/v1/admin/categories/${categoryId}`);
+    return this.http.delete<void>(`${this.apiUrl}/categories/${categoryId}`);
   }
 }
