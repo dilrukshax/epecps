@@ -13,17 +13,19 @@ public class EpecpsDbContext : DbContext
     {
     }
 
+    #region Existing DbSets
+    public DbSet<User> Users => Set<User>();
+    #endregion
+
     #region Scoring Module DbSets
     public DbSet<ScoreTemplate> ScoreTemplates => Set<ScoreTemplate>();
     public DbSet<ScoreCategory> ScoreCategories => Set<ScoreCategory>();
     public DbSet<ScoreItem> ScoreItems => Set<ScoreItem>();
     #endregion
 
-    #region Existing DbSets (placeholder for existing entities)
-    // Add other DbSets here as needed
-    // public DbSet<User> Users => Set<User>();
-    // public DbSet<Department> Departments => Set<Department>();
-    // etc.
+    #region Employee Goals Module DbSets
+    public DbSet<PersonalGoal> PersonalGoals => Set<PersonalGoal>();
+    public DbSet<PersonalGoalActivity> PersonalGoalActivities => Set<PersonalGoalActivity>();
     #endregion
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

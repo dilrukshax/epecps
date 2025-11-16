@@ -1,0 +1,310 @@
+<div class="min-h-screen bg-gray-50">
+  <app-header></app-header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900">Set New Goal</h1>
+          <p class="mt-2 text-gray-600">Create your personal development goals</p>
+        </div>
+        <button 
+          (click)="cancel()"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+          Cancel
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress Steps -->
+    <div class="mb-8">
+      <nav aria-label="Progress">
+        <ol class="flex items-center">
+          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 4">
+            <div class="flex items-center">
+              <div 
+                class="relative flex h-8 w-8 items-center justify-center rounded-full"
+                [class.bg-primary-600]="currentStep >= 1"
+                [class.bg-gray-300]="currentStep < 1">
+                <span class="text-white text-sm font-medium">1</span>
+              </div>
+              <span class="ml-4 text-sm font-medium" [class.text-gray-900]="currentStep >= 1" [class.text-gray-500]="currentStep < 1">
+                Category
+              </span>
+            </div>
+          </li>
+
+          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 4">
+            <div class="flex items-center">
+              <div 
+                class="relative flex h-8 w-8 items-center justify-center rounded-full"
+                [class.bg-primary-600]="currentStep >= 2"
+                [class.bg-gray-300]="currentStep < 2">
+                <span class="text-white text-sm font-medium">2</span>
+              </div>
+              <span class="ml-4 text-sm font-medium" [class.text-gray-900]="currentStep >= 2" [class.text-gray-500]="currentStep < 2">
+                Item
+              </span>
+            </div>
+          </li>
+
+          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 4">
+            <div class="flex items-center">
+              <div 
+                class="relative flex h-8 w-8 items-center justify-center rounded-full"
+                [class.bg-primary-600]="currentStep >= 3"
+                [class.bg-gray-300]="currentStep < 3">
+                <span class="text-white text-sm font-medium">3</span>
+              </div>
+              <span class="ml-4 text-sm font-medium" [class.text-gray-900]="currentStep >= 3" [class.text-gray-500]="currentStep < 3">
+                Select Goals
+              </span>
+            </div>
+          </li>
+
+          <li class="relative">
+            <div class="flex items-center">
+              <div 
+                class="relative flex h-8 w-8 items-center justify-center rounded-full"
+                [class.bg-primary-600]="currentStep >= 4"
+                [class.bg-gray-300]="currentStep < 4">
+                <span class="text-white text-sm font-medium">4</span>
+              </div>
+              <span class="ml-4 text-sm font-medium" [class.text-gray-900]="currentStep >= 4" [class.text-gray-500]="currentStep < 4">
+                Configure
+              </span>
+            </div>
+          </li>
+        </ol>
+      </nav>
+    </div>
+
+    <!-- Error Message -->
+    <div *ngIf="error" class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+      <div class="flex">
+        <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div class="ml-3">
+          <p class="text-sm text-red-800">{{ error }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 1: Choose Category -->
+    <div *ngIf="currentStep === 1" class="bg-white shadow-lg rounded-lg p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Step 1: Choose a Category</h2>
+      
+      <div *ngIf="loading" class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+
+      <div *ngIf="!loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div 
+          *ngFor="let category of categories"
+          (click)="selectCategory(category)"
+          class="border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-primary-500 hover:shadow-md transition-all">
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ category.name }}</h3>
+          <p class="text-sm text-gray-600 mb-4" *ngIf="category.description">{{ category.description }}</p>
+          <div class="text-sm text-gray-500">
+            {{ category.itemCount }} item{{ category.itemCount !== 1 ? 's' : '' }} available
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="!loading && categories.length === 0" class="text-center py-12 text-gray-500">
+        No categories available. Please contact your administrator.
+      </div>
+    </div>
+
+    <!-- Step 2: Choose Item -->
+    <div *ngIf="currentStep === 2" class="bg-white shadow-lg rounded-lg p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 2: Choose an Item</h2>
+      <p class="text-sm text-gray-600 mb-6">Category: <span class="font-medium">{{ selectedCategory?.name }}</span></p>
+      
+      <div *ngIf="loading" class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+
+      <div *ngIf="!loading" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div 
+          *ngFor="let item of items"
+          (click)="selectItem(item)"
+          class="border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-primary-500 hover:shadow-md transition-all">
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ item.name }}</h3>
+          <p class="text-sm text-gray-600" *ngIf="item.description">{{ item.description }}</p>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-between">
+        <button 
+          (click)="goBack()"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+          Back
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 3: Choose Goal Items -->
+    <div *ngIf="currentStep === 3" class="bg-white shadow-lg rounded-lg p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 3: Select Goal Items</h2>
+      <p class="text-sm text-gray-600 mb-6">You can select multiple goal items. Each will become a separate personal goal.</p>
+      
+      <div *ngIf="loading" class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+
+      <div *ngIf="!loading" class="space-y-4">
+        <div 
+          *ngFor="let goalItem of goalItems"
+          (click)="toggleGoalItemSelection(goalItem.id)"
+          class="border-2 rounded-lg p-6 cursor-pointer transition-all"
+          [class.border-primary-500]="isGoalItemSelected(goalItem.id)"
+          [class.bg-primary-50]="isGoalItemSelected(goalItem.id)"
+          [class.border-gray-200]="!isGoalItemSelected(goalItem.id)">
+          <div class="flex items-start">
+            <input 
+              type="checkbox" 
+              [checked]="isGoalItemSelected(goalItem.id)"
+              (click)="$event.stopPropagation()"
+              class="mt-1 h-5 w-5 text-primary-600 rounded">
+            <div class="ml-4 flex-1">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ goalItem.name }}</h3>
+              <p class="text-sm text-gray-600 mb-3" *ngIf="goalItem.description">{{ goalItem.description }}</p>
+              <div class="flex items-center gap-4 text-sm">
+                <span class="text-gray-700">Target Score: <span class="font-medium">{{ goalItem.targetScore }}</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-between">
+        <button 
+          (click)="goBack()"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+          Back
+        </button>
+        <button 
+          (click)="proceedToConfiguration()"
+          [disabled]="selectedGoalItems.size === 0"
+          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+          Continue ({{ selectedGoalItems.size }} selected)
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 4: Configure Details -->
+    <div *ngIf="currentStep === 4 && getCurrentConfiguration() as config" class="bg-white shadow-lg rounded-lg p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 4: Configure Goal Details</h2>
+      <p class="text-sm text-gray-600 mb-6">
+        Configuring goal {{ currentConfigIndex + 1 }} of {{ selectedGoalItems.size }}
+      </p>
+
+      <div class="space-y-6">
+        <!-- Goal Item Info -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 class="text-sm font-medium text-blue-900 mb-1">Goal Item</h3>
+          <p class="text-lg font-semibold text-blue-900">{{ config.goalItem.name }}</p>
+          <p class="text-sm text-blue-700 mt-1" *ngIf="config.goalItem.description">{{ config.goalItem.description }}</p>
+        </div>
+
+        <!-- Title -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Goal Title</label>
+          <input 
+            type="text" 
+            [(ngModel)]="config.title"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="Enter a title for your goal">
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+          <textarea 
+            [(ngModel)]="config.description"
+            rows="3"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="Describe what you want to achieve"></textarea>
+        </div>
+
+        <!-- Dates -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+            <input 
+              type="date" 
+              [(ngModel)]="config.startDate"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
+            <input 
+              type="date" 
+              [(ngModel)]="config.dueDate"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+          </div>
+        </div>
+
+        <!-- Custom Activities (Manual Activities Only) -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-3">Activities to Achieve This Goal</label>
+          <p class="text-xs text-gray-500 mb-3">Add activities that will help you achieve this goal</p>
+          <div class="flex gap-2 mb-3">
+            <input 
+              #customActivityInput
+              type="text" 
+              class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Enter an activity description">
+            <button 
+              (click)="addCustomActivity(customActivityInput.value); customActivityInput.value = ''"
+              class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+              Add Activity
+            </button>
+          </div>
+          <div *ngIf="config.customActivities.length > 0" class="space-y-2">
+            <div 
+              *ngFor="let activity of config.customActivities; let i = index"
+              class="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <span class="text-sm text-gray-900">{{ activity }}</span>
+              <button 
+                (click)="removeCustomActivity(i)"
+                class="text-red-600 hover:text-red-800">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <p *ngIf="config.customActivities.length === 0" class="text-sm text-gray-500 italic mt-2">
+            No activities added yet. Add at least one activity to help track your progress.
+          </p>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <div class="mt-6 flex justify-between">
+        <button 
+          (click)="canGoPrevious() ? previousConfiguration() : goBack()"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+          {{ canGoPrevious() ? 'Previous Goal' : 'Back' }}
+        </button>
+        <button 
+          *ngIf="canGoNext()"
+          (click)="nextConfiguration()"
+          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700">
+          Next Goal
+        </button>
+        <button 
+          *ngIf="!canGoNext()"
+          (click)="createGoals()"
+          [disabled]="loading"
+          class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-300">
+          {{ loading ? 'Creating...' : 'Create Goal(s)' }}
+        </button>
+      </div>
+    </div>
+  </main>
+</div>

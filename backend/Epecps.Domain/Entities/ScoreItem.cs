@@ -4,6 +4,7 @@ namespace Epecps.Domain.Entities;
 
 /// <summary>
 /// Represents an individual scoring item within a category (e.g., specific skill or competency)
+/// In the context of employee goals, this is equivalent to a "GoalItem"
 /// </summary>
 public class ScoreItem
 {
@@ -19,7 +20,13 @@ public class ScoreItem
     public string? EvidenceHint { get; set; }
     public int DisplayOrder { get; set; } = 0;
     public bool IsActive { get; set; } = true;
+    
+    /// <summary>
+    /// Default target score for employee goals based on this item (typically 100)
+    /// </summary>
+    public decimal TargetScore { get; set; } = 100;
 
     // Navigation properties
     public ScoreCategory Category { get; set; } = null!;
+    public ICollection<PersonalGoal> PersonalGoals { get; set; } = new List<PersonalGoal>();
 }

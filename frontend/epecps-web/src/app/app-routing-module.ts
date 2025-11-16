@@ -30,6 +30,13 @@ const routes: Routes = [
     loadChildren: () => import('./admin/admin-templates.module').then(m => m.AdminTemplatesModule)
   },
 
+  // Employee routes - personal goal management
+  {
+    path: 'employee',
+    loadChildren: () => import('./employee/employee.module').then(m => m.EmployeeModule),
+    canActivate: [MsalGuard]
+  },
+
   // Redirect root to dashboard if authenticated, otherwise to login
   { path: '', redirectTo: '/dashboard', pathMatch: 'full' },
 

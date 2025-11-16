@@ -4,6 +4,7 @@ using Epecps.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Epecps.Infrastructure.Migrations
 {
     [DbContext(typeof(EpecpsDbContext))]
-    partial class EpecpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251116032430_AddEmployeeGoalsModule")]
+    partial class AddEmployeeGoalsModule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -450,6 +453,8 @@ namespace Epecps.Infrastructure.Migrations
 
                     b.HasIndex("Status");
 
+                    b.HasIndex("SuggestedActivityId");
+
                     b.ToTable("PersonalGoalActivities", (string)null);
                 });
 
@@ -765,6 +770,39 @@ namespace Epecps.Infrastructure.Migrations
                     b.ToTable("ScoreTemplates", (string)null);
                 });
 
+            modelBuilder.Entity("Epecps.Domain.Entities.SuggestedActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<Guid>("ScoreItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScoreItemId");
+
+                    b.HasIndex("ScoreItemId", "DisplayOrder");
+
+                    b.ToTable("SuggestedActivities", (string)null);
+                });
+
             modelBuilder.Entity("Epecps.Domain.Entities.Template", b =>
                 {
                     b.Property<int>("TemplateId")
@@ -860,6 +898,9 @@ namespace Epecps.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserId"));
 
+                    b.Property<int?>("DepartmentDeptId")
+                        .HasColumnType("int");
+
                     b.Property<int>("DeptId")
                         .HasColumnType("int");
 
@@ -879,6 +920,8 @@ namespace Epecps.Infrastructure.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.HasKey("UserId");
+
+                    b.HasIndex("DepartmentDeptId");
 
                     b.HasIndex("DeptId");
 
@@ -906,9 +949,9 @@ namespace Epecps.Infrastructure.Migrations
             modelBuilder.Entity("Epecps.Domain.Entities.AuditLog", b =>
                 {
                     b.HasOne("Epecps.Domain.Entities.User", "ActorUser")
-                        .WithMany()
+                        .WithMany("AuditLogs")
                         .HasForeignKey("ActorUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("ActorUser");
@@ -959,9 +1002,9 @@ namespace Epecps.Infrastructure.Migrations
                         .HasForeignKey("CycleId1");
 
                     b.HasOne("Epecps.Domain.Entities.User", "Employee")
-                        .WithMany()
+                        .WithMany("EvaluationsAsEmployee")
                         .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Epecps.Domain.Entities.Evaluation", "PreviousEvaluation")
@@ -970,15 +1013,15 @@ namespace Epecps.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Epecps.Domain.Entities.User", "ReportingManager")
-                        .WithMany()
+                        .WithMany("EvaluationsAsReportingManager")
                         .HasForeignKey("ReportingManagerId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Epecps.Domain.Entities.User", "TeamLead")
-                        .WithMany()
+                        .WithMany("EvaluationsAsTeamLead")
                         .HasForeignKey("TeamLeadId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Cycle");
@@ -995,7 +1038,7 @@ namespace Epecps.Infrastructure.Migrations
             modelBuilder.Entity("Epecps.Domain.Entities.Notification", b =>
                 {
                     b.HasOne("Epecps.Domain.Entities.User", "User")
-                        .WithMany()
+                        .WithMany("Notifications")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1012,9 +1055,9 @@ namespace Epecps.Infrastructure.Migrations
                         .IsRequired();
 
                     b.HasOne("Epecps.Domain.Entities.User", "PeerUser")
-                        .WithMany()
+                        .WithMany("PeerAssignments")
                         .HasForeignKey("PeerUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Evaluation");
@@ -1049,7 +1092,14 @@ namespace Epecps.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Epecps.Domain.Entities.SuggestedActivity", "SuggestedActivity")
+                        .WithMany()
+                        .HasForeignKey("SuggestedActivityId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("PersonalGoal");
+
+                    b.Navigation("SuggestedActivity");
                 });
 
             modelBuilder.Entity("Epecps.Domain.Entities.PromotionCase", b =>
@@ -1061,12 +1111,14 @@ namespace Epecps.Infrastructure.Migrations
                         .IsRequired();
 
                     b.HasOne("Epecps.Domain.Entities.User", "GmDecidedBy")
-                        .WithMany()
-                        .HasForeignKey("GmDecidedById");
+                        .WithMany("PromotionCasesDecided")
+                        .HasForeignKey("GmDecidedById")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Epecps.Domain.Entities.User", "RecommendedByHod")
-                        .WithMany()
-                        .HasForeignKey("RecommendedByHodId");
+                        .WithMany("PromotionCasesRecommended")
+                        .HasForeignKey("RecommendedByHodId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Evaluation");
 
@@ -1084,9 +1136,9 @@ namespace Epecps.Infrastructure.Migrations
                         .IsRequired();
 
                     b.HasOne("Epecps.Domain.Entities.User", "Reviewer")
-                        .WithMany()
+                        .WithMany("Reviews")
                         .HasForeignKey("ReviewerUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Evaluation");
@@ -1141,6 +1193,17 @@ namespace Epecps.Infrastructure.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("Epecps.Domain.Entities.SuggestedActivity", b =>
+                {
+                    b.HasOne("Epecps.Domain.Entities.ScoreItem", "ScoreItem")
+                        .WithMany("SuggestedActivities")
+                        .HasForeignKey("ScoreItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ScoreItem");
+                });
+
             modelBuilder.Entity("Epecps.Domain.Entities.TrainingRecommendation", b =>
                 {
                     b.HasOne("Epecps.Domain.Entities.Evaluation", "Evaluation")
@@ -1162,8 +1225,12 @@ namespace Epecps.Infrastructure.Migrations
 
             modelBuilder.Entity("Epecps.Domain.Entities.User", b =>
                 {
-                    b.HasOne("Epecps.Domain.Entities.Department", "Department")
+                    b.HasOne("Epecps.Domain.Entities.Department", null)
                         .WithMany("Users")
+                        .HasForeignKey("DepartmentDeptId");
+
+                    b.HasOne("Epecps.Domain.Entities.Department", "Department")
+                        .WithMany()
                         .HasForeignKey("DeptId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -1252,6 +1319,8 @@ namespace Epecps.Infrastructure.Migrations
             modelBuilder.Entity("Epecps.Domain.Entities.ScoreItem", b =>
                 {
                     b.Navigation("PersonalGoals");
+
+                    b.Navigation("SuggestedActivities");
                 });
 
             modelBuilder.Entity("Epecps.Domain.Entities.ScoreTemplate", b =>
@@ -1266,7 +1335,25 @@ namespace Epecps.Infrastructure.Migrations
 
             modelBuilder.Entity("Epecps.Domain.Entities.User", b =>
                 {
+                    b.Navigation("AuditLogs");
+
+                    b.Navigation("EvaluationsAsEmployee");
+
+                    b.Navigation("EvaluationsAsReportingManager");
+
+                    b.Navigation("EvaluationsAsTeamLead");
+
+                    b.Navigation("Notifications");
+
+                    b.Navigation("PeerAssignments");
+
                     b.Navigation("PersonalGoals");
+
+                    b.Navigation("PromotionCasesDecided");
+
+                    b.Navigation("PromotionCasesRecommended");
+
+                    b.Navigation("Reviews");
 
                     b.Navigation("UserRoles");
                 });

@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Epecps.Infrastructure.Persistence;
 using Epecps.Application.Interfaces;
 using Epecps.Infrastructure.Services;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
@@ -16,10 +18,19 @@ var config = builder.Configuration;
 services.AddDbContext<EpecpsDbContext>(options =>
     options.UseSqlServer(config.GetConnectionString("DefaultConnection")));
 
-// Application Services
+// Admin Framework Services
 services.AddScoped<IScoreTemplateService, ScoreTemplateService>();
 services.AddScoped<IScoreCategoryService, ScoreCategoryService>();
 services.AddScoped<IScoreItemService, ScoreItemService>();
+
+// Employee Goals Services
+services.AddScoped<IGoalFrameworkService, GoalFrameworkService>();
+services.AddScoped<IPersonalGoalService, PersonalGoalService>();
+services.AddScoped<IUserSyncService, UserSyncService>(); // Auto-sync users from Azure AD
+
+// FluentValidation
+services.AddFluentValidationAutoValidation();
+services.AddValidatorsFromAssemblyContaining<Epecps.Application.Validators.CreatePersonalGoalDtoValidator>();
 
 // CORS for Angular dev on 64291
 services.AddCors(opt =>

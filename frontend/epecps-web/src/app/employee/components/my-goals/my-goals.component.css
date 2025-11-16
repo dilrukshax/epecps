@@ -1,0 +1,29 @@
+/* My Goals Component Styles */
+
+/* Card hover effect */
+.bg-white.rounded-lg.shadow:hover {
+  transform: translateY(-2px);
+}
+
+.bg-white.rounded-lg.shadow {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Progress bar animation */
+.h-2.rounded-full {
+  transition: width 0.3s ease-in-out;
+}
+
+/* Filter button active state */
+button.px-4.py-2 {
+  transition: all 0.15s ease-in-out;
+}
+
+/* Stats card icon backgrounds */
+.flex-shrink-0.rounded-md {
+  transition: transform 0.2s ease-in-out;
+}
+
+.bg-white.rounded-lg.shadow:hover .flex-shrink-0.rounded-md {
+  transform: scale(1.05);
+}

@@ -54,6 +54,11 @@ public class ScoreItemConfiguration : IEntityTypeConfiguration<ScoreItem>
             .IsRequired()
             .HasDefaultValue(true);
 
+        builder.Property(i => i.TargetScore)
+            .IsRequired()
+            .HasPrecision(10, 2)
+            .HasDefaultValue(100);
+
         // Relationships
         builder.HasOne(i => i.Category)
             .WithMany(c => c.Items)

@@ -20,4 +20,5 @@ public class User
     public ICollection<PromotionCase> PromotionCasesDecided { get; set; } = new List<PromotionCase>();
     public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
     public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+    public ICollection<PersonalGoal> PersonalGoals { get; set; } = new List<PersonalGoal>();
 }

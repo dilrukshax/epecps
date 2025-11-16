@@ -1,0 +1,318 @@
+<div class="min-h-screen bg-gray-50">
+  <app-header></app-header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+      <button 
+        (click)="goBack()"
+        class="inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 mb-4">
+        <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to My Goals
+      </button>
+      <h1 class="text-3xl font-bold text-gray-900">Goal Details</h1>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="loading" class="text-center py-12">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      <p class="mt-4 text-gray-600">Loading goal...</p>
+    </div>
+
+    <!-- Error Message -->
+    <div *ngIf="error && !loading" class="bg-red-50 border border-red-200 rounded-lg p-4 mb-8">
+      <div class="flex">
+        <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div class="ml-3">
+          <p class="text-sm text-red-800">{{ error }}</p>
+        </div>
+        <div class="ml-auto pl-3">
+          <button (click)="loadGoalDetails()" class="text-sm font-medium text-red-800 hover:text-red-900">
+            Retry
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Goal Content -->
+    <div *ngIf="goal && !loading" class="space-y-6">
+      <!-- Goal Overview Card -->
+      <div class="bg-white shadow-lg rounded-lg p-6">
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex-1">
+            <div class="flex items-center gap-3 mb-2">
+              <h2 class="text-2xl font-bold text-gray-900">{{ goal.title }}</h2>
+              <span 
+                class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                [ngClass]="getStatusClass(goal.status)">
+                {{ getStatusLabel(goal.status) }}
+              </span>
+            </div>
+            <p class="text-gray-600 mb-4" *ngIf="goal.description">{{ goal.description }}</p>
+            
+            <!-- Metadata -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span class="text-gray-500">Category:</span>
+                <span class="ml-2 font-medium text-gray-900">{{ goal.categoryName }}</span>
+              </div>
+              <div>
+                <span class="text-gray-500">Item:</span>
+                <span class="ml-2 font-medium text-gray-900">{{ goal.itemName }}</span>
+              </div>
+              <div>
+                <span class="text-gray-500">Goal Item:</span>
+                <span class="ml-2 font-medium text-gray-900">{{ goal.goalItemName }}</span>
+              </div>
+              <div>
+                <span class="text-gray-500">Target Score:</span>
+                <span class="ml-2 font-medium text-gray-900">{{ goal.targetScore }}</span>
+              </div>
+              <div>
+                <span class="text-gray-500">Start Date:</span>
+                <span class="ml-2 font-medium text-gray-900">{{ goal.startDate | date:'MMM d, yyyy' }}</span>
+              </div>
+              <div>
+                <span class="text-gray-500">Due Date:</span>
+                <span class="ml-2 font-medium text-gray-900">{{ goal.dueDate | date:'MMM d, yyyy' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Progress Section -->
+        <div class="border-t pt-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-lg font-semibold text-gray-900">Progress</h3>
+            <button 
+              *ngIf="!editingScore && goal.status !== PersonalGoalStatus.Completed && goal.status !== PersonalGoalStatus.Cancelled"
+              (click)="startEditingScore()"
+              class="text-sm text-primary-600 hover:text-primary-700 font-medium">
+              Update Score
+            </button>
+          </div>
+
+          <!-- Score Display/Edit -->
+          <div *ngIf="!editingScore" class="mb-4">
+            <div class="flex items-center justify-between text-lg mb-2">
+              <span class="text-gray-600">Current Score</span>
+              <span class="font-bold text-gray-900">{{ goal.currentScore }} / {{ goal.targetScore }}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div 
+                class="h-3 rounded-full bg-primary-600 transition-all"
+                [style.width.%]="getProgressPercentage()">
+              </div>
+            </div>
+            <p class="text-sm text-gray-500 mt-1">{{ getProgressPercentage() | number:'1.0-0' }}% complete</p>
+          </div>
+
+          <!-- Score Edit Form -->
+          <div *ngIf="editingScore" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Update Current Score</label>
+            <div class="flex items-center gap-4">
+              <input 
+                type="number" 
+                [(ngModel)]="tempScore"
+                [min]="0"
+                [max]="goal.targetScore"
+                class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+              <span class="text-gray-600">/ {{ goal.targetScore }}</span>
+              <button 
+                (click)="saveScore()"
+                class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+                Save
+              </button>
+              <button 
+                (click)="cancelEditingScore()"
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activities Section -->
+      <div class="bg-white shadow-lg rounded-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h3 class="text-xl font-bold text-gray-900">Activities</h3>
+            <p class="text-sm text-gray-600">
+              {{ getCompletedActivitiesCount() }} of {{ goal.activities.length }} completed
+            </p>
+          </div>
+          <button 
+            *ngIf="!addingActivity && goal.status !== PersonalGoalStatus.Completed && goal.status !== PersonalGoalStatus.Cancelled"
+            (click)="startAddingActivity()"
+            class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+            <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Activity
+          </button>
+        </div>
+
+        <!-- Add Activity Form -->
+        <div *ngIf="addingActivity" class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+          <h4 class="text-sm font-medium text-gray-900 mb-3">Add New Activity</h4>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <input 
+                type="text" 
+                [(ngModel)]="newActivityDescription"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="What will you do?">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Due Date (Optional)</label>
+              <input 
+                type="date" 
+                [(ngModel)]="newActivityDueDate"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+            <div class="flex gap-2">
+              <button 
+                (click)="addActivity()"
+                class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+                Add
+              </button>
+              <button 
+                (click)="cancelAddingActivity()"
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activities List -->
+        <div *ngIf="goal.activities.length > 0" class="space-y-4">
+          <div 
+            *ngFor="let activity of goal.activities"
+            class="border rounded-lg p-4"
+            [class.border-gray-200]="editingActivity?.id !== activity.id"
+            [class.border-blue-500]="editingActivity?.id === activity.id"
+            [class.bg-blue-50]="editingActivity?.id === activity.id">
+            
+            <!-- View Mode -->
+            <div *ngIf="editingActivity?.id !== activity.id">
+              <div class="flex items-start justify-between mb-2">
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 mb-2">
+                    <span 
+                      class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                      [ngClass]="getActivityStatusClass(activity.status)">
+                      {{ getActivityStatusLabel(activity.status) }}
+                    </span>
+                    <span 
+                      *ngIf="activity.isFromTemplate"
+                      class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      From Template
+                    </span>
+                  </div>
+                  <p class="text-sm text-gray-900 font-medium">{{ activity.description }}</p>
+                  <div class="mt-2 space-y-1 text-xs text-gray-600">
+                    <p *ngIf="activity.dueDate">Due: {{ activity.dueDate | date:'MMM d, yyyy' }}</p>
+                    <p *ngIf="activity.evidenceUrl">
+                      <a [href]="activity.evidenceUrl" target="_blank" class="text-primary-600 hover:text-primary-700">
+                        View Evidence
+                      </a>
+                    </p>
+                    <p *ngIf="activity.evidenceNotes">Notes: {{ activity.evidenceNotes }}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 ml-4" *ngIf="goal.status !== PersonalGoalStatus.Completed && goal.status !== PersonalGoalStatus.Cancelled">
+                  <button 
+                    (click)="startEditingActivity(activity)"
+                    class="text-primary-600 hover:text-primary-700 text-sm font-medium">
+                    Edit
+                  </button>
+                  <select 
+                    [value]="activity.status"
+                    (change)="quickUpdateActivityStatus(activity, +$any($event.target).value)"
+                    class="text-sm border border-gray-300 rounded px-2 py-1">
+                    <option [value]="ActivityStatus.NotStarted">Not Started</option>
+                    <option [value]="ActivityStatus.InProgress">In Progress</option>
+                    <option [value]="ActivityStatus.Done">Done</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Edit Mode -->
+            <div *ngIf="editingActivity?.id === activity.id && activityFormData" class="space-y-3">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <input 
+                  type="text" 
+                  [(ngModel)]="activityFormData.description"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select 
+                    [(ngModel)]="activityFormData.status"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    <option [value]="ActivityStatus.NotStarted">Not Started</option>
+                    <option [value]="ActivityStatus.InProgress">In Progress</option>
+                    <option [value]="ActivityStatus.Done">Done</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                  <input 
+                    type="date" 
+                    [(ngModel)]="activityFormData.dueDate"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Evidence URL</label>
+                <input 
+                  type="url" 
+                  [(ngModel)]="activityFormData.evidenceUrl"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="https://...">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Evidence Notes</label>
+                <textarea 
+                  [(ngModel)]="activityFormData.evidenceNotes"
+                  rows="2"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Add notes about evidence or completion"></textarea>
+              </div>
+              <div class="flex gap-2">
+                <button 
+                  (click)="saveActivity()"
+                  class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700">
+                  Save
+                </button>
+                <button 
+                  (click)="cancelEditingActivity()"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- No Activities -->
+        <div *ngIf="goal.activities.length === 0" class="text-center py-8 text-gray-500">
+          <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <p>No activities yet. Add activities to track your progress.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
