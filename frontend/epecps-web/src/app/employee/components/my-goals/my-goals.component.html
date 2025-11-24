@@ -195,19 +195,32 @@
             <div class="flex items-center justify-between text-sm mb-1">
               <span class="text-gray-600">Overall Progress</span>
               <span class="font-medium text-gray-900">
-                {{ goalSet.totalCurrentScore }} / {{ goalSet.totalTargetScore }}
+                {{ getSetProgressPercentage(goalSet) | number:'1.0-1' }}%
               </span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2">
               <div 
                 class="h-2 rounded-full transition-all"
-                [ngClass]="getProgressBarClass(getProgressPercentage(goalSet.totalCurrentScore, goalSet.totalTargetScore))"
-                [style.width.%]="getProgressPercentage(goalSet.totalCurrentScore, goalSet.totalTargetScore)">
+                [ngClass]="getProgressBarClass(getSetProgressPercentage(goalSet))"
+                [style.width.%]="getSetProgressPercentage(goalSet)">
               </div>
             </div>
             <p class="text-xs text-gray-500 mt-1">
-              {{ getProgressPercentage(goalSet.totalCurrentScore, goalSet.totalTargetScore) | number:'1.0-0' }}% complete
+              {{ goalSet.totalCurrentScore }} / {{ goalSet.totalTargetScore }} points
             </p>
+          </div>
+
+          <!-- Submit for Evaluation Button -->
+          <div *ngIf="goalSet.canSubmitForEvaluation" class="mb-4">
+            <button 
+              (click)="submitGoalSetForEvaluation(goalSet, $event)"
+              class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+              <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Submit for Evaluation
+            </button>
+            <p class="text-xs text-gray-500 mt-1 text-center">All goals completed - Ready for supervisor review</p>
           </div>
 
           <!-- Due Date -->
@@ -238,17 +251,18 @@
                 </span>
               </div>
               <p class="text-xs text-gray-600 mb-3">{{ goal.categoryName }}</p>
-              <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center justify-between text-xs mb-2">
                 <span class="text-gray-600">Progress</span>
-                <span class="font-medium text-gray-900">{{ goal.currentScore }} / {{ goal.targetScore }}</span>
+                <span class="font-medium text-gray-900">{{ getGoalProgressPercentage(goal) | number:'1.0-1' }}%</span>
               </div>
-              <div class="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+              <div class="w-full bg-gray-200 rounded-full h-1.5">
                 <div 
                   class="h-1.5 rounded-full"
-                  [ngClass]="getProgressBarClass(getProgressPercentage(goal.currentScore, goal.targetScore))"
-                  [style.width.%]="getProgressPercentage(goal.currentScore, goal.targetScore)">
+                  [ngClass]="getProgressBarClass(getGoalProgressPercentage(goal))"
+                  [style.width.%]="getGoalProgressPercentage(goal)">
                 </div>
               </div>
+              <p class="text-xs text-gray-500 mt-1">{{ goal.currentScore }} / {{ goal.targetScore }} points</p>
             </div>
           </div>
         </div>

@@ -163,6 +163,33 @@ public class EmployeeGoalsController : ControllerBase
     }
 
     /// <summary>
+    /// Recalculate goal score based on completed activities
+    /// </summary>
+    [HttpPost("{id}/recalculate-score")]
+    public async Task<IActionResult> RecalculateScore(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+        await _personalGoalService.RecalculateGoalScoreFromActivitiesAsync(id, userId, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Submit a goal set for evaluation (placeholder for future workflow)
+    /// All goals in the set must be completed (100%) before submission
+    /// </summary>
+    [HttpPost("sets/{goalSetId}/submit-for-evaluation")]
+    public async Task<IActionResult> SubmitGoalSetForEvaluation(
+        Guid goalSetId,
+        CancellationToken cancellationToken)
+    {
+        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+        await _personalGoalService.SubmitGoalSetForEvaluationAsync(goalSetId, userId, cancellationToken);
+        return Ok(new { message = "Goal set submitted for evaluation successfully. Your supervisor will be notified." });
+    }
+
+    /// <summary>
     /// Helper method to get the authenticated user ID from JWT claims
     /// Auto-creates user in database if doesn't exist
     /// </summary>

@@ -40,7 +40,7 @@ public class PersonalGoalService : IPersonalGoalService
                 GoalSetId = dto.GoalSetId, // Set the goal set ID for grouping
                 Title = dto.Title,
                 Description = dto.Description,
-                TargetScore = goalItem.TargetScore, // Default from framework
+                TargetScore = goalItem.TargetScore, // Default from framework (typically 100)
                 StartDate = dto.StartDate,
                 DueDate = dto.DueDate,
                 Status = PersonalGoalStatus.InProgress, // Start as InProgress
@@ -101,6 +101,7 @@ public class PersonalGoalService : IPersonalGoalService
                 GoalItemName = pg.GoalItem.Name,
                 TargetScore = pg.TargetScore,
                 CurrentScore = pg.CurrentScore,
+                ProgressPercent = pg.TargetScore > 0 ? Math.Round((pg.CurrentScore / pg.TargetScore) * 100, 2) : 0,
                 Status = pg.Status,
                 DueDate = pg.DueDate,
                 CreatedAt = pg.CreatedAt
@@ -123,32 +124,48 @@ public class PersonalGoalService : IPersonalGoalService
         // Group goals by GoalSetId
         var groupedGoals = allGoals
             .GroupBy(g => g.GoalSetId ?? Guid.Empty)
-            .Select(group => new PersonalGoalSetDto
+            .Select(group =>
             {
-                GoalSetId = group.Key == Guid.Empty ? group.First().Id : group.Key,
-                TemplateName = group.First().GoalItem.Category.Template.Name,
-                GoalCount = group.Count(),
-                TotalTargetScore = group.Sum(g => g.TargetScore),
-                TotalCurrentScore = group.Sum(g => g.CurrentScore),
-                StartDate = group.First().StartDate,
-                DueDate = group.First().DueDate,
-                Status = DetermineOverallStatus(group.ToList()),
-                CreatedAt = group.First().CreatedAt,
-                Categories = group.Select(g => g.GoalItem.Category.Name).Distinct().OrderBy(c => c).ToList(),
-                Goals = group.Select(g => new PersonalGoalListDto
+                var totalTargetScore = group.Sum(g => g.TargetScore);
+                var totalCurrentScore = group.Sum(g => g.CurrentScore);
+                var progressPercent = totalTargetScore > 0 
+                    ? Math.Round((totalCurrentScore / totalTargetScore) * 100, 2) 
+                    : 0;
+                
+                // Can submit for evaluation if all goals are at 100% and status is Completed
+                var canSubmit = progressPercent >= 100 && 
+                               group.All(g => g.Status == PersonalGoalStatus.Completed);
+
+                return new PersonalGoalSetDto
                 {
-                    Id = g.Id,
-                    GoalSetId = g.GoalSetId,
-                    Title = g.Title,
-                    CategoryName = g.GoalItem.Category.Name,
-                    ItemName = g.GoalItem.Name,
-                    GoalItemName = g.GoalItem.Name,
-                    TargetScore = g.TargetScore,
-                    CurrentScore = g.CurrentScore,
-                    Status = g.Status,
-                    DueDate = g.DueDate,
-                    CreatedAt = g.CreatedAt
-                }).ToList()
+                    GoalSetId = group.Key == Guid.Empty ? group.First().Id : group.Key,
+                    TemplateName = group.First().GoalItem.Category.Template.Name,
+                    GoalCount = group.Count(),
+                    TotalTargetScore = totalTargetScore,
+                    TotalCurrentScore = totalCurrentScore,
+                    ProgressPercent = progressPercent,
+                    CanSubmitForEvaluation = canSubmit,
+                    StartDate = group.First().StartDate,
+                    DueDate = group.First().DueDate,
+                    Status = DetermineOverallStatus(group.ToList()),
+                    CreatedAt = group.First().CreatedAt,
+                    Categories = group.Select(g => g.GoalItem.Category.Name).Distinct().OrderBy(c => c).ToList(),
+                    Goals = group.Select(g => new PersonalGoalListDto
+                    {
+                        Id = g.Id,
+                        GoalSetId = g.GoalSetId,
+                        Title = g.Title,
+                        CategoryName = g.GoalItem.Category.Name,
+                        ItemName = g.GoalItem.Name,
+                        GoalItemName = g.GoalItem.Name,
+                        TargetScore = g.TargetScore,
+                        CurrentScore = g.CurrentScore,
+                        ProgressPercent = g.TargetScore > 0 ? Math.Round((g.CurrentScore / g.TargetScore) * 100, 2) : 0,
+                        Status = g.Status,
+                        DueDate = g.DueDate,
+                        CreatedAt = g.CreatedAt
+                    }).ToList()
+                };
             })
             .OrderByDescending(s => s.CreatedAt)
             .ToList();
@@ -182,6 +199,10 @@ public class PersonalGoalService : IPersonalGoalService
         if (goal == null)
             throw new NotFoundException(nameof(PersonalGoal), goalId);
 
+        var progressPercent = goal.TargetScore > 0 
+            ? Math.Round((goal.CurrentScore / goal.TargetScore) * 100, 2) 
+            : 0;
+
         var dto = new PersonalGoalDetailDto
         {
             Id = goal.Id,
@@ -191,6 +212,7 @@ public class PersonalGoalService : IPersonalGoalService
             Description = goal.Description,
             TargetScore = goal.TargetScore,
             CurrentScore = goal.CurrentScore,
+            ProgressPercent = progressPercent,
             StartDate = goal.StartDate,
             DueDate = goal.DueDate,
             Status = goal.Status,
@@ -283,6 +305,7 @@ public class PersonalGoalService : IPersonalGoalService
     public async Task<Guid> AddActivityAsync(Guid goalId, int userId, CreatePersonalGoalActivityDto dto, CancellationToken cancellationToken = default)
     {
         var goal = await _context.PersonalGoals
+            .Include(pg => pg.Activities)
             .FirstOrDefaultAsync(pg => pg.Id == goalId && pg.UserId == userId, cancellationToken);
 
         if (goal == null)
@@ -317,6 +340,7 @@ public class PersonalGoalService : IPersonalGoalService
     {
         var activity = await _context.PersonalGoalActivities
             .Include(a => a.PersonalGoal)
+                .ThenInclude(pg => pg.Activities)
             .FirstOrDefaultAsync(a => a.Id == activityId && a.PersonalGoalId == goalId, cancellationToken);
 
         if (activity == null)
@@ -336,6 +360,87 @@ public class PersonalGoalService : IPersonalGoalService
 
         activity.PersonalGoal.UpdatedAt = DateTime.UtcNow;
 
+        // Auto-recalculate score based on completed activities
+        await RecalculateGoalScoreFromActivitiesInternalAsync(activity.PersonalGoal);
+
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RecalculateGoalScoreFromActivitiesAsync(Guid goalId, int userId, CancellationToken cancellationToken = default)
+    {
+        var goal = await _context.PersonalGoals
+            .Include(pg => pg.Activities)
+            .FirstOrDefaultAsync(pg => pg.Id == goalId && pg.UserId == userId, cancellationToken);
+
+        if (goal == null)
+            throw new NotFoundException(nameof(PersonalGoal), goalId);
+
+        await RecalculateGoalScoreFromActivitiesInternalAsync(goal);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Internal helper to recalculate goal score based on completed activities
+    /// </summary>
+    private Task RecalculateGoalScoreFromActivitiesInternalAsync(PersonalGoal goal)
+    {
+        var totalActivities = goal.Activities.Count;
+        if (totalActivities == 0)
+        {
+            // No activities - keep current manual score
+            return Task.CompletedTask;
+        }
+
+        var completedActivities = goal.Activities.Count(a => a.Status == ActivityStatus.Done);
+        
+        // Calculate score as percentage of completed activities
+        var newScore = Math.Round((decimal)completedActivities / totalActivities * goal.TargetScore, 2);
+        
+        goal.CurrentScore = newScore;
+        goal.UpdatedAt = DateTime.UtcNow;
+
+        // Auto-complete goal if all activities are done
+        if (completedActivities == totalActivities && goal.Status != PersonalGoalStatus.Completed)
+        {
+            goal.Status = PersonalGoalStatus.Completed;
+        }
+        else if (completedActivities < totalActivities && goal.Status == PersonalGoalStatus.Completed)
+        {
+            // Revert to InProgress if not all activities are done
+            goal.Status = PersonalGoalStatus.InProgress;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public async Task SubmitGoalSetForEvaluationAsync(Guid goalSetId, int userId, CancellationToken cancellationToken = default)
+    {
+        // Get all goals in the goal set
+        var goals = await _context.PersonalGoals
+            .Where(pg => pg.GoalSetId == goalSetId && pg.UserId == userId)
+            .ToListAsync(cancellationToken);
+
+        if (!goals.Any())
+            throw new NotFoundException("Goal set not found or you don't have permission to access it.");
+
+        // Verify all goals are completed
+        if (!goals.All(g => g.Status == PersonalGoalStatus.Completed))
+            throw new BusinessRuleException("All goals in the set must be completed before submitting for evaluation.");
+
+        // Verify all goals have reached 100%
+        var allComplete = goals.All(g => g.TargetScore > 0 && g.CurrentScore >= g.TargetScore);
+        if (!allComplete)
+            throw new BusinessRuleException("All goals must have a score of 100% before submitting for evaluation.");
+
+        // TODO: Implement actual evaluation workflow
+        // For now, this is a placeholder that validates the submission is possible
+        // In the future, this could:
+        // - Create an evaluation request record
+        // - Notify evaluators/supervisors
+        // - Lock the goals from further editing
+        // - Trigger approval workflow
+
+        // Placeholder: Just log the submission intent
+        // In production, you might update a status or create an evaluation record
     }
 }

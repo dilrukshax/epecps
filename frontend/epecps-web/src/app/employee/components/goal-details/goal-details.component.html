@@ -88,19 +88,27 @@
         <div class="border-t pt-4">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-lg font-semibold text-gray-900">Progress</h3>
-            <button 
-              *ngIf="!editingScore && goal.status !== PersonalGoalStatus.Completed && goal.status !== PersonalGoalStatus.Cancelled"
-              (click)="startEditingScore()"
-              class="text-sm text-primary-600 hover:text-primary-700 font-medium">
-              Update Score
-            </button>
+            <div class="flex gap-2">
+              <button 
+                *ngIf="goal.activities.length > 0"
+                (click)="recalculateScore()"
+                class="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                Recalculate from Activities
+              </button>
+              <button 
+                *ngIf="!editingScore && goal.status !== PersonalGoalStatus.Completed && goal.status !== PersonalGoalStatus.Cancelled"
+                (click)="startEditingScore()"
+                class="text-sm text-primary-600 hover:text-primary-700 font-medium">
+                Update Score
+              </button>
+            </div>
           </div>
 
           <!-- Score Display/Edit -->
           <div *ngIf="!editingScore" class="mb-4">
             <div class="flex items-center justify-between text-lg mb-2">
               <span class="text-gray-600">Current Score</span>
-              <span class="font-bold text-gray-900">{{ goal.currentScore }} / {{ goal.targetScore }}</span>
+              <span class="font-bold text-gray-900">{{ getProgressPercentage() | number:'1.0-1' }}%</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-3">
               <div 
@@ -108,8 +116,9 @@
                 [style.width.%]="getProgressPercentage()">
               </div>
             </div>
-            <p class="text-sm text-gray-500 mt-1">{{ getProgressPercentage() | number:'1.0-0' }}% complete</p>
-          </div>
+            <p class="text-sm text-gray-500 mt-1">
+              {{ goal.currentScore }} / {{ goal.targetScore }} points
+            </div>
 
           <!-- Score Edit Form -->
           <div *ngIf="editingScore" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
@@ -144,6 +153,9 @@
             <h3 class="text-xl font-bold text-gray-900">Activities</h3>
             <p class="text-sm text-gray-600">
               {{ getCompletedActivitiesCount() }} of {{ goal.activities.length }} completed
+              <span *ngIf="goal.activities.length > 0" class="ml-2">
+                ({{ getActivityProgressPercentage() }}%)
+              </span>
             </p>
           </div>
           <button 

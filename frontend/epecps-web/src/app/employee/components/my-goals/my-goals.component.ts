@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { EmployeeGoalsService } from '../../../services/employee-goals.service';
-import { PersonalGoalSetDto, PersonalGoalStatus } from '../../../models/employee-goals.models';
+import { PersonalGoalSetDto, PersonalGoalStatus, PersonalGoalListDto } from '../../../models/employee-goals.models';
 
 /**
  * Component for displaying all personal goals grouped by goal sets
@@ -136,6 +136,14 @@ export class MyGoalsComponent implements OnInit {
     return Math.min(100, (totalCurrent / totalTarget) * 100);
   }
 
+  getGoalProgressPercentage(goal: PersonalGoalListDto): number {
+    return goal.progressPercent || 0;
+  }
+
+  getSetProgressPercentage(goalSet: PersonalGoalSetDto): number {
+    return goalSet.progressPercent || 0;
+  }
+
   getProgressBarClass(percentage: number): string {
     if (percentage >= 75) return 'bg-green-600';
     if (percentage >= 50) return 'bg-blue-600';
@@ -160,5 +168,30 @@ export class MyGoalsComponent implements OnInit {
     const due = new Date(dueDate);
     const monthsDiff = Math.round((due.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
     return `${monthsDiff}-month goal period`;
+  }
+
+  submitGoalSetForEvaluation(goalSet: PersonalGoalSetDto, event: Event): void {
+    event.stopPropagation();
+    
+    if (!goalSet.canSubmitForEvaluation) {
+      alert('This goal set cannot be submitted yet. All goals must be 100% complete.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to submit this goal set for evaluation?\n\nTemplate: ${goalSet.templateName}\nProgress: ${goalSet.progressPercent.toFixed(0)}%\n\nOnce submitted, your supervisor will be notified.`)) {
+      return;
+    }
+
+    this.goalsService.submitGoalSetForEvaluation(goalSet.goalSetId).subscribe({
+      next: (response) => {
+        alert(response.message || 'Goal set submitted for evaluation successfully!');
+        this.loadGoals(); // Refresh the list
+      },
+      error: (err) => {
+        const errorMessage = err.error?.message || err.error || 'Failed to submit goal set for evaluation. Please try again.';
+        alert(errorMessage);
+        console.error('Error submitting goal set:', err);
+      }
+    });
   }
 }

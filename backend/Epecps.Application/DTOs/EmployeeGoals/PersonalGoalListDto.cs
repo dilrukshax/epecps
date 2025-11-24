@@ -15,6 +15,12 @@ public class PersonalGoalListDto
     public string GoalItemName { get; set; } = string.Empty;
     public decimal TargetScore { get; set; }
     public decimal CurrentScore { get; set; }
+    
+    /// <summary>
+    /// Progress percentage (0-100) calculated as (CurrentScore / TargetScore) * 100
+    /// </summary>
+    public decimal ProgressPercent { get; set; }
+    
     public PersonalGoalStatus Status { get; set; }
     public DateTime DueDate { get; set; }
     public DateTime CreatedAt { get; set; }

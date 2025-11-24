@@ -128,4 +128,18 @@ export class EmployeeGoalsService {
   updateActivity(goalId: string, activityId: string, dto: UpdatePersonalGoalActivityDto): Observable<void> {
     return this.http.put<void>(`${this.goalsUrl}/${goalId}/activities/${activityId}`, dto);
   }
+
+  /**
+   * Recalculate goal score based on completed activities
+   */
+  recalculateGoalScore(goalId: string): Observable<void> {
+    return this.http.post<void>(`${this.goalsUrl}/${goalId}/recalculate-score`, {});
+  }
+
+  /**
+   * Submit a goal set for evaluation
+   */
+  submitGoalSetForEvaluation(goalSetId: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.goalsUrl}/sets/${goalSetId}/submit-for-evaluation`, {});
+  }
 }

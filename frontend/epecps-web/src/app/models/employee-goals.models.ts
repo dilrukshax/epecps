@@ -86,6 +86,7 @@ export interface PersonalGoalListDto {
   goalItemName: string;
   targetScore: number;
   currentScore: number;
+  progressPercent: number; // Progress percentage (0-100)
   status: PersonalGoalStatus;
   dueDate: Date | string;
   createdAt: Date | string;
@@ -113,6 +114,7 @@ export interface PersonalGoalDetailDto {
   description?: string;
   targetScore: number;
   currentScore: number;
+  progressPercent: number; // Progress percentage (0-100)
   startDate: Date | string;
   dueDate: Date | string;
   status: PersonalGoalStatus;
@@ -157,6 +159,8 @@ export interface PersonalGoalSetDto {
   goalCount: number;
   totalTargetScore: number;
   totalCurrentScore: number;
+  progressPercent: number; // Overall progress percentage (0-100)
+  canSubmitForEvaluation: boolean; // True when all goals are 100% complete
   startDate: Date | string;
   dueDate: Date | string;
   status: PersonalGoalStatus;

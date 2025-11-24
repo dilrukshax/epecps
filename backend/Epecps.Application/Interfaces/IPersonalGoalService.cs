@@ -46,4 +46,14 @@ public interface IPersonalGoalService
     /// Update an existing activity
     /// </summary>
     Task UpdateActivityAsync(Guid goalId, Guid activityId, int userId, UpdatePersonalGoalActivityDto dto, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Submit a goal set for evaluation (placeholder for future workflow)
+    /// </summary>
+    Task SubmitGoalSetForEvaluationAsync(Guid goalSetId, int userId, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Recalculate goal score based on completed activities
+    /// </summary>
+    Task RecalculateGoalScoreFromActivitiesAsync(Guid goalId, int userId, CancellationToken cancellationToken = default);
 }

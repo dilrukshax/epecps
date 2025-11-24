@@ -33,6 +33,18 @@ public class PersonalGoalSetDto
     public decimal TotalCurrentScore { get; set; }
     
     /// <summary>
+    /// Overall progress percentage (0-100) for the entire goal set
+    /// Calculated as (TotalCurrentScore / TotalTargetScore) * 100
+    /// </summary>
+    public decimal ProgressPercent { get; set; }
+    
+    /// <summary>
+    /// Indicates if this goal set is fully completed and can be submitted for evaluation
+    /// True when all goals are completed (progress = 100%)
+    /// </summary>
+    public bool CanSubmitForEvaluation { get; set; }
+    
+    /// <summary>
     /// Start date (same for all goals in the set)
     /// </summary>
     public DateTime StartDate { get; set; }

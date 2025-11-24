@@ -14,6 +14,12 @@ public class PersonalGoalDetailDto
     public string? Description { get; set; }
     public decimal TargetScore { get; set; }
     public decimal CurrentScore { get; set; }
+
+    /// <summary>
+    /// Progress percentage (0-100) calculated as (CurrentScore / TargetScore) * 100
+    /// </summary>
+    public decimal ProgressPercent { get; set; }
+
     public DateTime StartDate { get; set; }
     public DateTime DueDate { get; set; }
     public PersonalGoalStatus Status { get; set; }

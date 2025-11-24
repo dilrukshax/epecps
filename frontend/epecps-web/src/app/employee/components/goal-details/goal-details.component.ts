@@ -117,8 +117,34 @@ export class GoalDetailsComponent implements OnInit {
   }
 
   getProgressPercentage(): number {
-    if (!this.goal || this.goal.targetScore === 0) return 0;
-    return Math.min(100, (this.goal.currentScore / this.goal.targetScore) * 100);
+    if (!this.goal) return 0;
+    return this.goal.progressPercent || 0;
+  }
+
+  getActivityProgressPercentage(): number {
+    if (!this.goal || this.goal.activities.length === 0) return 0;
+    const completed = this.getCompletedActivitiesCount();
+    const total = this.goal.activities.length;
+    return Math.round((completed / total) * 100);
+  }
+
+  recalculateScore(): void {
+    if (!this.goalId) return;
+
+    if (!confirm('This will recalculate the goal score based on completed activities. Continue?')) {
+      return;
+    }
+
+    this.goalsService.recalculateGoalScore(this.goalId).subscribe({
+      next: () => {
+        this.loadGoalDetails();
+        alert('Score recalculated successfully!');
+      },
+      error: (err) => {
+        alert('Failed to recalculate score. Please try again.');
+        console.error('Error recalculating score:', err);
+      }
+    });
   }
 
   // ===========================
@@ -179,10 +205,29 @@ export class GoalDetailsComponent implements OnInit {
   saveActivity(): void {
     if (!this.goalId || !this.editingActivity || !this.activityFormData) return;
 
+    // Properly convert dueDate to ISO string or undefined
+    let dueDate: string | undefined = undefined;
+    if (this.activityFormData.dueDate) {
+      try {
+        dueDate = new Date(this.activityFormData.dueDate).toISOString();
+      } catch (e) {
+        console.error('Invalid date format:', this.activityFormData.dueDate);
+        dueDate = undefined;
+      }
+    }
+
+    const dto: UpdatePersonalGoalActivityDto = {
+      description: this.activityFormData.description,
+      status: this.activityFormData.status,
+      dueDate: dueDate,
+      evidenceUrl: this.activityFormData.evidenceUrl || undefined,
+      evidenceNotes: this.activityFormData.evidenceNotes || undefined
+    };
+
     this.goalsService.updateActivity(
       this.goalId,
       this.editingActivity.id,
-      this.activityFormData
+      dto
     ).subscribe({
       next: () => {
         this.cancelEditingActivity();
@@ -198,12 +243,23 @@ export class GoalDetailsComponent implements OnInit {
   quickUpdateActivityStatus(activity: PersonalGoalActivityDto, newStatus: ActivityStatus): void {
     if (!this.goalId) return;
 
+    // Properly convert dueDate to ISO string or undefined
+    let dueDate: string | undefined = undefined;
+    if (activity.dueDate) {
+      try {
+        dueDate = new Date(activity.dueDate).toISOString();
+      } catch (e) {
+        console.error('Invalid date format:', activity.dueDate);
+        dueDate = undefined;
+      }
+    }
+
     const dto: UpdatePersonalGoalActivityDto = {
       description: activity.description,
       status: newStatus,
-      dueDate: activity.dueDate,
-      evidenceUrl: activity.evidenceUrl,
-      evidenceNotes: activity.evidenceNotes
+      dueDate: dueDate,
+      evidenceUrl: activity.evidenceUrl || undefined,
+      evidenceNotes: activity.evidenceNotes || undefined
     };
 
     this.goalsService.updateActivity(this.goalId, activity.id, dto).subscribe({
