@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { EmployeeGoalsService } from '../../../services/employee-goals.service';
+import { EvaluationService } from '../../../services/evaluation.service';
 import { PersonalGoalSetDto, PersonalGoalStatus, PersonalGoalListDto } from '../../../models/employee-goals.models';
 
 /**
@@ -17,6 +18,7 @@ export class MyGoalsComponent implements OnInit {
   filteredGoalSets: PersonalGoalSetDto[] = [];
   loading = false;
   error: string | null = null;
+  submittingGoalSetId: string | null = null;
 
   // Filter state
   selectedStatus: PersonalGoalStatus | 'all' = 'all';
@@ -30,6 +32,7 @@ export class MyGoalsComponent implements OnInit {
 
   constructor(
     private goalsService: EmployeeGoalsService,
+    private evaluationService: EvaluationService,
     private router: Router
   ) {}
 
@@ -174,24 +177,46 @@ export class MyGoalsComponent implements OnInit {
     event.stopPropagation();
     
     if (!goalSet.canSubmitForEvaluation) {
-      alert('This goal set cannot be submitted yet. All goals must be 100% complete.');
+      this.showToast('error', 'This goal set cannot be submitted yet. All goals must be 100% complete.');
       return;
     }
 
-    if (!confirm(`Are you sure you want to submit this goal set for evaluation?\n\nTemplate: ${goalSet.templateName}\nProgress: ${goalSet.progressPercent.toFixed(0)}%\n\nOnce submitted, your supervisor will be notified.`)) {
+    if (!confirm(`Are you sure you want to submit this goal set for evaluation?\n\nTemplate: ${goalSet.templateName}\nProgress: ${goalSet.progressPercent.toFixed(0)}%\n\nOnce submitted, your supervisor will be notified and you won't be able to edit these goals.`)) {
       return;
     }
 
-    this.goalsService.submitGoalSetForEvaluation(goalSet.goalSetId).subscribe({
+    this.submittingGoalSetId = goalSet.goalSetId;
+
+    this.evaluationService.submitGoalSetForEvaluation(goalSet.goalSetId).subscribe({
       next: (response) => {
-        alert(response.message || 'Goal set submitted for evaluation successfully!');
+        this.showToast('success', response.message || 'Goal set submitted for evaluation successfully!');
+        this.submittingGoalSetId = null;
         this.loadGoals(); // Refresh the list
       },
       error: (err) => {
+        this.submittingGoalSetId = null;
         const errorMessage = err.error?.message || err.error || 'Failed to submit goal set for evaluation. Please try again.';
-        alert(errorMessage);
+        this.showToast('error', errorMessage);
         console.error('Error submitting goal set:', err);
       }
     });
+  }
+
+  isSubmitting(goalSetId: string): boolean {
+    return this.submittingGoalSetId === goalSetId;
+  }
+
+  private showToast(type: 'success' | 'error', message: string): void {
+    // Simple toast implementation - can be replaced with a library like ngx-toastr
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 px-6 py-4 rounded-lg shadow-lg z-50 ${
+      type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+    }`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.remove();
+    }, 5000);
   }
 }

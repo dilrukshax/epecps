@@ -176,7 +176,7 @@ public class EmployeeGoalsController : ControllerBase
     }
 
     /// <summary>
-    /// Submit a goal set for evaluation (placeholder for future workflow)
+    /// Submit a goal set for evaluation (starts the approval workflow)
     /// All goals in the set must be completed (100%) before submission
     /// </summary>
     [HttpPost("sets/{goalSetId}/submit-for-evaluation")]
@@ -185,8 +185,8 @@ public class EmployeeGoalsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        await _personalGoalService.SubmitGoalSetForEvaluationAsync(goalSetId, userId, cancellationToken);
-        return Ok(new { message = "Goal set submitted for evaluation successfully. Your supervisor will be notified." });
+        var result = await _personalGoalService.SubmitGoalSetForEvaluationAsync(goalSetId, userId, cancellationToken);
+        return Ok(result);
     }
 
     /// <summary>

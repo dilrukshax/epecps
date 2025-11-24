@@ -27,17 +27,23 @@ import { SharedModule } from './shared/shared.module';
 import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { AdminDashboardComponent } from './pages/admin-dashboard/admin-dashboard.component';
 import { UnauthorizedComponent } from './pages/unauthorized/unauthorized.component';
+import { MyApprovalsComponent } from './employee/components/my-approvals/my-approvals.component';
+import { EvaluationDetailComponent } from './employee/components/evaluation-detail/evaluation-detail.component';
+import { FormsModule } from '@angular/forms';
 
 @NgModule({
   declarations: [
     App,
     DashboardComponent,
     AdminDashboardComponent,
-    UnauthorizedComponent
+    UnauthorizedComponent,
+    MyApprovalsComponent,
+    EvaluationDetailComponent
   ],
   imports: [
     BrowserModule,
     HttpClientModule,
+    FormsModule,
     AppRoutingModule,
     MsalModule,
     SharedModule

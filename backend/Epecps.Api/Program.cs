@@ -18,6 +18,9 @@ var config = builder.Configuration;
 services.AddDbContext<EpecpsDbContext>(options =>
     options.UseSqlServer(config.GetConnectionString("DefaultConnection")));
 
+// Database Seeder
+services.AddScoped<Epecps.Infrastructure.Data.DatabaseSeeder>();
+
 // Admin Framework Services
 services.AddScoped<IScoreTemplateService, ScoreTemplateService>();
 services.AddScoped<IScoreCategoryService, ScoreCategoryService>();
@@ -27,6 +30,9 @@ services.AddScoped<IScoreItemService, ScoreItemService>();
 services.AddScoped<IGoalFrameworkService, GoalFrameworkService>();
 services.AddScoped<IPersonalGoalService, PersonalGoalService>();
 services.AddScoped<IUserSyncService, UserSyncService>(); // Auto-sync users from Azure AD
+
+// Evaluation Workflow Services
+services.AddScoped<IEvaluationWorkflowService, EvaluationWorkflowService>();
 
 // FluentValidation
 services.AddFluentValidationAutoValidation();

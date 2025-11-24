@@ -4,6 +4,8 @@ import { MsalGuard, MsalRedirectComponent } from '@azure/msal-angular';
 import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { AdminDashboardComponent } from './pages/admin-dashboard/admin-dashboard.component';
 import { UnauthorizedComponent } from './pages/unauthorized/unauthorized.component';
+import { MyApprovalsComponent } from './employee/components/my-approvals/my-approvals.component';
+import { EvaluationDetailComponent } from './employee/components/evaluation-detail/evaluation-detail.component';
 
 const routes: Routes = [
   // MSAL processes the hash on this route after login
@@ -34,6 +36,18 @@ const routes: Routes = [
   {
     path: 'employee',
     loadChildren: () => import('./employee/employee.module').then(m => m.EmployeeModule),
+    canActivate: [MsalGuard]
+  },
+
+  // Evaluation routes - approval workflow (loaded separately for direct navigation)
+  {
+    path: 'evaluations/my-approvals',
+    component: MyApprovalsComponent,
+    canActivate: [MsalGuard]
+  },
+  {
+    path: 'evaluations/:id',
+    component: EvaluationDetailComponent,
     canActivate: [MsalGuard]
   },
 

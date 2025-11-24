@@ -4,6 +4,7 @@ using Epecps.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Epecps.Infrastructure.Migrations
 {
     [DbContext(typeof(EpecpsDbContext))]
-    partial class EpecpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251124144722_AddApprovalHistoryAndWorkflow")]
+    partial class AddApprovalHistoryAndWorkflow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -286,6 +289,9 @@ namespace Epecps.Infrastructure.Migrations
                     b.Property<int>("CycleId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("CycleId1")
+                        .HasColumnType("int");
+
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
 
@@ -310,6 +316,8 @@ namespace Epecps.Infrastructure.Migrations
                     b.HasKey("EvaluationId");
 
                     b.HasIndex("CycleId");
+
+                    b.HasIndex("CycleId1");
 
                     b.HasIndex("EmployeeId");
 
@@ -1035,6 +1043,10 @@ namespace Epecps.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Epecps.Domain.Entities.Cycle", null)
+                        .WithMany("Evaluations")
+                        .HasForeignKey("CycleId1");
+
                     b.HasOne("Epecps.Domain.Entities.User", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
@@ -1270,6 +1282,11 @@ namespace Epecps.Infrastructure.Migrations
             modelBuilder.Entity("Epecps.Domain.Entities.Competency", b =>
                 {
                     b.Navigation("ReviewItems");
+                });
+
+            modelBuilder.Entity("Epecps.Domain.Entities.Cycle", b =>
+                {
+                    b.Navigation("Evaluations");
                 });
 
             modelBuilder.Entity("Epecps.Domain.Entities.Department", b =>

@@ -8,6 +8,5 @@ public class Cycle
     public DateTime EndDate { get; set; }
     public string Status { get; set; } = string.Empty;
 
-    // Navigation properties
-    public ICollection<Evaluation> Evaluations { get; set; } = new List<Evaluation>();
+    // Navigation property removed - not needed since EvaluationConfiguration defines the relationship
 }

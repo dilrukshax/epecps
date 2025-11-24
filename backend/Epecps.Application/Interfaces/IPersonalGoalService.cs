@@ -1,4 +1,5 @@
 using Epecps.Application.DTOs.EmployeeGoals;
+using Epecps.Application.DTOs.Evaluations;
 
 namespace Epecps.Application.Interfaces;
 
@@ -48,9 +49,9 @@ public interface IPersonalGoalService
     Task UpdateActivityAsync(Guid goalId, Guid activityId, int userId, UpdatePersonalGoalActivityDto dto, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Submit a goal set for evaluation (placeholder for future workflow)
+    /// Submit a goal set for evaluation (starts the approval workflow)
     /// </summary>
-    Task SubmitGoalSetForEvaluationAsync(Guid goalSetId, int userId, CancellationToken cancellationToken = default);
+    Task<SubmitGoalSetResponseDto> SubmitGoalSetForEvaluationAsync(Guid goalSetId, int userId, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Recalculate goal score based on completed activities
