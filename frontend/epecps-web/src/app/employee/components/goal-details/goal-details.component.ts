@@ -217,6 +217,12 @@ export class GoalDetailsComponent implements OnInit {
     });
   }
 
+  onStatusChange(event: Event, activity: PersonalGoalActivityDto): void {
+    const selectElement = event.target as HTMLSelectElement;
+    const newStatus = parseInt(selectElement.value, 10) as ActivityStatus;
+    this.quickUpdateActivityStatus(activity, newStatus);
+  }
+
   getActivityStatusLabel(status: ActivityStatus): string {
     switch (status) {
       case ActivityStatus.NotStarted:

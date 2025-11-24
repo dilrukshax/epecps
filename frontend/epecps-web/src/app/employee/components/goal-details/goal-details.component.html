@@ -235,8 +235,8 @@
                   </button>
                   <select 
                     [value]="activity.status"
-                    (change)="quickUpdateActivityStatus(activity, +$any($event.target).value)"
-                    class="text-sm border border-gray-300 rounded px-2 py-1">
+                    (change)="onStatusChange($event, activity)"
+                    class="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500">
                     <option [value]="ActivityStatus.NotStarted">Not Started</option>
                     <option [value]="ActivityStatus.InProgress">In Progress</option>
                     <option [value]="ActivityStatus.Done">Done</option>
