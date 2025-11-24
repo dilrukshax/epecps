@@ -20,6 +20,12 @@ public class PersonalGoal
     public Guid GoalItemId { get; set; }
     
     /// <summary>
+    /// Groups goals created together in one session (same template, period, dates)
+    /// Allows displaying them as a single "goal set" in the UI
+    /// </summary>
+    public Guid? GoalSetId { get; set; }
+    
+    /// <summary>
     /// Employee-defined title for this goal
     /// </summary>
     public string Title { get; set; } = string.Empty;

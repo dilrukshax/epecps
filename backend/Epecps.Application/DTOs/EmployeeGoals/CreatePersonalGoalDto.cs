@@ -6,6 +6,13 @@ namespace Epecps.Application.DTOs.EmployeeGoals;
 public class CreatePersonalGoalDto
 {
     public Guid GoalItemId { get; set; }
+    
+    /// <summary>
+    /// Optional: Groups multiple goals created together
+    /// If provided, all goals with the same GoalSetId will be displayed as one set
+    /// </summary>
+    public Guid? GoalSetId { get; set; }
+    
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public DateTime StartDate { get; set; }

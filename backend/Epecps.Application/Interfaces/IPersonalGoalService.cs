@@ -18,6 +18,11 @@ public interface IPersonalGoalService
     Task<List<PersonalGoalListDto>> GetMyGoalsAsync(int userId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Get personal goals grouped by goal set
+    /// </summary>
+    Task<List<PersonalGoalSetDto>> GetMyGoalSetsAsync(int userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get detailed information about a specific personal goal
     /// </summary>
     Task<PersonalGoalDetailDto> GetGoalDetailsAsync(Guid goalId, int userId, CancellationToken cancellationToken = default);

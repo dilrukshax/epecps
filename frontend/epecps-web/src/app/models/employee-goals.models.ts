@@ -17,8 +17,17 @@ export enum ActivityStatus {
 }
 
 // Goal Framework DTOs (read-only for employees)
+export interface GoalFrameworkTemplateDto {
+  id: string;
+  name: string;
+  description?: string;
+  version: number;
+  categoryCount: number;
+}
+
 export interface GoalFrameworkCategoryDto {
   id: string;
+  templateId: string;
   name: string;
   description?: string;
   itemCount: number;
@@ -47,6 +56,7 @@ export interface GoalFrameworkGoalItemDto {
 // Personal Goal DTOs
 export interface CreatePersonalGoalDto {
   goalItemId: string;
+  goalSetId?: string; // Optional: groups goals created together
   title: string;
   description?: string;
   startDate: Date | string;
@@ -69,6 +79,7 @@ export interface UpdatePersonalGoalScoreDto {
 
 export interface PersonalGoalListDto {
   id: string;
+  goalSetId?: string; // Optional: groups goals together
   title: string;
   categoryName: string;
   itemName: string;
@@ -137,4 +148,19 @@ export interface GoalItemSelection {
   dueDate: Date | string;    // Can be Date object or string from date input
   selectedSuggestedActivityIds: string[];
   customActivities: string[];
+}
+
+// Goal Set DTO (grouped view)
+export interface PersonalGoalSetDto {
+  goalSetId: string;
+  templateName: string;
+  goalCount: number;
+  totalTargetScore: number;
+  totalCurrentScore: number;
+  startDate: Date | string;
+  dueDate: Date | string;
+  status: PersonalGoalStatus;
+  createdAt: Date | string;
+  goals: PersonalGoalListDto[];
+  categories: string[];
 }

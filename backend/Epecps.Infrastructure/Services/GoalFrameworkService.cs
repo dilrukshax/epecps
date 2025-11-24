@@ -17,6 +17,45 @@ public class GoalFrameworkService : IGoalFrameworkService
         _context = context;
     }
 
+    public async Task<List<GoalFrameworkTemplateDto>> GetTemplatesAsync()
+    {
+        var templates = await _context.ScoreTemplates
+            .Where(t => t.IsPublished && !t.IsArchived)
+            .Include(t => t.Categories)
+            .Select(t => new GoalFrameworkTemplateDto
+            {
+                Id = t.Id,
+                Name = t.Name,
+                Description = t.Description,
+                Version = t.Version,
+                CategoryCount = t.Categories.Count(c => c.IsActive)
+            })
+            .OrderBy(t => t.Name)
+            .ToListAsync();
+
+        return templates;
+    }
+
+    public async Task<List<GoalFrameworkCategoryDto>> GetCategoriesByTemplateAsync(Guid templateId)
+    {
+        var categories = await _context.ScoreCategories
+            .Where(c => c.ScoreTemplateId == templateId && c.IsActive && c.Template.IsPublished && !c.Template.IsArchived)
+            .Where(c => c.Items.Any(i => i.IsActive))
+            .OrderBy(c => c.DisplayOrder)
+            .ThenBy(c => c.Name)
+            .Select(c => new GoalFrameworkCategoryDto
+            {
+                Id = c.Id,
+                TemplateId = c.ScoreTemplateId,
+                Name = c.Name,
+                Description = c.Description,
+                ItemCount = c.Items.Count(i => i.IsActive)
+            })
+            .ToListAsync();
+
+        return categories;
+    }
+
     public async Task<List<GoalFrameworkCategoryDto>> GetCategoriesAsync()
     {
         // Get only active categories from published templates that have active items
@@ -26,6 +65,7 @@ public class GoalFrameworkService : IGoalFrameworkService
             .Select(c => new GoalFrameworkCategoryDto
             {
                 Id = c.Id,
+                TemplateId = c.ScoreTemplateId,
                 Name = c.Name,
                 Description = c.Description,
                 ItemCount = c.Items.Count(i => i.IsActive)

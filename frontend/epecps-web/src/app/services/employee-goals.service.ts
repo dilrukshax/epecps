@@ -3,11 +3,13 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
+  GoalFrameworkTemplateDto,
   GoalFrameworkCategoryDto,
   GoalFrameworkItemDto,
   GoalFrameworkGoalItemDto,
   CreatePersonalGoalDto,
   PersonalGoalListDto,
+  PersonalGoalSetDto,
   PersonalGoalDetailDto,
   UpdatePersonalGoalDto,
   UpdatePersonalGoalScoreDto,
@@ -31,6 +33,20 @@ export class EmployeeGoalsService {
   // ===========================
   // Goal Framework (Browse)
   // ===========================
+
+  /**
+   * Get all published, non-archived templates available for goal-setting
+   */
+  getTemplates(): Observable<GoalFrameworkTemplateDto[]> {
+    return this.http.get<GoalFrameworkTemplateDto[]>(`${this.frameworkUrl}/templates`);
+  }
+
+  /**
+   * Get all active categories for a specific template
+   */
+  getCategoriesByTemplate(templateId: string): Observable<GoalFrameworkCategoryDto[]> {
+    return this.http.get<GoalFrameworkCategoryDto[]>(`${this.frameworkUrl}/templates/${templateId}/categories`);
+  }
 
   /**
    * Get all active categories available for goal-setting
@@ -69,6 +85,13 @@ export class EmployeeGoalsService {
    */
   getMyGoals(): Observable<PersonalGoalListDto[]> {
     return this.http.get<PersonalGoalListDto[]>(`${this.goalsUrl}/my`);
+  }
+
+  /**
+   * Get personal goals grouped by goal sets
+   */
+  getMyGoalSets(): Observable<PersonalGoalSetDto[]> {
+    return this.http.get<PersonalGoalSetDto[]>(`${this.goalsUrl}/my/sets`);
   }
 
   /**

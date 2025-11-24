@@ -8,6 +8,16 @@ namespace Epecps.Application.Interfaces;
 public interface IGoalFrameworkService
 {
     /// <summary>
+    /// Get all published, non-archived score templates available for goal-setting
+    /// </summary>
+    Task<List<GoalFrameworkTemplateDto>> GetTemplatesAsync();
+
+    /// <summary>
+    /// Get all active categories for a specific template
+    /// </summary>
+    Task<List<GoalFrameworkCategoryDto>> GetCategoriesByTemplateAsync(Guid templateId);
+
+    /// <summary>
     /// Get all active categories available for goal-setting
     /// </summary>
     Task<List<GoalFrameworkCategoryDto>> GetCategoriesAsync();

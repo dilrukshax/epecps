@@ -145,50 +145,69 @@
       <p class="mt-4 text-gray-600">Loading goals...</p>
     </div>
 
-    <!-- Goals Grid -->
-    <div *ngIf="!loading && filteredGoals.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <!-- Goal Sets Grid -->
+    <div *ngIf="!loading && filteredGoalSets.length > 0" class="space-y-6">
       <div 
-        *ngFor="let goal of filteredGoals"
-        (click)="viewGoalDetails(goal.id)"
-        class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer">
-        <div class="p-6">
-          <!-- Status Badge -->
+        *ngFor="let goalSet of filteredGoalSets"
+        class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow">
+        
+        <!-- Goal Set Card (Main) -->
+        <div 
+          (click)="toggleGoalSet(goalSet.goalSetId)"
+          class="p-6 cursor-pointer">
+          
+          <!-- Header -->
           <div class="flex items-center justify-between mb-4">
-            <span 
-              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-              [ngClass]="getStatusClass(goal.status)">
-              {{ getStatusLabel(goal.status) }}
-            </span>
-            <span 
-              *ngIf="isOverdue(goal.dueDate) && goal.status === PersonalGoalStatus.InProgress"
-              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-              Overdue
-            </span>
+            <div class="flex items-center gap-3">
+              <span 
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                [ngClass]="getStatusClass(goalSet.status)">
+                {{ getStatusLabel(goalSet.status) }}
+              </span>
+              <span 
+                *ngIf="isOverdue(goalSet.dueDate) && goalSet.status === PersonalGoalStatus.InProgress"
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                Overdue
+              </span>
+              <span class="text-sm text-gray-500">
+                {{ getGoalPeriodLabel(goalSet.startDate, goalSet.dueDate) }}
+              </span>
+            </div>
+            <svg 
+              class="h-6 w-6 text-gray-400 transition-transform"
+              [class.rotate-180]="isGoalSetExpanded(goalSet.goalSetId)"
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
 
-          <!-- Title -->
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ goal.title }}</h3>
-
-          <!-- Category Info -->
-          <div class="text-sm text-gray-600 mb-4">
-            <p>{{ goal.categoryName }} → {{ goal.itemName }}</p>
-            <p class="font-medium text-gray-700">{{ goal.goalItemName }}</p>
-          </div>
+          <!-- Title and Info -->
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">{{ goalSet.templateName }}</h3>
+          <p class="text-sm text-gray-600 mb-4">
+            {{ goalSet.goalCount }} goal{{ goalSet.goalCount !== 1 ? 's' : '' }} • 
+            {{ goalSet.categories.join(', ') }}
+          </p>
 
           <!-- Progress Bar -->
           <div class="mb-4">
             <div class="flex items-center justify-between text-sm mb-1">
-              <span class="text-gray-600">Progress</span>
-              <span class="font-medium text-gray-900">{{ goal.currentScore }} / {{ goal.targetScore }}</span>
+              <span class="text-gray-600">Overall Progress</span>
+              <span class="font-medium text-gray-900">
+                {{ goalSet.totalCurrentScore }} / {{ goalSet.totalTargetScore }}
+              </span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2">
               <div 
                 class="h-2 rounded-full transition-all"
-                [ngClass]="getProgressBarClass(getProgressPercentage(goal))"
-                [style.width.%]="getProgressPercentage(goal)">
+                [ngClass]="getProgressBarClass(getProgressPercentage(goalSet.totalCurrentScore, goalSet.totalTargetScore))"
+                [style.width.%]="getProgressPercentage(goalSet.totalCurrentScore, goalSet.totalTargetScore)">
               </div>
             </div>
-            <p class="text-xs text-gray-500 mt-1">{{ getProgressPercentage(goal) | number:'1.0-0' }}% complete</p>
+            <p class="text-xs text-gray-500 mt-1">
+              {{ getProgressPercentage(goalSet.totalCurrentScore, goalSet.totalTargetScore) | number:'1.0-0' }}% complete
+            </p>
           </div>
 
           <!-- Due Date -->
@@ -196,14 +215,48 @@
             <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            Due: {{ goal.dueDate | date:'MMM d, yyyy' }}
+            Due: {{ goalSet.dueDate | date:'MMM d, yyyy' }}
+          </div>
+        </div>
+
+        <!-- Expanded View - Individual Goals -->
+        <div 
+          *ngIf="isGoalSetExpanded(goalSet.goalSetId)"
+          class="border-t border-gray-200 bg-gray-50 p-6">
+          <h4 class="text-sm font-medium text-gray-700 mb-4">Individual Goals ({{ goalSet.goalCount }})</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div 
+              *ngFor="let goal of goalSet.goals"
+              (click)="viewGoalDetails(goal.id, $event)"
+              class="bg-white rounded-lg border border-gray-200 p-4 hover:border-primary-500 hover:shadow-md transition-all cursor-pointer">
+              <div class="flex items-start justify-between mb-2">
+                <h5 class="text-sm font-semibold text-gray-900 flex-1">{{ goal.title }}</h5>
+                <span 
+                  class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ml-2"
+                  [ngClass]="getStatusClass(goal.status)">
+                  {{ getStatusLabel(goal.status) }}
+                </span>
+              </div>
+              <p class="text-xs text-gray-600 mb-3">{{ goal.categoryName }}</p>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-gray-600">Progress</span>
+                <span class="font-medium text-gray-900">{{ goal.currentScore }} / {{ goal.targetScore }}</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                <div 
+                  class="h-1.5 rounded-full"
+                  [ngClass]="getProgressBarClass(getProgressPercentage(goal.currentScore, goal.targetScore))"
+                  [style.width.%]="getProgressPercentage(goal.currentScore, goal.targetScore)">
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Empty State -->
-    <div *ngIf="!loading && filteredGoals.length === 0 && !error" class="bg-white rounded-lg shadow p-12 text-center">
+    <div *ngIf="!loading && filteredGoalSets.length === 0 && !error" class="bg-white rounded-lg shadow p-12 text-center">
       <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>

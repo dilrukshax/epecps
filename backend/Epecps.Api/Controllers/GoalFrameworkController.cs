@@ -20,6 +20,26 @@ public class GoalFrameworkController : ControllerBase
     }
 
     /// <summary>
+    /// Get all published, non-archived templates available for goal-setting
+    /// </summary>
+    [HttpGet("templates")]
+    public async Task<IActionResult> GetTemplates()
+    {
+        var templates = await _goalFrameworkService.GetTemplatesAsync();
+        return Ok(templates);
+    }
+
+    /// <summary>
+    /// Get all active categories for a specific template
+    /// </summary>
+    [HttpGet("templates/{templateId}/categories")]
+    public async Task<IActionResult> GetCategoriesByTemplate(Guid templateId)
+    {
+        var categories = await _goalFrameworkService.GetCategoriesByTemplateAsync(templateId);
+        return Ok(categories);
+    }
+
+    /// <summary>
     /// Get all active categories available for goal-setting
     /// </summary>
     [HttpGet("categories")]

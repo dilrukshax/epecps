@@ -17,11 +17,46 @@
       </div>
     </div>
 
+    <!-- Goal Period Selector (Shown from Step 1 onwards) -->
+    <div *ngIf="currentStep >= 1 && currentStep < 5" class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <h3 class="text-sm font-medium text-blue-900 mb-3">Goal Period</h3>
+      <div class="flex items-center gap-4">
+        <div class="flex-1">
+          <label class="block text-xs text-blue-700 mb-1">Period (months)</label>
+          <select 
+            [(ngModel)]="goalPeriodMonths" 
+            (change)="onPeriodChange()"
+            class="w-full px-3 py-2 border border-blue-300 rounded-md bg-white">
+            <option [value]="3">3 months</option>
+            <option [value]="6">6 months</option>
+            <option [value]="9">9 months</option>
+            <option [value]="12">12 months</option>
+          </select>
+        </div>
+        <div class="flex-1">
+          <label class="block text-xs text-blue-700 mb-1">Start Date</label>
+          <input 
+            type="text" 
+            [value]="goalStartDate | date:'mediumDate'" 
+            readonly
+            class="w-full px-3 py-2 border border-blue-300 rounded-md bg-blue-100 text-blue-900">
+        </div>
+        <div class="flex-1">
+          <label class="block text-xs text-blue-700 mb-1">End Date</label>
+          <input 
+            type="text" 
+            [value]="goalEndDate | date:'mediumDate'" 
+            readonly
+            class="w-full px-3 py-2 border border-blue-300 rounded-md bg-blue-100 text-blue-900">
+        </div>
+      </div>
+    </div>
+
     <!-- Progress Steps -->
     <div class="mb-8">
       <nav aria-label="Progress">
         <ol class="flex items-center">
-          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 4">
+          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 5">
             <div class="flex items-center">
               <div 
                 class="relative flex h-8 w-8 items-center justify-center rounded-full"
@@ -30,12 +65,12 @@
                 <span class="text-white text-sm font-medium">1</span>
               </div>
               <span class="ml-4 text-sm font-medium" [class.text-gray-900]="currentStep >= 1" [class.text-gray-500]="currentStep < 1">
-                Category
+                Template
               </span>
             </div>
           </li>
 
-          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 4">
+          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 5">
             <div class="flex items-center">
               <div 
                 class="relative flex h-8 w-8 items-center justify-center rounded-full"
@@ -44,12 +79,12 @@
                 <span class="text-white text-sm font-medium">2</span>
               </div>
               <span class="ml-4 text-sm font-medium" [class.text-gray-900]="currentStep >= 2" [class.text-gray-500]="currentStep < 2">
-                Item
+                Categories
               </span>
             </div>
           </li>
 
-          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 4">
+          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 5">
             <div class="flex items-center">
               <div 
                 class="relative flex h-8 w-8 items-center justify-center rounded-full"
@@ -58,12 +93,12 @@
                 <span class="text-white text-sm font-medium">3</span>
               </div>
               <span class="ml-4 text-sm font-medium" [class.text-gray-900]="currentStep >= 3" [class.text-gray-500]="currentStep < 3">
-                Select Goals
+                Items
               </span>
             </div>
           </li>
 
-          <li class="relative">
+          <li class="relative pr-8 sm:pr-20" [class.flex-1]="currentStep < 5">
             <div class="flex items-center">
               <div 
                 class="relative flex h-8 w-8 items-center justify-center rounded-full"
@@ -72,6 +107,20 @@
                 <span class="text-white text-sm font-medium">4</span>
               </div>
               <span class="ml-4 text-sm font-medium" [class.text-gray-900]="currentStep >= 4" [class.text-gray-500]="currentStep < 4">
+                Goal Items
+              </span>
+            </div>
+          </li>
+
+          <li class="relative">
+            <div class="flex items-center">
+              <div 
+                class="relative flex h-8 w-8 items-center justify-center rounded-full"
+                [class.bg-primary-600]="currentStep >= 5"
+                [class.bg-gray-300]="currentStep < 5">
+                <span class="text-white text-sm font-medium">5</span>
+              </div>
+              <span class="ml-4 text-sm font-medium" [class.text-gray-900]="currentStep >= 5" [class.text-gray-500]="currentStep < 5">
                 Configure
               </span>
             </div>
@@ -92,9 +141,10 @@
       </div>
     </div>
 
-    <!-- Step 1: Choose Category -->
+    <!-- Step 1: Select Template -->
     <div *ngIf="currentStep === 1" class="bg-white shadow-lg rounded-lg p-6">
-      <h2 class="text-xl font-bold text-gray-900 mb-4">Step 1: Choose a Category</h2>
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Step 1: Choose a Score Template</h2>
+      <p class="text-sm text-gray-600 mb-6">Select a template that defines your goal framework</p>
       
       <div *ngIf="loading" class="text-center py-12">
         <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -102,38 +152,53 @@
 
       <div *ngIf="!loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div 
-          *ngFor="let category of categories"
-          (click)="selectCategory(category)"
+          *ngFor="let template of templates"
+          (click)="selectTemplate(template)"
           class="border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-primary-500 hover:shadow-md transition-all">
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ category.name }}</h3>
-          <p class="text-sm text-gray-600 mb-4" *ngIf="category.description">{{ category.description }}</p>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ template.name }}</h3>
+          <p class="text-sm text-gray-600 mb-4" *ngIf="template.description">{{ template.description }}</p>
           <div class="text-sm text-gray-500">
-            {{ category.itemCount }} item{{ category.itemCount !== 1 ? 's' : '' }} available
+            Version {{ template.version }} • {{ template.categoryCount }} categor{{ template.categoryCount !== 1 ? 'ies' : 'y' }}
           </div>
         </div>
       </div>
 
-      <div *ngIf="!loading && categories.length === 0" class="text-center py-12 text-gray-500">
-        No categories available. Please contact your administrator.
+      <div *ngIf="!loading && templates.length === 0" class="text-center py-12 text-gray-500">
+        No templates available. Please contact your administrator.
       </div>
     </div>
 
-    <!-- Step 2: Choose Item -->
+    <!-- Step 2: Select Categories -->
     <div *ngIf="currentStep === 2" class="bg-white shadow-lg rounded-lg p-6">
-      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 2: Choose an Item</h2>
-      <p class="text-sm text-gray-600 mb-6">Category: <span class="font-medium">{{ selectedCategory?.name }}</span></p>
+      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 2: Select Categories</h2>
+      <p class="text-sm text-gray-600 mb-6">Template: <span class="font-medium">{{ selectedTemplate?.name }}</span></p>
       
       <div *ngIf="loading" class="text-center py-12">
         <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
       </div>
 
-      <div *ngIf="!loading" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div *ngIf="!loading" class="space-y-4">
         <div 
-          *ngFor="let item of items"
-          (click)="selectItem(item)"
-          class="border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-primary-500 hover:shadow-md transition-all">
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ item.name }}</h3>
-          <p class="text-sm text-gray-600" *ngIf="item.description">{{ item.description }}</p>
+          *ngFor="let category of categories"
+          (click)="toggleCategorySelection(category.id)"
+          class="border-2 rounded-lg p-6 cursor-pointer transition-all"
+          [class.border-primary-500]="isCategorySelected(category.id)"
+          [class.bg-primary-50]="isCategorySelected(category.id)"
+          [class.border-gray-200]="!isCategorySelected(category.id)">
+          <div class="flex items-start">
+            <input 
+              type="checkbox" 
+              [checked]="isCategorySelected(category.id)"
+              (click)="$event.stopPropagation()"
+              class="mt-1 h-5 w-5 text-primary-600 rounded">
+            <div class="ml-4 flex-1">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ category.name }}</h3>
+              <p class="text-sm text-gray-600 mb-3" *ngIf="category.description">{{ category.description }}</p>
+              <div class="text-sm text-gray-500">
+                {{ category.itemCount }} item{{ category.itemCount !== 1 ? 's' : '' }} available
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -143,13 +208,19 @@
           class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
           Back
         </button>
+        <button 
+          (click)="proceedToItemSelection()"
+          [disabled]="selectedCategoryIds.size === 0"
+          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+          Continue ({{ selectedCategoryIds.size }} selected)
+        </button>
       </div>
     </div>
 
-    <!-- Step 3: Choose Goal Items -->
+    <!-- Step 3: Select Items -->
     <div *ngIf="currentStep === 3" class="bg-white shadow-lg rounded-lg p-6">
-      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 3: Select Goal Items</h2>
-      <p class="text-sm text-gray-600 mb-6">You can select multiple goal items. Each will become a separate personal goal.</p>
+      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 3: Select Items</h2>
+      <p class="text-sm text-gray-600 mb-6">Select items from your chosen categories</p>
       
       <div *ngIf="loading" class="text-center py-12">
         <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -157,7 +228,88 @@
 
       <div *ngIf="!loading" class="space-y-4">
         <div 
-          *ngFor="let goalItem of goalItems"
+          *ngFor="let item of getItemsForDisplay()"
+          (click)="toggleItemSelection(item.id)"
+          class="border-2 rounded-lg p-6 cursor-pointer transition-all"
+          [class.border-primary-500]="isItemSelected(item.id)"
+          [class.bg-primary-50]="isItemSelected(item.id)"
+          [class.border-gray-200]="!isItemSelected(item.id)">
+          <div class="flex items-start">
+            <input 
+              type="checkbox" 
+              [checked]="isItemSelected(item.id)"
+              (click)="$event.stopPropagation()"
+              class="mt-1 h-5 w-5 text-primary-600 rounded">
+            <div class="ml-4 flex-1">
+              <div class="flex items-start justify-between">
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ item.name }}</h3>
+                  <p class="text-sm text-gray-600 mb-2" *ngIf="item.description">{{ item.description }}</p>
+                  <span class="inline-block px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                    {{ getCategoryName(item) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-between">
+        <button 
+          (click)="goBack()"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+          Back
+        </button>
+        <button 
+          (click)="proceedToGoalItemSelection()"
+          [disabled]="selectedItemIds.size === 0"
+          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+          Continue ({{ selectedItemIds.size }} selected)
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 4: Select Goal Items -->
+    <div *ngIf="currentStep === 4" class="bg-white shadow-lg rounded-lg p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 4: Select Goal Items</h2>
+      <p class="text-sm text-gray-600 mb-4">Select goal items. Each will become a separate personal goal.</p>
+      
+      <!-- Score Progress Bar -->
+      <div class="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium text-gray-700">Total Target Score</span>
+          <span class="text-lg font-bold" 
+                [class.text-green-600]="totalTargetScore >= minRequiredScore"
+                [class.text-orange-600]="totalTargetScore < minRequiredScore">
+            {{ totalTargetScore }} / {{ minRequiredScore }}
+          </span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-3">
+          <div 
+            class="h-3 rounded-full transition-all duration-300"
+            [class.bg-green-500]="totalTargetScore >= minRequiredScore"
+            [class.bg-orange-500]="totalTargetScore < minRequiredScore"
+            [style.width.%]="Math.min((totalTargetScore / minRequiredScore) * 100, 100)">
+          </div>
+        </div>
+        <p class="text-xs text-gray-600 mt-2">
+          <span *ngIf="totalTargetScore < minRequiredScore">
+            You need {{ minRequiredScore - totalTargetScore }} more points to proceed
+          </span>
+          <span *ngIf="totalTargetScore >= minRequiredScore" class="text-green-600 font-medium">
+            ✓ Minimum score requirement met!
+          </span>
+        </p>
+      </div>
+      
+      <div *ngIf="loading" class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+
+      <div *ngIf="!loading" class="space-y-4">
+        <div 
+          *ngFor="let goalItem of getGoalItemsForDisplay()"
           (click)="toggleGoalItemSelection(goalItem.id)"
           class="border-2 rounded-lg p-6 cursor-pointer transition-all"
           [class.border-primary-500]="isGoalItemSelected(goalItem.id)"
@@ -173,7 +325,7 @@
               <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ goalItem.name }}</h3>
               <p class="text-sm text-gray-600 mb-3" *ngIf="goalItem.description">{{ goalItem.description }}</p>
               <div class="flex items-center gap-4 text-sm">
-                <span class="text-gray-700">Target Score: <span class="font-medium">{{ goalItem.targetScore }}</span></span>
+                <span class="font-medium text-primary-600">Target Score: {{ goalItem.targetScore }}</span>
               </div>
             </div>
           </div>
@@ -188,16 +340,16 @@
         </button>
         <button 
           (click)="proceedToConfiguration()"
-          [disabled]="selectedGoalItems.size === 0"
+          [disabled]="!canProceedToConfiguration()"
           class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
           Continue ({{ selectedGoalItems.size }} selected)
         </button>
       </div>
     </div>
 
-    <!-- Step 4: Configure Details -->
-    <div *ngIf="currentStep === 4 && getCurrentConfiguration() as config" class="bg-white shadow-lg rounded-lg p-6">
-      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 4: Configure Goal Details</h2>
+    <!-- Step 5: Configure Details -->
+    <div *ngIf="currentStep === 5 && getCurrentConfiguration() as config" class="bg-white shadow-lg rounded-lg p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-2">Step 5: Configure Goal Details</h2>
       <p class="text-sm text-gray-600 mb-6">
         Configuring goal {{ currentConfigIndex + 1 }} of {{ selectedGoalItems.size }}
       </p>
@@ -208,6 +360,7 @@
           <h3 class="text-sm font-medium text-blue-900 mb-1">Goal Item</h3>
           <p class="text-lg font-semibold text-blue-900">{{ config.goalItem.name }}</p>
           <p class="text-sm text-blue-700 mt-1" *ngIf="config.goalItem.description">{{ config.goalItem.description }}</p>
+          <p class="text-sm text-blue-900 mt-2">Target Score: <span class="font-medium">{{ config.goalItem.targetScore }}</span></p>
         </div>
 
         <!-- Title -->
@@ -248,7 +401,7 @@
           </div>
         </div>
 
-        <!-- Custom Activities (Manual Activities Only) -->
+        <!-- Custom Activities -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-3">Activities to Achieve This Goal</label>
           <p class="text-xs text-gray-500 mb-3">Add activities that will help you achieve this goal</p>

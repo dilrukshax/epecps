@@ -84,6 +84,17 @@ public class EmployeeGoalsController : ControllerBase
     }
 
     /// <summary>
+    /// Get personal goals grouped by goal sets
+    /// </summary>
+    [HttpGet("my/sets")]
+    public async Task<IActionResult> GetMyGoalSets(CancellationToken cancellationToken)
+    {
+        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+        var goalSets = await _personalGoalService.GetMyGoalSetsAsync(userId, cancellationToken);
+        return Ok(goalSets);
+    }
+
+    /// <summary>
     /// Get detailed information about a specific personal goal
     /// </summary>
     [HttpGet("{id}")]

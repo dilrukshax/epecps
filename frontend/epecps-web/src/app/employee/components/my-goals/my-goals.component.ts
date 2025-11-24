@@ -1,10 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { EmployeeGoalsService } from '../../../services/employee-goals.service';
-import { PersonalGoalListDto, PersonalGoalStatus } from '../../../models/employee-goals.models';
+import { PersonalGoalSetDto, PersonalGoalStatus } from '../../../models/employee-goals.models';
 
 /**
- * Component for displaying all personal goals for the current user
+ * Component for displaying all personal goals grouped by goal sets
  */
 @Component({
   selector: 'app-my-goals',
@@ -13,14 +13,17 @@ import { PersonalGoalListDto, PersonalGoalStatus } from '../../../models/employe
   standalone: false
 })
 export class MyGoalsComponent implements OnInit {
-  goals: PersonalGoalListDto[] = [];
-  filteredGoals: PersonalGoalListDto[] = [];
+  goalSets: PersonalGoalSetDto[] = [];
+  filteredGoalSets: PersonalGoalSetDto[] = [];
   loading = false;
   error: string | null = null;
 
   // Filter state
   selectedStatus: PersonalGoalStatus | 'all' = 'all';
   searchQuery = '';
+
+  // Expanded goal sets
+  expandedSetIds: Set<string> = new Set();
 
   // Reference to enum for template
   PersonalGoalStatus = PersonalGoalStatus;
@@ -38,9 +41,9 @@ export class MyGoalsComponent implements OnInit {
     this.loading = true;
     this.error = null;
 
-    this.goalsService.getMyGoals().subscribe({
-      next: (goals) => {
-        this.goals = goals;
+    this.goalsService.getMyGoalSets().subscribe({
+      next: (goalSets) => {
+        this.goalSets = goalSets;
         this.applyFilters();
         this.loading = false;
       },
@@ -53,15 +56,15 @@ export class MyGoalsComponent implements OnInit {
   }
 
   applyFilters(): void {
-    this.filteredGoals = this.goals.filter(goal => {
+    this.filteredGoalSets = this.goalSets.filter(goalSet => {
       // Status filter
-      const statusMatch = this.selectedStatus === 'all' || goal.status === this.selectedStatus;
+      const statusMatch = this.selectedStatus === 'all' || goalSet.status === this.selectedStatus;
 
       // Search filter
       const searchMatch = !this.searchQuery || 
-        goal.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        goal.categoryName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        goal.goalItemName.toLowerCase().includes(this.searchQuery.toLowerCase());
+        goalSet.templateName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+        goalSet.categories.some(cat => cat.toLowerCase().includes(this.searchQuery.toLowerCase())) ||
+        goalSet.goals.some(g => g.title.toLowerCase().includes(this.searchQuery.toLowerCase()));
 
       return statusMatch && searchMatch;
     });
@@ -77,7 +80,20 @@ export class MyGoalsComponent implements OnInit {
     this.applyFilters();
   }
 
-  viewGoalDetails(goalId: string): void {
+  toggleGoalSet(goalSetId: string): void {
+    if (this.expandedSetIds.has(goalSetId)) {
+      this.expandedSetIds.delete(goalSetId);
+    } else {
+      this.expandedSetIds.add(goalSetId);
+    }
+  }
+
+  isGoalSetExpanded(goalSetId: string): boolean {
+    return this.expandedSetIds.has(goalSetId);
+  }
+
+  viewGoalDetails(goalId: string, event: Event): void {
+    event.stopPropagation(); // Prevent card expansion toggle
     this.router.navigate(['/employee/goals', goalId]);
   }
 
@@ -115,9 +131,9 @@ export class MyGoalsComponent implements OnInit {
     }
   }
 
-  getProgressPercentage(goal: PersonalGoalListDto): number {
-    if (goal.targetScore === 0) return 0;
-    return Math.min(100, (goal.currentScore / goal.targetScore) * 100);
+  getProgressPercentage(totalCurrent: number, totalTarget: number): number {
+    if (totalTarget === 0) return 0;
+    return Math.min(100, (totalCurrent / totalTarget) * 100);
   }
 
   getProgressBarClass(percentage: number): string {
@@ -133,7 +149,16 @@ export class MyGoalsComponent implements OnInit {
   }
 
   getGoalCountByStatus(status: PersonalGoalStatus | 'all'): number {
-    if (status === 'all') return this.goals.length;
-    return this.goals.filter(g => g.status === status).length;
+    if (status === 'all') {
+      return this.goalSets.reduce((sum, set) => sum + set.goalCount, 0);
+    }
+    return this.goalSets.filter(s => s.status === status).reduce((sum, set) => sum + set.goalCount, 0);
+  }
+
+  getGoalPeriodLabel(startDate: Date | string, dueDate: Date | string): string {
+    const start = new Date(startDate);
+    const due = new Date(dueDate);
+    const monthsDiff = Math.round((due.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    return `${monthsDiff}-month goal period`;
   }
 }

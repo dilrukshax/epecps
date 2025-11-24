@@ -8,6 +8,7 @@ namespace Epecps.Application.DTOs.EmployeeGoals;
 public class PersonalGoalListDto
 {
     public Guid Id { get; set; }
+    public Guid? GoalSetId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string CategoryName { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;

@@ -37,6 +37,7 @@ public class PersonalGoalService : IPersonalGoalService
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 GoalItemId = dto.GoalItemId,
+                GoalSetId = dto.GoalSetId, // Set the goal set ID for grouping
                 Title = dto.Title,
                 Description = dto.Description,
                 TargetScore = goalItem.TargetScore, // Default from framework
@@ -93,6 +94,7 @@ public class PersonalGoalService : IPersonalGoalService
             .Select(pg => new PersonalGoalListDto
             {
                 Id = pg.Id,
+                GoalSetId = pg.GoalSetId,
                 Title = pg.Title,
                 CategoryName = pg.GoalItem.Category.Name,
                 ItemName = pg.GoalItem.Name, // Using ScoreItem name as Item name
@@ -106,6 +108,66 @@ public class PersonalGoalService : IPersonalGoalService
             .ToListAsync(cancellationToken);
 
         return goals;
+    }
+
+    public async Task<List<PersonalGoalSetDto>> GetMyGoalSetsAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var allGoals = await _context.PersonalGoals
+            .Where(pg => pg.UserId == userId)
+            .Include(pg => pg.GoalItem)
+                .ThenInclude(gi => gi.Category)
+                    .ThenInclude(c => c.Template)
+            .OrderByDescending(pg => pg.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        // Group goals by GoalSetId
+        var groupedGoals = allGoals
+            .GroupBy(g => g.GoalSetId ?? Guid.Empty)
+            .Select(group => new PersonalGoalSetDto
+            {
+                GoalSetId = group.Key == Guid.Empty ? group.First().Id : group.Key,
+                TemplateName = group.First().GoalItem.Category.Template.Name,
+                GoalCount = group.Count(),
+                TotalTargetScore = group.Sum(g => g.TargetScore),
+                TotalCurrentScore = group.Sum(g => g.CurrentScore),
+                StartDate = group.First().StartDate,
+                DueDate = group.First().DueDate,
+                Status = DetermineOverallStatus(group.ToList()),
+                CreatedAt = group.First().CreatedAt,
+                Categories = group.Select(g => g.GoalItem.Category.Name).Distinct().OrderBy(c => c).ToList(),
+                Goals = group.Select(g => new PersonalGoalListDto
+                {
+                    Id = g.Id,
+                    GoalSetId = g.GoalSetId,
+                    Title = g.Title,
+                    CategoryName = g.GoalItem.Category.Name,
+                    ItemName = g.GoalItem.Name,
+                    GoalItemName = g.GoalItem.Name,
+                    TargetScore = g.TargetScore,
+                    CurrentScore = g.CurrentScore,
+                    Status = g.Status,
+                    DueDate = g.DueDate,
+                    CreatedAt = g.CreatedAt
+                }).ToList()
+            })
+            .OrderByDescending(s => s.CreatedAt)
+            .ToList();
+
+        return groupedGoals;
+    }
+
+    private PersonalGoalStatus DetermineOverallStatus(List<PersonalGoal> goals)
+    {
+        if (goals.All(g => g.Status == PersonalGoalStatus.Completed))
+            return PersonalGoalStatus.Completed;
+        
+        if (goals.Any(g => g.Status == PersonalGoalStatus.Cancelled))
+            return PersonalGoalStatus.Cancelled;
+        
+        if (goals.Any(g => g.Status == PersonalGoalStatus.InProgress))
+            return PersonalGoalStatus.InProgress;
+        
+        return PersonalGoalStatus.Draft;
     }
 
     public async Task<PersonalGoalDetailDto> GetGoalDetailsAsync(Guid goalId, int userId, CancellationToken cancellationToken = default)

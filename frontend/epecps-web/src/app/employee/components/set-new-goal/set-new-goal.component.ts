@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { EmployeeGoalsService } from '../../../services/employee-goals.service';
 import {
+  GoalFrameworkTemplateDto,
   GoalFrameworkCategoryDto,
   GoalFrameworkItemDto,
   GoalFrameworkGoalItemDto,
@@ -23,19 +24,33 @@ export class SetNewGoalComponent implements OnInit {
   loading = false;
   error: string | null = null;
 
-  // Step 1 - Categories
+  // Expose Math to template
+  Math = Math;
+
+  // Goal Period (6 months by default)
+  goalPeriodMonths = 6;
+  goalStartDate: Date = new Date();
+  goalEndDate: Date = new Date();
+
+  // Step 1 - Select Template
+  templates: GoalFrameworkTemplateDto[] = [];
+  selectedTemplate: GoalFrameworkTemplateDto | null = null;
+
+  // Step 2 - Select Categories
   categories: GoalFrameworkCategoryDto[] = [];
-  selectedCategory: GoalFrameworkCategoryDto | null = null;
+  selectedCategoryIds: Set<string> = new Set();
 
-  // Step 2 - Items
-  items: GoalFrameworkItemDto[] = [];
-  selectedItem: GoalFrameworkItemDto | null = null;
+  // Step 3 - Select Items
+  allItems: Map<string, GoalFrameworkItemDto[]> = new Map();
+  selectedItemIds: Set<string> = new Set();
 
-  // Step 3 - Goal Items
-  goalItems: GoalFrameworkGoalItemDto[] = [];
-  selectedGoalItems: Set<string> = new Set();
+  // Step 4 - Select Goal Items
+  allGoalItems: Map<string, GoalFrameworkGoalItemDto[]> = new Map();
+  selectedGoalItems: Map<string, GoalFrameworkGoalItemDto> = new Map();
+  totalTargetScore = 0;
+  minRequiredScore = 100;
 
-  // Step 4 - Configure details
+  // Step 5 - Configure details
   goalConfigurations: Map<string, GoalItemSelection> = new Map();
   currentConfigIndex = 0;
 
@@ -45,18 +60,78 @@ export class SetNewGoalComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.loadCategories();
+    this.calculateGoalPeriod();
+    this.loadTemplates();
   }
 
   // ===========================
-  // Step 1: Choose Category
+  // Goal Period Management
   // ===========================
 
-  loadCategories(): void {
+  calculateGoalPeriod(): void {
+    this.goalStartDate = new Date();
+    this.goalEndDate = new Date();
+    this.goalEndDate.setMonth(this.goalEndDate.getMonth() + this.goalPeriodMonths);
+  }
+
+  onPeriodChange(): void {
+    this.calculateGoalPeriod();
+    // Update all existing configurations with new dates
+    this.goalConfigurations.forEach(config => {
+      config.startDate = this.formatDateForInput(this.goalStartDate);
+      config.dueDate = this.formatDateForInput(this.goalEndDate);
+    });
+  }
+
+  // Helper method to format Date to yyyy-MM-dd for HTML input
+  private formatDateForInput(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // Helper method to parse yyyy-MM-dd string to Date
+  private parseDateFromInput(dateString: string): Date {
+    return new Date(dateString + 'T00:00:00');
+  }
+
+  // ===========================
+  // Step 1: Select Template
+  // ===========================
+
+  loadTemplates(): void {
     this.loading = true;
     this.error = null;
 
-    this.goalsService.getCategories().subscribe({
+    this.goalsService.getTemplates().subscribe({
+      next: (templates) => {
+        this.templates = templates;
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = 'Failed to load templates. Please try again.';
+        this.loading = false;
+        console.error('Error loading templates:', err);
+      }
+    });
+  }
+
+  selectTemplate(template: GoalFrameworkTemplateDto): void {
+    this.selectedTemplate = template;
+    this.loadCategories(template.id);
+    this.currentStep = 2;
+  }
+
+  // ===========================
+  // Step 2: Select Categories
+  // ===========================
+
+  loadCategories(templateId: string): void {
+    this.loading = true;
+    this.error = null;
+
+    this.goalsService.getCategoriesByTemplate(templateId).subscribe({
       next: (categories) => {
         this.categories = categories;
         this.loading = false;
@@ -69,108 +144,228 @@ export class SetNewGoalComponent implements OnInit {
     });
   }
 
-  selectCategory(category: GoalFrameworkCategoryDto): void {
-    this.selectedCategory = category;
-    this.loadItems(category.id);
-    this.currentStep = 2;
-  }
-
-  // ===========================
-  // Step 2: Choose Item
-  // ===========================
-
-  loadItems(categoryId: string): void {
-    this.loading = true;
-    this.error = null;
-
-    this.goalsService.getItemsByCategory(categoryId).subscribe({
-      next: (items) => {
-        this.items = items;
-        this.loading = false;
-      },
-      error: (err) => {
-        this.error = 'Failed to load items. Please try again.';
-        this.loading = false;
-        console.error('Error loading items:', err);
+  toggleCategorySelection(categoryId: string): void {
+    if (this.selectedCategoryIds.has(categoryId)) {
+      this.selectedCategoryIds.delete(categoryId);
+      // Remove items from this category
+      const itemsToRemove = this.allItems.get(categoryId);
+      if (itemsToRemove) {
+        itemsToRemove.forEach(item => {
+          this.selectedItemIds.delete(item.id);
+          // Remove goal items as well
+          const goalItems = this.allGoalItems.get(item.id);
+          if (goalItems) {
+            goalItems.forEach(gi => {
+              this.selectedGoalItems.delete(gi.id);
+              this.goalConfigurations.delete(gi.id);
+            });
+          }
+        });
       }
-    });
+    } else {
+      this.selectedCategoryIds.add(categoryId);
+    }
+    this.recalculateTotalScore();
   }
 
-  selectItem(item: GoalFrameworkItemDto): void {
-    this.selectedItem = item;
-    this.loadGoalItems(item.id);
+  isCategorySelected(categoryId: string): boolean {
+    return this.selectedCategoryIds.has(categoryId);
+  }
+
+  proceedToItemSelection(): void {
+    if (this.selectedCategoryIds.size === 0) {
+      alert('Please select at least one category.');
+      return;
+    }
+    // Load items for all selected categories
+    this.loadItemsForSelectedCategories();
     this.currentStep = 3;
   }
 
   // ===========================
-  // Step 3: Choose Goal Items
+  // Step 3: Select Items
   // ===========================
 
-  loadGoalItems(itemId: string): void {
+  loadItemsForSelectedCategories(): void {
     this.loading = true;
     this.error = null;
+    let loadedCount = 0;
+    const totalToLoad = this.selectedCategoryIds.size;
 
-    this.goalsService.getGoalItemsByItem(itemId).subscribe({
-      next: (goalItems) => {
-        this.goalItems = goalItems;
-        this.loading = false;
-      },
-      error: (err) => {
-        this.error = 'Failed to load goal items. Please try again.';
-        this.loading = false;
-        console.error('Error loading goal items:', err);
-      }
+    this.selectedCategoryIds.forEach(categoryId => {
+      this.goalsService.getItemsByCategory(categoryId).subscribe({
+        next: (items) => {
+          this.allItems.set(categoryId, items);
+          loadedCount++;
+          if (loadedCount === totalToLoad) {
+            this.loading = false;
+          }
+        },
+        error: (err) => {
+          this.error = 'Failed to load items. Please try again.';
+          this.loading = false;
+          console.error('Error loading items:', err);
+        }
+      });
     });
   }
 
+  getItemsForDisplay(): GoalFrameworkItemDto[] {
+    const items: GoalFrameworkItemDto[] = [];
+    this.selectedCategoryIds.forEach(categoryId => {
+      const categoryItems = this.allItems.get(categoryId);
+      if (categoryItems) {
+        items.push(...categoryItems);
+      }
+    });
+    return items;
+  }
+
+  getCategoryName(item: GoalFrameworkItemDto): string {
+    // Find category name by looking up items
+    for (const category of this.categories) {
+      const categoryItems = this.allItems.get(category.id);
+      if (categoryItems && categoryItems.find(i => i.id === item.id)) {
+        return category.name;
+      }
+    }
+    return '';
+  }
+
+  toggleItemSelection(itemId: string): void {
+    if (this.selectedItemIds.has(itemId)) {
+      this.selectedItemIds.delete(itemId);
+      // Remove goal items for this item
+      const goalItems = this.allGoalItems.get(itemId);
+      if (goalItems) {
+        goalItems.forEach(gi => {
+          this.selectedGoalItems.delete(gi.id);
+          this.goalConfigurations.delete(gi.id);
+        });
+      }
+    } else {
+      this.selectedItemIds.add(itemId);
+    }
+    this.recalculateTotalScore();
+  }
+
+  isItemSelected(itemId: string): boolean {
+    return this.selectedItemIds.has(itemId);
+  }
+
+  proceedToGoalItemSelection(): void {
+    if (this.selectedItemIds.size === 0) {
+      alert('Please select at least one item.');
+      return;
+    }
+    // Load goal items for all selected items
+    this.loadGoalItemsForSelectedItems();
+    this.currentStep = 4;
+  }
+
+  // ===========================
+  // Step 4: Select Goal Items
+  // ===========================
+
+  loadGoalItemsForSelectedItems(): void {
+    this.loading = true;
+    this.error = null;
+    let loadedCount = 0;
+    const totalToLoad = this.selectedItemIds.size;
+
+    this.selectedItemIds.forEach(itemId => {
+      this.goalsService.getGoalItemsByItem(itemId).subscribe({
+        next: (goalItems) => {
+          this.allGoalItems.set(itemId, goalItems);
+          loadedCount++;
+          if (loadedCount === totalToLoad) {
+            this.loading = false;
+          }
+        },
+        error: (err) => {
+          this.error = 'Failed to load goal items. Please try again.';
+          this.loading = false;
+          console.error('Error loading goal items:', err);
+        }
+      });
+    });
+  }
+
+  getGoalItemsForDisplay(): GoalFrameworkGoalItemDto[] {
+    const goalItems: GoalFrameworkGoalItemDto[] = [];
+    this.selectedItemIds.forEach(itemId => {
+      const items = this.allGoalItems.get(itemId);
+      if (items) {
+        goalItems.push(...items);
+      }
+    });
+    return goalItems;
+  }
+
   toggleGoalItemSelection(goalItemId: string): void {
+    const goalItem = this.findGoalItemById(goalItemId);
+    if (!goalItem) return;
+
     if (this.selectedGoalItems.has(goalItemId)) {
       this.selectedGoalItems.delete(goalItemId);
       this.goalConfigurations.delete(goalItemId);
     } else {
-      this.selectedGoalItems.add(goalItemId);
-      const goalItem = this.goalItems.find(gi => gi.id === goalItemId);
-      if (goalItem) {
-        this.initializeGoalConfiguration(goalItem);
-      }
+      this.selectedGoalItems.set(goalItemId, goalItem);
+      this.initializeGoalConfiguration(goalItem);
     }
+    this.recalculateTotalScore();
   }
 
   isGoalItemSelected(goalItemId: string): boolean {
     return this.selectedGoalItems.has(goalItemId);
   }
 
+  findGoalItemById(goalItemId: string): GoalFrameworkGoalItemDto | null {
+    for (const goalItems of this.allGoalItems.values()) {
+      const found = goalItems.find(gi => gi.id === goalItemId);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  recalculateTotalScore(): void {
+    this.totalTargetScore = 0;
+    this.selectedGoalItems.forEach(goalItem => {
+      this.totalTargetScore += goalItem.targetScore;
+    });
+  }
+
+  canProceedToConfiguration(): boolean {
+    return this.totalTargetScore >= this.minRequiredScore;
+  }
+
   proceedToConfiguration(): void {
-    if (this.selectedGoalItems.size === 0) {
-      alert('Please select at least one goal item.');
+    if (!this.canProceedToConfiguration()) {
+      alert(`Please select goal items with a total score of at least ${this.minRequiredScore}. Current total: ${this.totalTargetScore}`);
       return;
     }
     this.currentConfigIndex = 0;
-    this.currentStep = 4;
+    this.currentStep = 5;
   }
 
   // ===========================
-  // Step 4: Configure Details
+  // Step 5: Configure Details
   // ===========================
 
   initializeGoalConfiguration(goalItem: GoalFrameworkGoalItemDto): void {
-    const defaultStartDate = new Date();
-    const defaultDueDate = new Date();
-    defaultDueDate.setMonth(defaultDueDate.getMonth() + 3); // 3 months from now
-
     this.goalConfigurations.set(goalItem.id, {
       goalItem: goalItem,
       title: goalItem.name,
       description: goalItem.description || '',
-      startDate: defaultStartDate,
-      dueDate: defaultDueDate,
-      selectedSuggestedActivityIds: [], // Keep empty - not used anymore
+      startDate: this.formatDateForInput(this.goalStartDate),
+      dueDate: this.formatDateForInput(this.goalEndDate),
+      selectedSuggestedActivityIds: [],
       customActivities: []
     });
   }
 
   getCurrentConfiguration(): GoalItemSelection | null {
-    const goalItemIds = Array.from(this.selectedGoalItems);
+    const goalItemIds = Array.from(this.selectedGoalItems.keys());
     if (goalItemIds.length === 0 || this.currentConfigIndex >= goalItemIds.length) {
       return null;
     }
@@ -222,25 +417,29 @@ export class SetNewGoalComponent implements OnInit {
 
     const configurations = Array.from(this.goalConfigurations.values());
     const createdGoals: string[] = [];
+    
+    // Generate a single GoalSetId for all goals created together
+    const goalSetId = this.generateGuid();
 
     try {
       for (const config of configurations) {
-        // Convert dates to ISO string format (handle both Date objects and string inputs)
-        const startDateStr = config.startDate instanceof Date 
-          ? config.startDate.toISOString() 
-          : new Date(config.startDate).toISOString();
+        // Parse date strings to Date objects, then convert to ISO string
+        const startDate = typeof config.startDate === 'string' 
+          ? this.parseDateFromInput(config.startDate)
+          : config.startDate;
         
-        const dueDateStr = config.dueDate instanceof Date 
-          ? config.dueDate.toISOString() 
-          : new Date(config.dueDate).toISOString();
+        const dueDate = typeof config.dueDate === 'string'
+          ? this.parseDateFromInput(config.dueDate)
+          : config.dueDate;
 
         const dto: CreatePersonalGoalDto = {
           goalItemId: config.goalItem.id,
+          goalSetId: goalSetId, // Same for all goals in this batch
           title: config.title,
           description: config.description,
-          startDate: startDateStr,
-          dueDate: dueDateStr,
-          selectedSuggestedActivityIds: [], // Always empty now
+          startDate: startDate.toISOString(),
+          dueDate: dueDate.toISOString(),
+          selectedSuggestedActivityIds: [],
           customActivities: config.customActivities
         };
 
@@ -258,6 +457,15 @@ export class SetNewGoalComponent implements OnInit {
       this.error = 'Failed to create goals. Please try again.';
       console.error('Error creating goals:', err);
     }
+  }
+
+  // Helper method to generate GUID
+  private generateGuid(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 
   // ===========================
