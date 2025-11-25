@@ -73,4 +73,21 @@ public interface IEvaluationWorkflowService
     /// <param name="comment">Optional comment</param>
     /// <param name="cancellationToken">Cancellation token</param>
     Task ProcessPromotionDecisionAsync(int evaluationId, int gmUserId, bool approve, string? comment, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get available peer reviewers for an evaluation
+    /// </summary>
+    /// <param name="evaluationId">The evaluation ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of available peer reviewers</returns>
+    Task<IEnumerable<AvailablePeerDto>> GetAvailablePeersAsync(int evaluationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all evaluations where the user is involved (as employee, reviewer, or approver)
+    /// Includes both pending and completed evaluations
+    /// </summary>
+    /// <param name="userId">The user ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of evaluations where user is involved</returns>
+    Task<IEnumerable<MyEvaluationDto>> GetMyEvaluationsAsync(int userId, CancellationToken cancellationToken = default);
 }

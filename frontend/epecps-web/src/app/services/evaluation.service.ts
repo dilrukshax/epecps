@@ -8,7 +8,9 @@ import {
   EvaluationDetailDto,
   ApprovalActionDto,
   AssignPeersDto,
-  PromotionDecisionDto
+  PromotionDecisionDto,
+  AvailablePeerDto,
+  MyEvaluationDto
 } from '../models/evaluation.models';
 
 @Injectable({
@@ -35,6 +37,15 @@ export class EvaluationService {
   getPendingApprovals(): Observable<PendingApprovalDto[]> {
     return this.http.get<PendingApprovalDto[]>(
       `${this.apiUrl}/api/evaluations/pending-approvals`
+    );
+  }
+
+  /**
+   * Get all evaluations where current user is involved (pending + completed)
+   */
+  getMyEvaluations(): Observable<MyEvaluationDto[]> {
+    return this.http.get<MyEvaluationDto[]>(
+      `${this.apiUrl}/api/evaluations/my-evaluations`
     );
   }
 
@@ -66,6 +77,15 @@ export class EvaluationService {
     return this.http.post(
       `${this.apiUrl}/api/evaluations/${evaluationId}/reject`,
       body
+    );
+  }
+
+  /**
+   * Get available peer reviewers for an evaluation
+   */
+  getAvailablePeers(evaluationId: number): Observable<AvailablePeerDto[]> {
+    return this.http.get<AvailablePeerDto[]>(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/available-peers`
     );
   }
 

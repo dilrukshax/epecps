@@ -131,9 +131,11 @@ public class PersonalGoalService : IPersonalGoalService
                 var canSubmit = progressPercent >= 100 && 
                                group.All(g => g.Status == PersonalGoalStatus.Completed);
 
+                var goalSetId = group.Key == Guid.Empty ? group.First().Id : group.Key;
+
                 return new PersonalGoalSetDto
                 {
-                    GoalSetId = group.Key == Guid.Empty ? group.First().Id : group.Key,
+                    GoalSetId = goalSetId,
                     TemplateName = group.First().GoalItem.Category.Template.Name,
                     GoalCount = group.Count(),
                     TotalTargetScore = totalTargetScore,
@@ -159,13 +161,132 @@ public class PersonalGoalService : IPersonalGoalService
                         Status = g.Status,
                         DueDate = g.DueDate,
                         CreatedAt = g.CreatedAt
-                    }).ToList()
+                    }).ToList(),
+                    EvaluationInfo = GetEvaluationInfoForGoalSet(goalSetId, userId).Result
                 };
             })
             .OrderByDescending(s => s.CreatedAt)
             .ToList();
 
         return groupedGoals;
+    }
+
+    private async Task<GoalSetEvaluationInfoDto?> GetEvaluationInfoForGoalSet(Guid goalSetId, int userId)
+    {
+        // Find evaluation for this goal set
+        var evaluation = await _context.Set<Evaluation>()
+            .Include(e => e.Reviews)
+                .ThenInclude(r => r.Reviewer)
+            .Include(e => e.PeerAssignments)
+                .ThenInclude(pa => pa.PeerUser)
+            .Where(e => e.EmployeeId == userId)
+            .Where(e => e.EmployeeGoals.Any()) // Has goals
+            .OrderByDescending(e => e.EvaluationId)
+            .FirstOrDefaultAsync();
+
+        if (evaluation == null)
+            return null;
+
+        // Get approval history
+        var approvalHistory = await _context.Set<ApprovalHistory>()
+            .Include(ah => ah.ActorUser)
+            .Where(ah => ah.EvaluationId == evaluation.EvaluationId)
+            .OrderBy(ah => ah.CreatedAt)
+            .ToListAsync();
+
+        var approvalSteps = new List<GoalSetApprovalStepDto>();
+
+        // Build approval steps for horizontal timeline
+        var allSteps = new List<(string Role, string? ActorName, string Action, string? Comment, DateTime? ActionDate, bool IsCompleted)>
+        {
+            ("Employee", null, "Pending", null, null, false),
+            ("RM", null, "Pending", null, null, false),
+            ("TL", null, "Pending", null, null, false),
+            ("Peer", null, "Pending", null, null, false),
+            ("HOD", null, "Pending", null, null, false)
+        };
+
+        // Update with actual data from approval history
+        foreach (var history in approvalHistory)
+        {
+            var role = history.ActorRole;
+            if (role == "Employee") role = "Employee";
+            
+            var existingStep = approvalSteps.FirstOrDefault(s => s.Role == role);
+            if (existingStep == null)
+            {
+                approvalSteps.Add(new GoalSetApprovalStepDto
+                {
+                    Role = role,
+                    ActorName = history.ActorUser.FullName,
+                    Action = history.Action,
+                    Comment = history.Comment,
+                    ActionDate = history.CreatedAt,
+                    IsCompleted = history.Action.Contains("Approved") || history.Action.Contains("Submitted"),
+                    IsPending = false,
+                    IsRejected = history.Action.Contains("Rejected")
+                });
+            }
+        }
+
+        // Add pending steps based on current status
+        var status = evaluation.Status;
+        if (status.Contains("Pending_RM"))
+        {
+            if (!approvalSteps.Any(s => s.Role == "RM"))
+                approvalSteps.Add(new GoalSetApprovalStepDto { Role = "RM", Action = "Pending", IsPending = true, ActorName = evaluation.ReportingManager?.FullName ?? "RM" });
+        }
+        else if (status.Contains("Pending_TL"))
+        {
+            if (!approvalSteps.Any(s => s.Role == "TL"))
+                approvalSteps.Add(new GoalSetApprovalStepDto { Role = "TL", Action = "Pending", IsPending = true, ActorName = evaluation.TeamLead?.FullName ?? "TL" });
+        }
+        else if (status.Contains("Pending_Peer"))
+        {
+            var peers = evaluation.PeerAssignments.ToList();
+            foreach (var peer in peers)
+            {
+                var peerReview = evaluation.Reviews.FirstOrDefault(r => r.ReviewerUserId == peer.PeerUserId && r.ReviewerRole == ReviewerRole.Peer);
+                if (peerReview != null && peerReview.Status == "Pending")
+                {
+                    approvalSteps.Add(new GoalSetApprovalStepDto 
+                    { 
+                        Role = "Peer", 
+                        Action = "Pending", 
+                        IsPending = true, 
+                        ActorName = peer.PeerUser?.FullName ?? "Peer" 
+                    });
+                }
+            }
+        }
+        else if (status.Contains("Pending_HOD"))
+        {
+            approvalSteps.Add(new GoalSetApprovalStepDto { Role = "HOD", Action = "Pending", IsPending = true, ActorName = "HOD" });
+        }
+
+        return new GoalSetEvaluationInfoDto
+        {
+            EvaluationId = evaluation.EvaluationId,
+            Status = evaluation.Status,
+            OverallScore = evaluation.OverallScore,
+            SubmittedDate = approvalHistory.FirstOrDefault(ah => ah.Action == "Submitted")?.CreatedAt ?? DateTime.UtcNow,
+            CompletedDate = status.Contains("Completed") ? approvalHistory.LastOrDefault()?.CreatedAt : null,
+            ApprovalSteps = approvalSteps.OrderBy(s => GetStepOrder(s.Role)).ToList()
+        };
+    }
+
+    private int GetStepOrder(string role)
+    {
+        return role switch
+        {
+            "Employee" => 1,
+            "RM" => 2,
+            "TL" => 3,
+            "Peer" => 4,
+            "HOD" => 5,
+            "GM" => 6,
+            _ => 99
+        };
     }
 
     private PersonalGoalStatus DetermineOverallStatus(List<PersonalGoal> goals)

@@ -1,5 +1,12 @@
 // Evaluation Models
 
+export interface AvailablePeerDto {
+  userId: number;
+  fullName: string;
+  email: string;
+  department?: string;
+}
+
 export interface SubmitGoalSetResponseDto {
   evaluationId: number;
   status: string;
@@ -15,6 +22,19 @@ export interface PendingApprovalDto {
   submittedDate?: Date;
   cycleId: number;
   cycleName: string;
+}
+
+export interface MyEvaluationDto {
+  evaluationId: number;
+  employeeId: number;
+  employeeName: string;
+  status: string;
+  myRole: string;  // The role I'm playing in this evaluation (Employee, RM, TL, Peer, HOD, GM)
+  submittedDate?: Date;
+  completedDate?: Date;
+  cycleId: number;
+  cycleName: string;
+  overallScore?: number;
 }
 
 export interface EvaluationDetailDto {

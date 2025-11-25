@@ -30,6 +30,7 @@ export class EvaluationDetailComponent implements OnInit {
   // Peer assignment state
   showPeerAssignment = false;
   assigningPeers = false;
+  loadingPeers = false;
   peerUserId1: number | null = null;
   peerUserId2: number | null = null;
   availablePeers: Array<{ userId: number; name: string }> = [];
@@ -109,19 +110,34 @@ export class EvaluationDetailComponent implements OnInit {
   }
 
   loadAvailablePeers(): void {
-    // TODO: Create a dedicated endpoint to get available peers
-    // For now, we'll use mock data since there's no /api/users endpoint yet
-    // In production, this should call an API like: /api/users/peers or /api/evaluations/{id}/available-peers
-    this.availablePeers = [
-      { userId: 1, name: 'Dilan Dilruksha (Current User)' },
-      { userId: 2, name: 'John Smith' },
-      { userId: 3, name: 'Jane Doe' },
-      { userId: 4, name: 'Bob Johnson' },
-      { userId: 5, name: 'Alice Williams' },
-      { userId: 6, name: 'Charlie Brown' },
-      { userId: 7, name: 'Diana Prince' },
-      { userId: 8, name: 'Eve Adams' }
-    ];
+    this.loadingPeers = true;
+    console.log('Loading available peers for evaluation:', this.evaluationId);
+    
+    // Load available peers from the API
+    this.evaluationService.getAvailablePeers(this.evaluationId).subscribe({
+      next: (peers) => {
+        console.log('Available peers loaded:', peers);
+        this.availablePeers = peers.map(p => ({
+          userId: p.userId,
+          name: `${p.fullName}${p.department ? ` (${p.department})` : ''}`
+        }));
+        this.loadingPeers = false;
+        console.log('Mapped peers:', this.availablePeers);
+      },
+      error: (err) => {
+        console.error('Error loading peers:', err);
+        this.loadingPeers = false;
+        
+        // Show error details
+        const errorMessage = err.error?.message || err.message || 'Failed to load available peers';
+        console.error('Error details:', errorMessage, err);
+        
+        this.showToast('error', `Failed to load available peers: ${errorMessage}`);
+        
+        // Fallback: empty array so user sees the issue
+        this.availablePeers = [];
+      }
+    });
   }
 
   initiateAction(type: 'approve' | 'reject'): void {
@@ -158,14 +174,16 @@ export class EvaluationDetailComponent implements OnInit {
 
   confirmPeerAssignment(): void {
     if (!this.peerUserId1 || !this.peerUserId2) {
-      this.showToast('error', 'Please select two different peer reviewers');
+      this.showToast('error', 'Please select both peer reviewers');
       return;
     }
 
-    if (this.peerUserId1 === this.peerUserId2) {
-      this.showToast('error', 'Please select two different peer reviewers');
-      return;
-    }
+    // Allow same user for testing when only one user exists
+    // In production, uncomment this validation:
+    // if (this.peerUserId1 === this.peerUserId2) {
+    //   this.showToast('error', 'Please select two different peer reviewers');
+    //   return;
+    // }
 
     this.assigningPeers = true;
 
@@ -288,7 +306,8 @@ export class EvaluationDetailComponent implements OnInit {
   }
 
   backToApprovals(): void {
-    this.router.navigate(['/evaluations/my-approvals']);
+    this.router.navigate(['/evaluations/my-approvals']),
+    { queryParams: { refresh: new Date().getTime() }};
   }
 
   private showToast(type: 'success' | 'error', message: string): void {

@@ -206,6 +206,22 @@ export class MyGoalsComponent implements OnInit {
     return this.submittingGoalSetId === goalSetId;
   }
 
+  getTimelineProgress(evaluationInfo: any): number {
+    if (!evaluationInfo || !evaluationInfo.approvalSteps) return 0;
+    
+    const totalSteps = evaluationInfo.approvalSteps.length;
+    if (totalSteps === 0) return 0;
+    
+    const completedSteps = evaluationInfo.approvalSteps.filter((s: any) => s.isCompleted).length;
+    return (completedSteps / totalSteps) * 100;
+  }
+
+  formatEvaluationStatus(status: string): string {
+    return status
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (l: string) => l.toUpperCase());
+  }
+
   private showToast(type: 'success' | 'error', message: string): void {
     // Simple toast implementation - can be replaced with a library like ngx-toastr
     const toast = document.createElement('div');

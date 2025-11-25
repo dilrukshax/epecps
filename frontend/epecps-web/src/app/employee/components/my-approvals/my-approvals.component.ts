@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { EvaluationService } from '../../../services/evaluation.service';
-import { PendingApprovalDto } from '../../../models/evaluation.models';
+import { PendingApprovalDto, MyEvaluationDto } from '../../../models/evaluation.models';
 
 @Component({
   selector: 'app-my-approvals',
@@ -10,7 +10,12 @@ import { PendingApprovalDto } from '../../../models/evaluation.models';
   standalone: false
 })
 export class MyApprovalsComponent implements OnInit {
+  // Active tab: 'pending' or 'all'
+  activeTab: 'pending' | 'all' = 'pending';
+  
   pendingApprovals: PendingApprovalDto[] = [];
+  allEvaluations: MyEvaluationDto[] = [];
+  
   loading = false;
   error: string | null = null;
 
@@ -21,6 +26,13 @@ export class MyApprovalsComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadPendingApprovals();
+  }
+
+  switchTab(tab: 'pending' | 'all'): void {
+    this.activeTab = tab;
+    if (tab === 'all' && this.allEvaluations.length === 0) {
+      this.loadAllEvaluations();
+    }
   }
 
   loadPendingApprovals(): void {
@@ -40,6 +52,23 @@ export class MyApprovalsComponent implements OnInit {
     });
   }
 
+  loadAllEvaluations(): void {
+    this.loading = true;
+    this.error = null;
+
+    this.evaluationService.getMyEvaluations().subscribe({
+      next: (evaluations) => {
+        this.allEvaluations = evaluations;
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = 'Failed to load evaluations. Please try again.';
+        this.loading = false;
+        console.error('Error loading evaluations:', err);
+      }
+    });
+  }
+
   viewEvaluation(evaluationId: number): void {
     this.router.navigate(['/evaluations', evaluationId]);
   }
@@ -53,6 +82,7 @@ export class MyApprovalsComponent implements OnInit {
     if (statusLower.includes('pending_hod')) return 'bg-orange-100 text-orange-800';
     if (statusLower.includes('pending_gm')) return 'bg-red-100 text-red-800';
     if (statusLower.includes('completed')) return 'bg-green-100 text-green-800';
+    if (statusLower.includes('rejected')) return 'bg-red-100 text-red-800';
     
     return 'bg-gray-100 text-gray-800';
   }
@@ -69,6 +99,7 @@ export class MyApprovalsComponent implements OnInit {
       case 'HOD': return 'bg-orange-100 text-orange-800';
       case 'GM': return 'bg-red-100 text-red-800';
       case 'HR': return 'bg-green-100 text-green-800';
+      case 'EMPLOYEE': return 'bg-indigo-100 text-indigo-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   }
@@ -80,7 +111,8 @@ export class MyApprovalsComponent implements OnInit {
       'PEER': 'Peer Reviewer',
       'HOD': 'Head of Department',
       'GM': 'General Manager',
-      'HR': 'Human Resources'
+      'HR': 'Human Resources',
+      'EMPLOYEE': 'My Evaluation'
     };
     return labels[role.toUpperCase()] || role;
   }
@@ -107,5 +139,13 @@ export class MyApprovalsComponent implements OnInit {
       .join('')
       .substring(0, 2)
       .toUpperCase();
+  }
+
+  getCompletedCount(): number {
+    return this.allEvaluations.filter(e => e.status.toLowerCase().includes('completed')).length;
+  }
+
+  getPendingCountForAll(): number {
+    return this.allEvaluations.filter(e => e.status.toLowerCase().includes('pending')).length;
   }
 }

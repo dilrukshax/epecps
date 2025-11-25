@@ -4,168 +4,336 @@
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Header -->
     <div class="mb-8">
-      <h1 class="text-3xl font-bold text-gray-900">My Evaluation Approvals</h1>
-      <p class="mt-2 text-gray-600">Review and approve employee evaluations</p>
+      <h1 class="text-3xl font-bold text-gray-900">My Evaluations</h1>
+      <p class="mt-2 text-gray-600">Review and approve employee evaluations, and view your own evaluation history</p>
     </div>
 
-    <!-- Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-      <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center">
-          <div class="flex-shrink-0 bg-blue-100 rounded-md p-3">
-            <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          </div>
-          <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500">Pending Approvals</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ pendingApprovals.length }}</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center">
-          <div class="flex-shrink-0 bg-yellow-100 rounded-md p-3">
-            <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500">Awaiting Action</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ pendingApprovals.length }}</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center">
-          <div class="flex-shrink-0 bg-green-100 rounded-md p-3">
-            <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500">Completed Today</p>
-            <p class="text-2xl font-semibold text-gray-900">0</p>
-          </div>
-        </div>
-      </div>
+    <!-- Tabs -->
+    <div class="border-b border-gray-200 mb-6">
+      <nav class="-mb-px flex space-x-8">
+        <button
+          (click)="switchTab('pending')"
+          [class.border-primary-500]="activeTab === 'pending'"
+          [class.text-primary-600]="activeTab === 'pending'"
+          [class.border-transparent]="activeTab !== 'pending'"
+          [class.text-gray-500]="activeTab !== 'pending'"
+          class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm hover:text-gray-700 hover:border-gray-300">
+          Pending Approvals
+          <span *ngIf="pendingApprovals.length > 0" class="ml-2 bg-primary-100 text-primary-600 py-0.5 px-2 rounded-full text-xs font-medium">
+            {{ pendingApprovals.length }}
+          </span>
+        </button>
+        <button
+          (click)="switchTab('all')"
+          [class.border-primary-500]="activeTab === 'all'"
+          [class.text-primary-600]="activeTab === 'all'"
+          [class.border-transparent]="activeTab !== 'all'"
+          [class.text-gray-500]="activeTab !== 'all'"
+          class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm hover:text-gray-700 hover:border-gray-300">
+          All Evaluations
+          <span *ngIf="allEvaluations.length > 0" class="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs font-medium">
+            {{ allEvaluations.length }}
+          </span>
+        </button>
+      </nav>
     </div>
 
-    <!-- Error Message -->
-    <div *ngIf="error" class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-      <div class="flex">
-        <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <!-- Pending Approvals Tab Content -->
+    <div *ngIf="activeTab === 'pending'">
+      <!-- Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center">
+            <div class="flex-shrink-0 bg-blue-100 rounded-md p-3">
+              <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <div class="ml-4">
+              <p class="text-sm font-medium text-gray-500">Pending Approvals</p>
+              <p class="text-2xl font-semibold text-gray-900">{{ pendingApprovals.length }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center">
+            <div class="flex-shrink-0 bg-yellow-100 rounded-md p-3">
+              <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="ml-4">
+              <p class="text-sm font-medium text-gray-500">Awaiting Action</p>
+              <p class="text-2xl font-semibold text-gray-900">{{ pendingApprovals.length }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center">
+            <div class="flex-shrink-0 bg-green-100 rounded-md p-3">
+              <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="ml-4">
+              <p class="text-sm font-medium text-gray-500">Completed</p>
+              <p class="text-2xl font-semibold text-gray-900">{{ getCompletedCount() }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div *ngIf="error" class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+        <div class="flex">
+          <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div class="ml-3">
+            <p class="text-sm text-red-800">{{ error }}</p>
+          </div>
+          <div class="ml-auto pl-3">
+            <button (click)="loadPendingApprovals()" class="text-sm font-medium text-red-800 hover:text-red-900">
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div *ngIf="loading" class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <p class="mt-4 text-gray-600">Loading pending approvals...</p>
+      </div>
+
+      <!-- Approvals Table -->
+      <div *ngIf="!loading && pendingApprovals.length > 0" class="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Employee
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Cycle
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Your Role
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Submitted
+                </th>
+                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr *ngFor="let approval of pendingApprovals" class="hover:bg-gray-50">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div class="flex-shrink-0 h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
+                      <span class="text-primary-600 font-medium text-sm">
+                        {{ getEmployeeInitials(approval.employeeName) }}
+                      </span>
+                    </div>
+                    <div class="ml-4">
+                      <div class="text-sm font-medium text-gray-900">{{ approval.employeeName }}</div>
+                      <div class="text-sm text-gray-500">ID: {{ approval.employeeId }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="text-sm text-gray-900">{{ approval.cycleName }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                        [ngClass]="getRoleBadgeClass(approval.requiredRole)">
+                    {{ getRoleLabel(approval.requiredRole) }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                        [ngClass]="getStatusBadgeClass(approval.status)">
+                    {{ getStatusLabel(approval.status) }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <div class="flex items-center">
+                    <svg class="h-4 w-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {{ getTimeSince(approval.submittedDate) }}
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <button
+                    (click)="viewEvaluation(approval.evaluationId)"
+                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Review
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!loading && pendingApprovals.length === 0 && !error" class="bg-white rounded-lg shadow p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <div class="ml-3">
-          <p class="text-sm text-red-800">{{ error }}</p>
-        </div>
-        <div class="ml-auto pl-3">
-          <button (click)="loadPendingApprovals()" class="text-sm font-medium text-red-800 hover:text-red-900">
-            Retry
-          </button>
-        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No Pending Approvals</h3>
+        <p class="text-gray-600">
+          You're all caught up! There are no evaluations awaiting your review at this time.
+        </p>
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div *ngIf="loading" class="text-center py-12">
-      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      <p class="mt-4 text-gray-600">Loading pending approvals...</p>
-    </div>
-
-    <!-- Approvals Table -->
-    <div *ngIf="!loading && pendingApprovals.length > 0" class="bg-white shadow-lg rounded-lg overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Employee
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Cycle
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Your Role
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Submitted
-              </th>
-              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr *ngFor="let approval of pendingApprovals" class="hover:bg-gray-50">
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                  <div class="flex-shrink-0 h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
-                    <span class="text-primary-600 font-medium text-sm">
-                      {{ getEmployeeInitials(approval.employeeName) }}
-                    </span>
-                  </div>
-                  <div class="ml-4">
-                    <div class="text-sm font-medium text-gray-900">{{ approval.employeeName }}</div>
-                    <div class="text-sm text-gray-500">ID: {{ approval.employeeId }}</div>
-                  </div>
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="text-sm text-gray-900">{{ approval.cycleName }}</div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                      [ngClass]="getRoleBadgeClass(approval.requiredRole)">
-                  {{ getRoleLabel(approval.requiredRole) }}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                      [ngClass]="getStatusBadgeClass(approval.status)">
-                  {{ getStatusLabel(approval.status) }}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                <div class="flex items-center">
-                  <svg class="h-4 w-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  {{ getTimeSince(approval.submittedDate) }}
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button
-                  (click)="viewEvaluation(approval.evaluationId)"
-                  class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                  <svg class="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  Review
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+    <!-- All Evaluations Tab Content -->
+    <div *ngIf="activeTab === 'all'">
+      <!-- Loading State -->
+      <div *ngIf="loading" class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <p class="mt-4 text-gray-600">Loading evaluations...</p>
       </div>
-    </div>
 
-    <!-- Empty State -->
-    <div *ngIf="!loading && pendingApprovals.length === 0 && !error" class="bg-white rounded-lg shadow p-12 text-center">
-      <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No Pending Approvals</h3>
-      <p class="text-gray-600">
-        You're all caught up! There are no evaluations awaiting your review at this time.
-      </p>
+      <!-- Error Message -->
+      <div *ngIf="error" class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+        <div class="flex">
+          <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div class="ml-3">
+            <p class="text-sm text-red-800">{{ error }}</p>
+          </div>
+          <div class="ml-auto pl-3">
+            <button (click)="loadAllEvaluations()" class="text-sm font-medium text-red-800 hover:text-red-900">
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Evaluations Table -->
+      <div *ngIf="!loading && allEvaluations.length > 0" class="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Employee
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Cycle
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  My Role
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Score
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr *ngFor="let evaluation of allEvaluations" class="hover:bg-gray-50">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div class="flex-shrink-0 h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
+                      <span class="text-primary-600 font-medium text-sm">
+                        {{ getEmployeeInitials(evaluation.employeeName) }}
+                      </span>
+                    </div>
+                    <div class="ml-4">
+                      <div class="text-sm font-medium text-gray-900">{{ evaluation.employeeName }}</div>
+                      <div class="text-sm text-gray-500">ID: {{ evaluation.employeeId }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="text-sm text-gray-900">{{ evaluation.cycleName }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                        [ngClass]="getRoleBadgeClass(evaluation.myRole)">
+                    {{ getRoleLabel(evaluation.myRole) }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                        [ngClass]="getStatusBadgeClass(evaluation.status)">
+                    {{ getStatusLabel(evaluation.status) }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div *ngIf="evaluation.overallScore" class="text-sm font-semibold text-gray-900">
+                    {{ evaluation.overallScore | number:'1.0-0' }}%
+                  </div>
+                  <div *ngIf="!evaluation.overallScore" class="text-sm text-gray-400">
+                    -
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <div *ngIf="evaluation.completedDate" class="flex items-center">
+                    <svg class="h-4 w-4 mr-1 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {{ getTimeSince(evaluation.completedDate) }}
+                  </div>
+                  <div *ngIf="!evaluation.completedDate" class="flex items-center">
+                    <svg class="h-4 w-4 mr-1 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {{ getTimeSince(evaluation.submittedDate) }}
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <button
+                    (click)="viewEvaluation(evaluation.evaluationId)"
+                    class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    View Details
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!loading && allEvaluations.length === 0 && !error" class="bg-white rounded-lg shadow p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No Evaluations Found</h3>
+        <p class="text-gray-600">
+          You haven't been involved in any evaluations yet.
+        </p>
+      </div>
     </div>
   </main>
 </div>

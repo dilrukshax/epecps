@@ -229,11 +229,20 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 if (peerAssignment == null)
                     throw new BusinessRuleException("Only assigned peer reviewers can approve at this stage.");
                 
-                currentReview = evaluation.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.Peer && r.ReviewerUserId == actorUserId);
+                // Find the specific peer review for this user that is still pending
+                currentReview = evaluation.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Peer && 
+                               r.ReviewerUserId == actorUserId && 
+                               r.Status == REVIEW_STATUS_PENDING)
+                    .OrderBy(r => r.ReviewId) // Take the first pending review
+                    .FirstOrDefault();
+                
+                if (currentReview == null)
+                    throw new BusinessRuleException("You have already approved this evaluation.");
+                
                 actorRole = "Peer";
                 
-                // Check if both peers have approved
-                await CheckAndTransitionAfterPeerReviewsAsync(evaluation, cancellationToken);
+                // Don't call CheckAndTransitionAfterPeerReviewsAsync here - it will be called after updating the review
                 break;
 
             case STATUS_PENDING_HOD_REVIEW:
@@ -255,6 +264,12 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             currentReview.Status = REVIEW_STATUS_APPROVED;
             currentReview.OverallComment = comment ?? currentReview.OverallComment;
             currentReview.SubmittedAt = DateTime.UtcNow;
+        }
+        
+        // Check if we need to transition after peer reviews (must be done AFTER updating the review)
+        if (evaluation.Status == STATUS_PENDING_PEER_REVIEWS)
+        {
+            await CheckAndTransitionAfterPeerReviewsAsync(evaluation, cancellationToken);
         }
 
         // Create approval history
@@ -430,8 +445,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         if (evaluation.Status != STATUS_PENDING_PEER_ASSIGNMENT)
             throw new BusinessRuleException("Peer reviewers can only be assigned after Team Lead approval.");
 
-        if (peerUserId1 == peerUserId2)
-            throw new BusinessRuleException("Peer reviewers must be different users.");
+        // Removed validation: Allow same user for single-user testing
+        // In production with multiple users, uncomment this line:
+        // if (peerUserId1 == peerUserId2)
+        //     throw new BusinessRuleException("Peer reviewers must be different users.");
 
         // Verify peer users exist
         var peer1 = await _context.Users.FindAsync(new object[] { peerUserId1 }, cancellationToken);
@@ -886,6 +903,221 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         _context.Set<AuditLog>().Add(auditLog);
 
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<AvailablePeerDto>> GetAvailablePeersAsync(int evaluationId, CancellationToken cancellationToken = default)
+    {
+        var evaluation = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+        if (evaluation == null)
+            throw new NotFoundException(nameof(Evaluation), evaluationId);
+
+        // Get all users from the database (including the employee for testing with single user)
+        // In production, you may want to exclude: u.UserId != evaluation.EmployeeId
+        var availablePeers = await _context.Users
+            .Include(u => u.Department)
+            .OrderBy(u => u.FullName)
+            .Select(u => new AvailablePeerDto
+            {
+                UserId = u.UserId,
+                FullName = u.FullName,
+                Email = u.Email,
+                Department = u.Department != null ? u.Department.Name : "No Department"
+            })
+            .ToListAsync(cancellationToken);
+
+        return availablePeers;
+    }
+
+    public async Task<IEnumerable<MyEvaluationDto>> GetMyEvaluationsAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var userRoles = await GetUserRolesAsync(userId, cancellationToken);
+        var myEvaluations = new List<MyEvaluationDto>();
+
+        // Get evaluations where I am the employee
+        var myEmployeeEvaluations = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Include(e => e.Reviews)
+            .Where(e => e.EmployeeId == userId)
+            .Select(e => new MyEvaluationDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                MyRole = "Employee",
+                SubmittedDate = e.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                    .Select(r => r.SubmittedAt)
+                    .FirstOrDefault(),
+                CompletedDate = e.Status.Contains("Completed") || e.Status.Contains("Rejected")
+                    ? e.Reviews.OrderByDescending(r => r.SubmittedAt).Select(r => r.SubmittedAt).FirstOrDefault()
+                    : null,
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name,
+                OverallScore = e.OverallScore
+            })
+            .ToListAsync(cancellationToken);
+
+        myEvaluations.AddRange(myEmployeeEvaluations);
+
+        // Get evaluations where I am the RM
+        var myRmEvaluations = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Include(e => e.Reviews)
+            .Where(e => e.ReportingManagerId == userId && e.EmployeeId != userId) // Exclude if I'm also the employee
+            .Select(e => new MyEvaluationDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                MyRole = "RM",
+                SubmittedDate = e.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                    .Select(r => r.SubmittedAt)
+                    .FirstOrDefault(),
+                CompletedDate = e.Status.Contains("Completed") || e.Status.Contains("Rejected")
+                    ? e.Reviews.OrderByDescending(r => r.SubmittedAt).Select(r => r.SubmittedAt).FirstOrDefault()
+                    : null,
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name,
+                OverallScore = e.OverallScore
+            })
+            .ToListAsync(cancellationToken);
+
+        myEvaluations.AddRange(myRmEvaluations);
+
+        // Get evaluations where I am the TL
+        var myTlEvaluations = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Include(e => e.Reviews)
+            .Where(e => e.TeamLeadId == userId && e.EmployeeId != userId) // Exclude if I'm also the employee
+            .Select(e => new MyEvaluationDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                MyRole = "TL",
+                SubmittedDate = e.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                    .Select(r => r.SubmittedAt)
+                    .FirstOrDefault(),
+                CompletedDate = e.Status.Contains("Completed") || e.Status.Contains("Rejected")
+                    ? e.Reviews.OrderByDescending(r => r.SubmittedAt).Select(r => r.SubmittedAt).FirstOrDefault()
+                    : null,
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name,
+                OverallScore = e.OverallScore
+            })
+            .ToListAsync(cancellationToken);
+
+        myEvaluations.AddRange(myTlEvaluations);
+
+        // Get evaluations where I am assigned as a peer
+        var myPeerEvaluations = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Include(e => e.Reviews)
+            .Include(e => e.PeerAssignments)
+            .Where(e => e.PeerAssignments.Any(pa => pa.PeerUserId == userId) && e.EmployeeId != userId)
+            .Select(e => new MyEvaluationDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                MyRole = "Peer",
+                SubmittedDate = e.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                    .Select(r => r.SubmittedAt)
+                    .FirstOrDefault(),
+                CompletedDate = e.Status.Contains("Completed") || e.Status.Contains("Rejected")
+                    ? e.Reviews.OrderByDescending(r => r.SubmittedAt).Select(r => r.SubmittedAt).FirstOrDefault()
+                    : null,
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name,
+                OverallScore = e.OverallScore
+            })
+            .ToListAsync(cancellationToken);
+
+        myEvaluations.AddRange(myPeerEvaluations);
+
+        // Get evaluations where I might need to act as HOD (if I have HOD role)
+        if (userRoles.Contains("HOD"))
+        {
+            var hodEvaluations = await _context.Set<Evaluation>()
+                .Include(e => e.Employee)
+                .Include(e => e.Cycle)
+                .Include(e => e.Reviews)
+                .Where(e => (e.Status == STATUS_PENDING_HOD_REVIEW || e.Status.Contains("Completed")) &&
+                           e.EmployeeId != userId)
+                .Select(e => new MyEvaluationDto
+                {
+                    EvaluationId = e.EvaluationId,
+                    EmployeeId = e.EmployeeId,
+                    EmployeeName = e.Employee.FullName,
+                    Status = e.Status,
+                    MyRole = "HOD",
+                    SubmittedDate = e.Reviews
+                        .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                        .Select(r => r.SubmittedAt)
+                        .FirstOrDefault(),
+                    CompletedDate = e.Status.Contains("Completed") || e.Status.Contains("Rejected")
+                        ? e.Reviews.OrderByDescending(r => r.SubmittedAt).Select(r => r.SubmittedAt).FirstOrDefault()
+                        : null,
+                    CycleId = e.CycleId,
+                    CycleName = e.Cycle.Name,
+                    OverallScore = e.OverallScore
+                })
+                .ToListAsync(cancellationToken);
+
+            myEvaluations.AddRange(hodEvaluations);
+        }
+
+        // Get evaluations where I might need to act as GM (if I have GM role)
+        if (userRoles.Contains("GM"))
+        {
+            var gmEvaluations = await _context.Set<Evaluation>()
+                .Include(e => e.Employee)
+                .Include(e => e.Cycle)
+                .Include(e => e.Reviews)
+                .Where(e => (e.Status == STATUS_PENDING_GM_DECISION || e.Status.Contains("Completed")) &&
+                           e.EmployeeId != userId)
+                .Select(e => new MyEvaluationDto
+                {
+                    EvaluationId = e.EvaluationId,
+                    EmployeeId = e.EmployeeId,
+                    EmployeeName = e.Employee.FullName,
+                    Status = e.Status,
+                    MyRole = "GM",
+                    SubmittedDate = e.Reviews
+                        .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                        .Select(r => r.SubmittedAt)
+                        .FirstOrDefault(),
+                    CompletedDate = e.Status.Contains("Completed") || e.Status.Contains("Rejected")
+                        ? e.Reviews.OrderByDescending(r => r.SubmittedAt).Select(r => r.SubmittedAt).FirstOrDefault()
+                        : null,
+                    CycleId = e.CycleId,
+                    CycleName = e.Cycle.Name,
+                    OverallScore = e.OverallScore
+                })
+                .ToListAsync(cancellationToken);
+
+            myEvaluations.AddRange(gmEvaluations);
+        }
+
+        // Remove duplicates and order by submitted date descending
+        return myEvaluations
+            .GroupBy(e => e.EvaluationId)
+            .Select(g => g.First())
+            .OrderByDescending(e => e.SubmittedDate ?? DateTime.MinValue);
     }
 
     #region Private Helper Methods

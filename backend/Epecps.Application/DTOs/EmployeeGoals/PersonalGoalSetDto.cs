@@ -73,4 +73,37 @@ public class PersonalGoalSetDto
     /// Categories covered by this goal set
     /// </summary>
     public List<string> Categories { get; set; } = new();
+    
+    /// <summary>
+    /// Evaluation information if this goal set has been submitted
+    /// </summary>
+    public GoalSetEvaluationInfoDto? EvaluationInfo { get; set; }
+}
+
+/// <summary>
+/// Information about the evaluation for a goal set
+/// </summary>
+public class GoalSetEvaluationInfoDto
+{
+    public int EvaluationId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public decimal? OverallScore { get; set; }
+    public DateTime SubmittedDate { get; set; }
+    public DateTime? CompletedDate { get; set; }
+    public List<GoalSetApprovalStepDto> ApprovalSteps { get; set; } = new();
+}
+
+/// <summary>
+/// Approval step for horizontal timeline display
+/// </summary>
+public class GoalSetApprovalStepDto
+{
+    public string Role { get; set; } = string.Empty; // Employee, RM, TL, Peer, HOD, GM
+    public string ActorName { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty; // Submitted, Approved, Rejected, Pending
+    public string? Comment { get; set; }
+    public DateTime? ActionDate { get; set; }
+    public bool IsCompleted { get; set; }
+    public bool IsPending { get; set; }
+    public bool IsRejected { get; set; }
 }

@@ -167,4 +167,27 @@ export interface PersonalGoalSetDto {
   createdAt: Date | string;
   goals: PersonalGoalListDto[];
   categories: string[];
+  evaluationInfo?: GoalSetEvaluationInfoDto; // NEW: Evaluation and approval history
+}
+
+// NEW: Evaluation information for a goal set
+export interface GoalSetEvaluationInfoDto {
+  evaluationId: number;
+  status: string;
+  overallScore?: number;
+  submittedDate: Date | string;
+  completedDate?: Date | string;
+  approvalSteps: GoalSetApprovalStepDto[];
+}
+
+// NEW: Approval step for horizontal timeline display
+export interface GoalSetApprovalStepDto {
+  role: string; // Employee, RM, TL, Peer, HOD, GM
+  actorName: string;
+  action: string; // Submitted, Approved, Rejected, Pending
+  comment?: string;
+  actionDate?: Date | string;
+  isCompleted: boolean;
+  isPending: boolean;
+  isRejected: boolean;
 }

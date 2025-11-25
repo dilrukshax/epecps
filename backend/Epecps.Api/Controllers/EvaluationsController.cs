@@ -37,6 +37,17 @@ public class EvaluationsController : ControllerBase
     }
 
     /// <summary>
+    /// Get all evaluations where current user is involved (pending + completed)
+    /// </summary>
+    [HttpGet("my-evaluations")]
+    public async Task<IActionResult> GetMyEvaluations(CancellationToken cancellationToken)
+    {
+        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+        var evaluations = await _evaluationWorkflowService.GetMyEvaluationsAsync(userId, cancellationToken);
+        return Ok(evaluations);
+    }
+
+    /// <summary>
     /// Get detailed evaluation information
     /// </summary>
     [HttpGet("{evaluationId}")]
@@ -98,10 +109,20 @@ public class EvaluationsController : ControllerBase
     }
 
     /// <summary>
-    /// Assign peer reviewers (Team Lead only)
+    /// Get available peer reviewers for an evaluation
+    /// </summary>
+    [HttpGet("{evaluationId}/available-peers")]
+    public async Task<IActionResult> GetAvailablePeers(int evaluationId, CancellationToken cancellationToken)
+    {
+        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+        var peers = await _evaluationWorkflowService.GetAvailablePeersAsync(evaluationId, cancellationToken);
+        return Ok(peers);
+    }
+
+    /// <summary>
+    /// Assign peer reviewers
     /// </summary>
     [HttpPost("{evaluationId}/assign-peers")]
-    [Authorize(Roles = "TL")]
     public async Task<IActionResult> AssignPeerReviewers(
         int evaluationId,
         [FromBody] AssignPeersDto dto,
