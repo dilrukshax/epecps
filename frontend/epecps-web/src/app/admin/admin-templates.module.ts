@@ -11,12 +11,18 @@ import { CategoryItemsComponent } from './components/category-items/category-ite
 import { TemplateFormDialogComponent } from './components/template-form-dialog/template-form-dialog.component';
 import { CategoryFormDialogComponent } from './components/category-form-dialog/category-form-dialog.component';
 import { ItemFormDialogComponent } from './components/item-form-dialog/item-form-dialog.component';
+import { UserManagementComponent } from './components/user-management/user-management.component';
 import { SharedModule } from '../shared/shared.module';
 
 const routes: Routes = [
   {
     path: '',
     component: TemplateListComponent,
+    canActivate: [MsalGuard]
+  },
+  {
+    path: 'users',
+    component: UserManagementComponent,
     canActivate: [MsalGuard]
   },
   {
@@ -34,7 +40,8 @@ const routes: Routes = [
     CategoryItemsComponent,
     TemplateFormDialogComponent,
     CategoryFormDialogComponent,
-    ItemFormDialogComponent
+    ItemFormDialogComponent,
+    UserManagementComponent
   ],
   imports: [
     CommonModule,

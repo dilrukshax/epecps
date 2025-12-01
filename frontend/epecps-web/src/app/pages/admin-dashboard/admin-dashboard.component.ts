@@ -28,17 +28,17 @@ export class AdminDashboardComponent implements OnInit {
       color: 'blue'
     },
     {
+      title: 'User & Role Management',
+      description: 'Manage users and assign roles',
+      icon: 'users',
+      route: '/admin/templates/users',
+      color: 'green'
+    },
+    {
       title: 'View All Templates',
       description: 'Browse all templates including archived ones',
       icon: 'list',
       route: '/admin/templates',
-      color: 'green'
-    },
-    {
-      title: 'API Documentation',
-      description: 'View API endpoints and documentation',
-      icon: 'doc',
-      route: '#',
       color: 'purple'
     },
     {
