@@ -173,14 +173,27 @@
                 {{ getGoalPeriodLabel(goalSet.startDate, goalSet.dueDate) }}
               </span>
             </div>
-            <svg 
-              class="h-6 w-6 text-gray-400 transition-transform"
-              [class.rotate-180]="isGoalSetExpanded(goalSet.goalSetId)"
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
+            <div class="flex items-center gap-2">
+              <!-- Delete Goal Set Button -->
+              <button 
+                *ngIf="canDeleteGoalSet(goalSet)"
+                (click)="deleteGoalSet(goalSet, $event)"
+                class="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                title="Delete entire goal set">
+                <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete Set
+              </button>
+              <svg 
+                class="h-6 w-6 text-gray-400 transition-transform"
+                [class.rotate-180]="isGoalSetExpanded(goalSet.goalSetId)"
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </div>
 
           <!-- Title and Info -->
@@ -373,29 +386,43 @@
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div 
               *ngFor="let goal of goalSet.goals"
-              (click)="viewGoalDetails(goal.id, $event)"
-              class="bg-white rounded-lg border border-gray-200 p-4 hover:border-primary-500 hover:shadow-md transition-all cursor-pointer">
-              <div class="flex items-start justify-between mb-2">
-                <h5 class="text-sm font-semibold text-gray-900 flex-1">{{ goal.title }}</h5>
-                <span 
-                  class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ml-2"
-                  [ngClass]="getStatusClass(goal.status)">
-                  {{ getStatusLabel(goal.status) }}
-                </span>
-              </div>
-              <p class="text-xs text-gray-600 mb-3">{{ goal.categoryName }}</p>
-              <div class="flex items-center justify-between text-xs mb-2">
-                <span class="text-gray-600">Progress</span>
-                <span class="font-medium text-gray-900">{{ getGoalProgressPercentage(goal) | number:'1.0-1' }}%</span>
-              </div>
-              <div class="w-full bg-gray-200 rounded-full h-1.5">
-                <div 
-                  class="h-1.5 rounded-full"
-                  [ngClass]="getProgressBarClass(getGoalProgressPercentage(goal))"
-                  [style.width.%]="getGoalProgressPercentage(goal)">
+              class="bg-white rounded-lg border border-gray-200 p-4 hover:border-primary-500 hover:shadow-md transition-all relative">
+              <!-- Delete Individual Goal Button -->
+              <button 
+                *ngIf="!goalSet.evaluationInfo"
+                (click)="deleteGoal(goal, $event)"
+                class="absolute top-2 right-2 p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                title="Delete this goal">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+              
+              <div 
+                (click)="viewGoalDetails(goal.id, $event)"
+                class="cursor-pointer">
+                <div class="flex items-start justify-between mb-2">
+                  <h5 class="text-sm font-semibold text-gray-900 flex-1 pr-8">{{ goal.title }}</h5>
+                  <span 
+                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ml-2"
+                    [ngClass]="getStatusClass(goal.status)">
+                    {{ getStatusLabel(goal.status) }}
+                  </span>
                 </div>
+                <p class="text-xs text-gray-600 mb-3">{{ goal.categoryName }}</p>
+                <div class="flex items-center justify-between text-xs mb-2">
+                  <span class="text-gray-600">Progress</span>
+                  <span class="font-medium text-gray-900">{{ getGoalProgressPercentage(goal) | number:'1.0-1' }}%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                  <div 
+                    class="h-1.5 rounded-full"
+                    [ngClass]="getProgressBarClass(getGoalProgressPercentage(goal))"
+                    [style.width.%]="getGoalProgressPercentage(goal)">
+                  </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">{{ goal.currentScore }} / {{ goal.targetScore }} points</p>
               </div>
-              <p class="text-xs text-gray-500 mt-1">{{ goal.currentScore }} / {{ goal.targetScore }} points</p>
             </div>
           </div>
         </div>

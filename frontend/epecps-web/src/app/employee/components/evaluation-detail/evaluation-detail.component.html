@@ -507,6 +507,242 @@
           This evaluation is currently being reviewed. You will be notified when action is required.
         </p>
       </div>
+
+      <!-- Promotion Case Information -->
+      <div *ngIf="evaluation.promotionCase" class="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div class="px-6 py-5 border-b border-gray-200">
+          <h2 class="text-xl font-bold text-gray-900">Promotion Recommendation</h2>
+        </div>
+        <div class="px-6 py-5">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div *ngIf="evaluation.promotionCase.recommendedByHodName">
+              <h3 class="text-sm font-medium text-gray-500">Recommended By</h3>
+              <p class="mt-1 text-base text-gray-900">{{ evaluation.promotionCase.recommendedByHodName }}</p>
+              <p class="text-sm text-gray-600">{{ evaluation.promotionCase.recommendedAt | date:'medium' }}</p>
+            </div>
+            
+            <div>
+              <h3 class="text-sm font-medium text-gray-500">GM Decision</h3>
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                    [ngClass]="{
+                      'bg-yellow-100 text-yellow-800': evaluation.promotionCase.gmDecision === 'Pending',
+                      'bg-green-100 text-green-800': evaluation.promotionCase.gmDecision === 'Approved',
+                      'bg-red-100 text-red-800': evaluation.promotionCase.gmDecision === 'Rejected'
+                    }">
+                {{ evaluation.promotionCase.gmDecision }}
+              </span>
+            </div>
+
+            <div *ngIf="evaluation.promotionCase.gmDecidedByName">
+              <h3 class="text-sm font-medium text-gray-500">GM Decision By</h3>
+              <p class="mt-1 text-base text-gray-900">{{ evaluation.promotionCase.gmDecidedByName }}</p>
+              <p class="text-sm text-gray-600">{{ evaluation.promotionCase.gmDecidedAt | date:'medium' }}</p>
+            </div>
+
+            <div *ngIf="evaluation.promotionCase.decisionReason" class="md:col-span-2">
+              <h3 class="text-sm font-medium text-gray-500">Decision Reason</h3>
+              <p class="mt-1 text-sm text-gray-700 italic bg-gray-50 p-3 rounded">
+                "{{ evaluation.promotionCase.decisionReason }}"
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOD Action Panel -->
+      <div *ngIf="showHodActions && currentUserRole === 'HOD'" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-orange-200">
+        <div class="px-6 py-5 bg-orange-50 border-b border-orange-200">
+          <h2 class="text-xl font-bold text-orange-900">HOD Review - Promotion Decision</h2>
+          <p class="mt-1 text-sm text-orange-700">
+            You are acting as: <span class="font-semibold">Head of Department (HOD)</span>
+          </p>
+        </div>
+        <div class="px-6 py-5">
+          <p class="text-gray-700 mb-4">
+            As HOD, you can recommend this employee for promotion to GM, or reject the evaluation.
+          </p>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Comment <span class="text-gray-500">(optional for recommendation, required for rejection)</span>
+            </label>
+            <textarea
+              [(ngModel)]="hodComment"
+              rows="3"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+              placeholder="Add your comments or feedback..."></textarea>
+          </div>
+          <div class="flex gap-4">
+            <button
+              (click)="recommendPromotionToGm()"
+              [disabled]="recommendingPromotion || hodRejectingEval"
+              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
+              <svg *ngIf="!recommendingPromotion" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+              <svg *ngIf="recommendingPromotion" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ recommendingPromotion ? 'Recommending...' : 'Recommend to GM' }}
+            </button>
+            <button
+              (click)="hodRejectEvaluation()"
+              [disabled]="recommendingPromotion || hodRejectingEval"
+              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
+              <svg *ngIf="!hodRejectingEval" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <svg *ngIf="hodRejectingEval" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ hodRejectingEval ? 'Rejecting...' : 'Reject Evaluation' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- GM Action Panel -->
+      <div *ngIf="showGmActions && currentUserRole === 'GM'" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-red-200">
+        <div class="px-6 py-5 bg-red-50 border-b border-red-200">
+          <h2 class="text-xl font-bold text-red-900">GM Decision - Promotion Approval</h2>
+          <p class="mt-1 text-sm text-red-700">
+            You are acting as: <span class="font-semibold">General Manager (GM)</span>
+          </p>
+        </div>
+        <div class="px-6 py-5">
+          <p class="text-gray-700 mb-4">
+            HOD has recommended this employee for promotion. Please review and make your decision.
+          </p>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Decision <span class="text-red-600">*</span>
+            </label>
+            <div class="flex gap-4 mb-4">
+              <label class="inline-flex items-center">
+                <input
+                  type="radio"
+                  [(ngModel)]="gmApproveDecision"
+                  [value]="true"
+                  class="form-radio h-4 w-4 text-green-600"
+                  name="gmDecision">
+                <span class="ml-2 text-gray-700">Approve Promotion</span>
+              </label>
+              <label class="inline-flex items-center">
+                <input
+                  type="radio"
+                  [(ngModel)]="gmApproveDecision"
+                  [value]="false"
+                  class="form-radio h-4 w-4 text-red-600"
+                  name="gmDecision">
+                <span class="ml-2 text-gray-700">Decline Promotion</span>
+              </label>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Comment <span class="text-gray-500">(optional)</span>
+            </label>
+            <textarea
+              [(ngModel)]="gmComment"
+              rows="3"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+              placeholder="Add your decision reason or feedback..."></textarea>
+          </div>
+          <div class="flex gap-4">
+            <button
+              (click)="processGmDecision()"
+              [disabled]="processingGmDecision"
+              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              [class.bg-green-600]="gmApproveDecision"
+              [class.hover:bg-green-700]="gmApproveDecision"
+              [class.focus:ring-green-500]="gmApproveDecision"
+              [class.bg-red-600]="!gmApproveDecision"
+              [class.hover:bg-red-700]="!gmApproveDecision"
+              [class.focus:ring-red-500]="!gmApproveDecision">
+              <svg *ngIf="!processingGmDecision" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <svg *ngIf="processingGmDecision" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ processingGmDecision ? 'Processing...' : 'Submit Decision' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HR Action Panel -->
+      <div *ngIf="showHrActions && currentUserRole === 'HR'" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-purple-200">
+        <div class="px-6 py-5 bg-purple-50 border-b border-purple-200">
+          <h2 class="text-xl font-bold text-purple-900">HR Processing - Final Promotion Step</h2>
+          <p class="mt-1 text-sm text-purple-700">
+            You are acting as: <span class="font-semibold">Human Resources (HR)</span>
+          </p>
+        </div>
+        <div class="px-6 py-5">
+          <p class="text-gray-700 mb-4">
+            GM has approved this promotion. Please finalize the promotion processing.
+          </p>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Action <span class="text-red-600">*</span>
+            </label>
+            <div class="flex gap-4 mb-4">
+              <label class="inline-flex items-center">
+                <input
+                  type="radio"
+                  [(ngModel)]="hrProceedDecision"
+                  [value]="true"
+                  class="form-radio h-4 w-4 text-green-600"
+                  name="hrDecision">
+                <span class="ml-2 text-gray-700">Process Promotion</span>
+              </label>
+              <label class="inline-flex items-center">
+                <input
+                  type="radio"
+                  [(ngModel)]="hrProceedDecision"
+                  [value]="false"
+                  class="form-radio h-4 w-4 text-red-600"
+                  name="hrDecision">
+                <span class="ml-2 text-gray-700">Decline Processing</span>
+              </label>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Comment <span class="text-gray-500">(optional)</span>
+            </label>
+            <textarea
+              [(ngModel)]="hrComment"
+              rows="3"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Add any notes or comments..."></textarea>
+          </div>
+          <div class="flex gap-4">
+            <button
+              (click)="processHrAction()"
+              [disabled]="processingHrAction"
+              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white focus:outline.none focus:ring-2 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              [class.bg-green-600]="hrProceedDecision"
+              [class.hover:bg-green-700]="hrProceedDecision"
+              [class.focus:ring-green-500]="hrProceedDecision"
+              [class.bg-red-600]="!hrProceedDecision"
+              [class.hover:bg-red-700]="!hrProceedDecision"
+              [class.focus:ring-red-500]="!hrProceedDecision">
+              <svg *ngIf="!processingHrAction" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <svg *ngIf="processingHrAction" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ processingHrAction ? 'Processing...' : (hrProceedDecision ? 'Process Promotion' : 'Decline Processing') }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 </div>

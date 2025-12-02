@@ -21,6 +21,10 @@ public class EvaluationConfiguration : IEntityTypeConfiguration<Evaluation>
 
         builder.Property(e => e.OverallScore)
             .HasPrecision(10, 2);
+        
+        // Add GoalSetId for linking evaluations to specific goal sets
+        builder.Property(e => e.GoalSetId)
+            .IsRequired(false); // Nullable for backwards compatibility
 
         // Relationships - Configure multiple relationships to User
         builder.HasOne(e => e.Employee)
@@ -53,5 +57,6 @@ public class EvaluationConfiguration : IEntityTypeConfiguration<Evaluation>
         builder.HasIndex(e => e.EmployeeId);
         builder.HasIndex(e => e.CycleId);
         builder.HasIndex(e => e.Status);
+        builder.HasIndex(e => e.GoalSetId); // Index for faster lookups by goal set
     }
 }

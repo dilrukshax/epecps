@@ -26,3 +26,12 @@ public class SubmitGoalSetResponseDto
     public string Status { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Request for HR to process promotion (after GM approval)
+/// </summary>
+public class HrProcessDto
+{
+    public bool Proceed { get; set; }
+    public string? Comment { get; set; }
+}

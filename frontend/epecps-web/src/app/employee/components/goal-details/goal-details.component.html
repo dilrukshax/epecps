@@ -82,6 +82,16 @@
               </div>
             </div>
           </div>
+          
+          <!-- Delete Goal Button -->
+          <button 
+            (click)="deleteGoal()"
+            class="ml-4 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+            <svg class="h-5 w-5 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete Goal
+          </button>
         </div>
 
         <!-- Progress Section -->
@@ -240,6 +250,14 @@
                   </div>
                 </div>
                 <div class="flex items-center gap-2 ml-4" *ngIf="goal.status !== PersonalGoalStatus.Completed && goal.status !== PersonalGoalStatus.Cancelled">
+                  <button 
+                    (click)="deleteActivity(activity)"
+                    class="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50"
+                    title="Delete activity">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
                   <button 
                     (click)="startEditingActivity(activity)"
                     class="text-primary-600 hover:text-primary-700 text-sm font-medium">

@@ -3,6 +3,7 @@ using Epecps.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 
 namespace Epecps.Api.Controllers;
 
@@ -143,13 +144,19 @@ public class EvaluationsController : ControllerBase
     /// Process promotion decision (GM only)
     /// </summary>
     [HttpPost("{evaluationId}/promotion-decision")]
-    [Authorize(Roles = "GM")]
     public async Task<IActionResult> ProcessPromotionDecision(
         int evaluationId,
         [FromBody] PromotionDecisionDto dto,
         CancellationToken cancellationToken)
     {
         var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+        
+        // Check if user has GM role in database
+        if (!await UserHasRoleAsync(userId, "GM", cancellationToken))
+        {
+            return StatusCode(403, new { error = "You must have the GM role to perform this action." });
+        }
+        
         await _evaluationWorkflowService.ProcessPromotionDecisionAsync(
             evaluationId,
             userId,
@@ -160,6 +167,92 @@ public class EvaluationsController : ControllerBase
         var message = dto.Approve 
             ? "Promotion approved successfully. HR has been notified." 
             : "Promotion declined. Employee has been notified.";
+
+        return Ok(new { message });
+    }
+
+    /// <summary>
+    /// HOD recommends employee for promotion
+    /// </summary>
+    [HttpPost("{evaluationId}/hod/recommend")]
+    public async Task<IActionResult> HodRecommendPromotion(
+        int evaluationId,
+        [FromBody] ApprovalActionDto dto,
+        CancellationToken cancellationToken)
+    {
+        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+        
+        // Check if user has HOD role in database
+        if (!await UserHasRoleAsync(userId, "HOD", cancellationToken))
+        {
+            return StatusCode(403, new { error = "You must have the HOD role to perform this action." });
+        }
+        
+        await _evaluationWorkflowService.RecommendForPromotionAsync(
+            evaluationId,
+            userId,
+            dto.Comment,
+            cancellationToken);
+
+        return Ok(new { message = "Employee recommended for promotion successfully. GM has been notified." });
+    }
+
+    /// <summary>
+    /// HOD rejects evaluation
+    /// </summary>
+    [HttpPost("{evaluationId}/hod/reject")]
+    public async Task<IActionResult> HodRejectEvaluation(
+        int evaluationId,
+        [FromBody] ApprovalActionDto dto,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Comment))
+            return BadRequest(new { error = "A comment is required when rejecting an evaluation at HOD stage." });
+
+        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+        
+        // Check if user has HOD role in database
+        if (!await UserHasRoleAsync(userId, "HOD", cancellationToken))
+        {
+            return StatusCode(403, new { error = "You must have the HOD role to perform this action." });
+        }
+
+        await _evaluationWorkflowService.RejectAtHodAsync(
+            evaluationId,
+            userId,
+            dto.Comment,
+            cancellationToken);
+
+        return Ok(new { message = "Evaluation rejected at HOD stage. Employee has been notified." });
+    }
+
+    /// <summary>
+    /// HR processes final promotion (after GM approval)
+    /// </summary>
+    [HttpPost("{evaluationId}/hr/process")]
+    public async Task<IActionResult> HrProcessPromotion(
+        int evaluationId,
+        [FromBody] HrProcessDto dto,
+        CancellationToken cancellationToken)
+    {
+        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+        
+        // Check if user has HR role in database
+        if (!await UserHasRoleAsync(userId, "HR", cancellationToken))
+        {
+            return StatusCode(403, new { error = "You must have the HR role to perform this action." });
+        }
+        
+        await _evaluationWorkflowService.FinalizePromotionByHrAsync(
+            evaluationId,
+            userId,
+            dto.Proceed,
+            dto.Comment,
+            cancellationToken);
+
+        var message = dto.Proceed
+            ? "Promotion processed successfully. Employee has been notified."
+            : "Promotion processing declined.";
 
         return Ok(new { message });
     }
@@ -194,6 +287,23 @@ public class EvaluationsController : ControllerBase
 
         return userId;
     }
+
+    /// <summary>
+    /// Helper method to check if user has a specific role in the database
+    /// </summary>
+    private async Task<bool> UserHasRoleAsync(int userId, string roleName, CancellationToken cancellationToken = default)
+    {
+        // Use the UserSyncService to get user roles from database
+        // We need to add a method to IUserSyncService to get roles
+        // For now, we'll use direct database access
+        var dbContext = HttpContext.RequestServices.GetRequiredService<Epecps.Infrastructure.Persistence.EpecpsDbContext>();
+        
+        var hasRole = await dbContext.Set<Epecps.Domain.Entities.UserRole>()
+            .Include(ur => ur.Role)
+            .AnyAsync(ur => ur.UserId == userId && ur.Role.Name == roleName, cancellationToken);
+        
+        return hasRole;
+    }
 }
 
 /// <summary>
@@ -202,5 +312,14 @@ public class EvaluationsController : ControllerBase
 public class PromotionDecisionDto
 {
     public bool Approve { get; set; }
+    public string? Comment { get; set; }
+}
+
+/// <summary>
+/// DTO for HR promotion processing
+/// </summary>
+public class HrProcessDto
+{
+    public bool Proceed { get; set; }
     public string? Comment { get; set; }
 }

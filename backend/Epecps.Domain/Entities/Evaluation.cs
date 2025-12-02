@@ -7,6 +7,13 @@ public class Evaluation
     public int EmployeeId { get; set; }
     public int ReportingManagerId { get; set; }
     public int TeamLeadId { get; set; }
+    
+    /// <summary>
+    /// Links evaluation to the specific goal set that was submitted
+    /// Used to ensure each goal set has its own unique approval history
+    /// </summary>
+    public Guid? GoalSetId { get; set; }
+    
     public string Status { get; set; } = string.Empty;
     public decimal? OverallScore { get; set; }
     public int? PreviousEvaluationId { get; set; }

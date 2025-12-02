@@ -1,5 +1,6 @@
 using Epecps.Application.DTOs.EmployeeGoals;
 using Epecps.Application.Interfaces;
+using Epecps.Application.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -173,6 +174,79 @@ public class EmployeeGoalsController : ControllerBase
         var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
         await _personalGoalService.RecalculateGoalScoreFromActivitiesAsync(id, userId, cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Delete a personal goal (only if not submitted for evaluation)
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeletePersonalGoal(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            await _personalGoalService.DeletePersonalGoalAsync(id, userId, cancellationToken);
+            return Ok(new { message = "Personal goal deleted successfully." });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Delete an activity from a personal goal
+    /// </summary>
+    [HttpDelete("{id}/activities/{activityId}")]
+    public async Task<IActionResult> DeleteActivity(
+        Guid id,
+        Guid activityId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            await _personalGoalService.DeleteActivityAsync(id, activityId, userId, cancellationToken);
+            return Ok(new { message = "Activity deleted successfully." });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Delete an entire goal set (all goals in the set)
+    /// </summary>
+    [HttpDelete("sets/{goalSetId}")]
+    public async Task<IActionResult> DeleteGoalSet(
+        Guid goalSetId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            await _personalGoalService.DeleteGoalSetAsync(goalSetId, userId, cancellationToken);
+            return Ok(new { message = "Goal set deleted successfully." });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     /// <summary>

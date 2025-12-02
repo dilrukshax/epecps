@@ -35,11 +35,30 @@ export class EvaluationDetailComponent implements OnInit {
   peerUserId2: number | null = null;
   availablePeers: Array<{ userId: number; name: string }> = [];
 
+  // HOD action state
+  showHodActions = false;
+  recommendingPromotion = false;
+  hodRejectingEval = false;
+  hodComment = '';
+
+  // GM action state
+  showGmActions = false;
+  processingGmDecision = false;
+  gmComment = '';
+  gmApproveDecision = true;
+
+  // HR action state
+  showHrActions = false;
+  processingHrAction = false;
+  hrComment = '';
+  hrProceedDecision = true;
+
   // Current user state (would come from auth service in real app)
   currentUserId = 0; // This should come from AuthService
   isActiveApprover = false;
   currentUserRole = '';
   needsPeerAssignment = false;
+  userRoles: string[] = []; // Store all user roles
 
   ReviewerRole = ReviewerRole;
 
@@ -79,19 +98,43 @@ export class EvaluationDetailComponent implements OnInit {
 
     const status = this.evaluation.status.toLowerCase();
     
+    // TODO: Get actual user roles from AuthService
+    // For now, simulate roles based on status
+    this.userRoles = this.getUserRolesFromStatus(status);
+    
+    // Reset all action flags
+    this.isActiveApprover = false;
+    this.needsPeerAssignment = false;
+    this.showHodActions = false;
+    this.showGmActions = false;
+    this.showHrActions = false;
+    
     // Check if peer assignment is needed
     if (status.includes('pending_peer_assignment')) {
       this.needsPeerAssignment = true;
       this.isActiveApprover = true;
       this.currentUserRole = 'TL';
-      // TODO: Load available peers from API
       this.loadAvailablePeers();
       return;
     }
 
-    // Simple logic - in real app, get current user from AuthService
-    // and check against evaluation.reportingManagerId, teamLeadId, etc.
-    if (status.includes('pending_rm')) {
+    // Determine active approver role
+    if (status.includes('pending_hod')) {
+      // HOD stage - only show HOD promotion panel
+      this.isActiveApprover = false; // Don't show generic approve/reject
+      this.showHodActions = true;
+      this.currentUserRole = 'HOD';
+    } else if (status.includes('pending_gm')) {
+      // GM stage - only show GM decision panel
+      this.isActiveApprover = false; // Don't show generic approve/reject
+      this.showGmActions = true;
+      this.currentUserRole = 'GM';
+    } else if (status.includes('pending_hr')) {
+      // HR stage - only show HR processing panel
+      this.isActiveApprover = false; // Don't show generic approve/reject
+      this.showHrActions = true;
+      this.currentUserRole = 'HR';
+    } else if (status.includes('pending_rm')) {
       this.isActiveApprover = true;
       this.currentUserRole = 'RM';
     } else if (status.includes('pending_tl')) {
@@ -100,13 +143,17 @@ export class EvaluationDetailComponent implements OnInit {
     } else if (status.includes('pending_peer')) {
       this.isActiveApprover = true;
       this.currentUserRole = 'Peer';
-    } else if (status.includes('pending_hod')) {
-      this.isActiveApprover = true;
-      this.currentUserRole = 'HOD';
-    } else if (status.includes('pending_gm')) {
-      this.isActiveApprover = true;
-      this.currentUserRole = 'GM';
     }
+  }
+
+  getUserRolesFromStatus(status: string): string[] {
+    // TODO: Replace with actual roles from AuthService
+    // For demo purposes, return roles based on status
+    const roles: string[] = ['Employee'];
+    if (status.includes('hod')) roles.push('HOD');
+    if (status.includes('gm')) roles.push('GM');
+    if (status.includes('hr')) roles.push('HR');
+    return roles;
   }
 
   loadAvailablePeers(): void {
@@ -321,5 +368,133 @@ export class EvaluationDetailComponent implements OnInit {
     setTimeout(() => {
       toast.remove();
     }, 5000);
+  }
+
+  // HOD Actions
+  recommendPromotionToGm(): void {
+    if (this.recommendingPromotion || !this.evaluation) return;
+
+    if (!confirm('Are you sure you want to recommend this employee for promotion to GM?')) {
+      return;
+    }
+
+    this.recommendingPromotion = true;
+    this.error = null;
+
+    this.evaluationService.recommendPromotion(this.evaluationId, this.hodComment || undefined).subscribe({
+      next: () => {
+        this.showToast('success', 'Successfully recommended for promotion. GM has been notified.');
+        this.recommendingPromotion = false;
+        this.hodComment = '';
+        this.loadEvaluation();
+      },
+      error: (err) => {
+        this.recommendingPromotion = false;
+        const errorMessage = err.error?.message || 'Failed to recommend promotion. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error recommending promotion:', err);
+      }
+    });
+  }
+
+  hodRejectEvaluation(): void {
+    if (this.hodRejectingEval || !this.evaluation) return;
+
+    if (!this.hodComment.trim()) {
+      this.showToast('error', 'Please provide a comment explaining the rejection.');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to reject this evaluation? The employee will be notified.')) {
+      return;
+    }
+
+    this.hodRejectingEval = true;
+    this.error = null;
+
+    this.evaluationService.hodReject(this.evaluationId, this.hodComment).subscribe({
+      next: () => {
+        this.showToast('success', 'Evaluation rejected at HOD stage. Employee has been notified.');
+        this.hodRejectingEval = false;
+        this.hodComment = '';
+        this.loadEvaluation();
+      },
+      error: (err) => {
+        this.hodRejectingEval = false;
+        const errorMessage = err.error?.message || 'Failed to reject evaluation. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error rejecting evaluation:', err);
+      }
+    });
+  }
+
+  // GM Actions
+  processGmDecision(): void {
+    if (this.processingGmDecision || !this.evaluation) return;
+
+    const action = this.gmApproveDecision ? 'approve' : 'decline';
+    const confirmMessage = this.gmApproveDecision
+      ? 'Are you sure you want to approve this promotion? HR will be notified for processing.'
+      : 'Are you sure you want to decline this promotion? The employee will be notified.';
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    this.processingGmDecision = true;
+    this.error = null;
+
+    this.evaluationService.gmDecision(this.evaluationId, this.gmApproveDecision, this.gmComment || undefined).subscribe({
+      next: () => {
+        const successMessage = this.gmApproveDecision
+          ? 'Promotion approved successfully. HR has been notified.'
+          : 'Promotion declined. Employee has been notified.';
+        this.showToast('success', successMessage);
+        this.processingGmDecision = false;
+        this.gmComment = '';
+        this.loadEvaluation();
+      },
+      error: (err) => {
+        this.processingGmDecision = false;
+        const errorMessage = err.error?.message || 'Failed to process GM decision. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error processing GM decision:', err);
+      }
+    });
+  }
+
+  // HR Actions
+  processHrAction(): void {
+    if (this.processingHrAction || !this.evaluation) return;
+
+    const action = this.hrProceedDecision ? 'process' : 'decline';
+    const confirmMessage = this.hrProceedDecision
+      ? 'Are you sure you want to process this promotion? The employee will be notified with congratulations.'
+      : 'Are you sure you want to decline processing this promotion?';
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    this.processingHrAction = true;
+    this.error = null;
+
+    this.evaluationService.hrProcessPromotion(this.evaluationId, this.hrProceedDecision, this.hrComment || undefined).subscribe({
+      next: () => {
+        const successMessage = this.hrProceedDecision
+          ? 'Promotion processed successfully. Employee has been notified.'
+          : 'Promotion processing declined.';
+        this.showToast('success', successMessage);
+        this.processingHrAction = false;
+        this.hrComment = '';
+        this.loadEvaluation();
+      },
+      error: (err) => {
+        this.processingHrAction = false;
+        const errorMessage = err.error?.message || 'Failed to process HR action. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error processing HR action:', err);
+      }
+    });
   }
 }

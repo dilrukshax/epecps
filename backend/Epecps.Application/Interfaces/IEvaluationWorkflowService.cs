@@ -75,6 +75,34 @@ public interface IEvaluationWorkflowService
     Task ProcessPromotionDecisionAsync(int evaluationId, int gmUserId, bool approve, string? comment, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// HOD recommends an employee for promotion (creates promotion case)
+    /// </summary>
+    /// <param name="evaluationId">The evaluation ID</param>
+    /// <param name="hodUserId">The HOD user ID</param>
+    /// <param name="comment">Optional comment</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task RecommendForPromotionAsync(int evaluationId, int hodUserId, string? comment, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// HOD rejects the evaluation at HOD review stage
+    /// </summary>
+    /// <param name="evaluationId">The evaluation ID</param>
+    /// <param name="hodUserId">The HOD user ID</param>
+    /// <param name="comment">Required comment explaining the rejection</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task RejectAtHodAsync(int evaluationId, int hodUserId, string comment, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// HR processes the final promotion decision (after GM approval)
+    /// </summary>
+    /// <param name="evaluationId">The evaluation ID</param>
+    /// <param name="hrUserId">The HR user ID</param>
+    /// <param name="proceed">True to process promotion, false to decline</param>
+    /// <param name="comment">Optional comment</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task FinalizePromotionByHrAsync(int evaluationId, int hrUserId, bool proceed, string? comment, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get available peer reviewers for an evaluation
     /// </summary>
     /// <param name="evaluationId">The evaluation ID</param>

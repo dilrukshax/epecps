@@ -57,4 +57,19 @@ public interface IPersonalGoalService
     /// Recalculate goal score based on completed activities
     /// </summary>
     Task RecalculateGoalScoreFromActivitiesAsync(Guid goalId, int userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Delete a personal goal (only if not submitted for evaluation)
+    /// </summary>
+    Task DeletePersonalGoalAsync(Guid goalId, int userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Delete an activity from a personal goal
+    /// </summary>
+    Task DeleteActivityAsync(Guid goalId, Guid activityId, int userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Delete an entire goal set (all goals in the set)
+    /// </summary>
+    Task DeleteGoalSetAsync(Guid goalSetId, int userId, CancellationToken cancellationToken = default);
 }

@@ -110,4 +110,48 @@ export class EvaluationService {
       body
     );
   }
+
+  /**
+   * HOD recommends employee for promotion (HOD only)
+   */
+  recommendPromotion(evaluationId: number, comment?: string): Observable<any> {
+    const body: ApprovalActionDto = { comment };
+    return this.http.post(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/hod/recommend`,
+      body
+    );
+  }
+
+  /**
+   * HOD rejects evaluation (HOD only)
+   */
+  hodReject(evaluationId: number, comment: string): Observable<any> {
+    const body: ApprovalActionDto = { comment };
+    return this.http.post(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/hod/reject`,
+      body
+    );
+  }
+
+  /**
+   * GM makes promotion decision (GM only)
+   */
+  gmDecision(evaluationId: number, approve: boolean, comment?: string): Observable<any> {
+    const body: PromotionDecisionDto = { approve, comment };
+    return this.http.post(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/promotion-decision`,
+      body
+    );
+  }
+
+  /**
+   * HR processes promotion (HR only)
+   */
+  hrProcessPromotion(evaluationId: number, proceed: boolean, comment?: string): Observable<any> {
+    const body = { proceed, comment };
+    return this.http.post(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/hr/process`,
+      body
+    );
+  }
 }

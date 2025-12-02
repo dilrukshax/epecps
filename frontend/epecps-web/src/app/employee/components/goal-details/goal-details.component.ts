@@ -347,4 +347,64 @@ export class GoalDetailsComponent implements OnInit {
         return 'bg-gray-100 text-gray-800';
     }
   }
+
+  // ===========================
+  // Delete Operations
+  // ===========================
+
+  deleteActivity(activity: PersonalGoalActivityDto): void {
+    if (!this.goalId) return;
+
+    if (!confirm(`Are you sure you want to delete this activity?\n\n"${activity.description}"\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    this.goalsService.deleteActivity(this.goalId, activity.id).subscribe({
+      next: (response) => {
+        this.showToast('success', response.message || 'Activity deleted successfully!');
+        this.loadGoalDetails(); // Refresh the goal
+      },
+      error: (err) => {
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to delete activity. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error deleting activity:', err);
+      }
+    });
+  }
+
+  deleteGoal(): void {
+    if (!this.goalId || !this.goal) return;
+
+    if (!confirm(`Are you sure you want to delete this goal?\n\nTitle: ${this.goal.title}\n\nThis action cannot be undone and you will be returned to the goals list.`)) {
+      return;
+    }
+
+    this.goalsService.deletePersonalGoal(this.goalId).subscribe({
+      next: (response) => {
+        this.showToast('success', response.message || 'Goal deleted successfully!');
+        setTimeout(() => {
+          this.router.navigate(['/employee/goals']);
+        }, 1000);
+      },
+      error: (err) => {
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to delete goal. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error deleting goal:', err);
+      }
+    });
+  }
+
+  private showToast(type: 'success' | 'error', message: string): void {
+    // Simple toast implementation - can be replaced with a library like ngx-toastr
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 px-6 py-4 rounded-lg shadow-lg z-50 ${
+      type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+    }`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.remove();
+    }, 5000);
+  }
 }

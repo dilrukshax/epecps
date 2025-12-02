@@ -222,6 +222,69 @@ export class MyGoalsComponent implements OnInit {
       .replace(/\b\w/g, (l: string) => l.toUpperCase());
   }
 
+  deleteGoalSet(goalSet: PersonalGoalSetDto, event: Event): void {
+    event.stopPropagation();
+    
+    // Check if already submitted for evaluation
+    if (goalSet.evaluationInfo) {
+      this.showToast('error', 'Cannot delete a goal set that has been submitted for evaluation. Please contact your supervisor if you need to make changes.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete this entire goal set?\n\nTemplate: ${goalSet.templateName}\nGoals: ${goalSet.goalCount}\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    this.loading = true;
+
+    this.goalsService.deleteGoalSet(goalSet.goalSetId).subscribe({
+      next: (response) => {
+        this.showToast('success', response.message || 'Goal set deleted successfully!');
+        this.loadGoals(); // Refresh the list
+      },
+      error: (err) => {
+        this.loading = false;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to delete goal set. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error deleting goal set:', err);
+      }
+    });
+  }
+
+  deleteGoal(goal: PersonalGoalListDto, event: Event): void {
+    event.stopPropagation();
+    
+    // Check if part of a goal set that's been submitted
+    const goalSet = this.goalSets.find(gs => gs.goalSetId === goal.goalSetId);
+    if (goalSet?.evaluationInfo) {
+      this.showToast('error', 'Cannot delete a goal that has been submitted for evaluation.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete this goal?\n\nTitle: ${goal.title}\nCategory: ${goal.categoryName}\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    this.loading = true;
+
+    this.goalsService.deletePersonalGoal(goal.id).subscribe({
+      next: (response) => {
+        this.showToast('success', response.message || 'Goal deleted successfully!');
+        this.loadGoals(); // Refresh the list
+      },
+      error: (err) => {
+        this.loading = false;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to delete goal. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error deleting goal:', err);
+      }
+    });
+  }
+
+  canDeleteGoalSet(goalSet: PersonalGoalSetDto): boolean {
+    return !goalSet.evaluationInfo; // Can only delete if not submitted for evaluation
+  }
+
   private showToast(type: 'success' | 'error', message: string): void {
     // Simple toast implementation - can be replaced with a library like ngx-toastr
     const toast = document.createElement('div');

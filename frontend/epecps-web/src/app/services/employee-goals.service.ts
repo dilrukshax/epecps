@@ -137,6 +137,27 @@ export class EmployeeGoalsService {
   }
 
   /**
+   * Delete a personal goal (only if not submitted for evaluation)
+   */
+  deletePersonalGoal(goalId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.goalsUrl}/${goalId}`);
+  }
+
+  /**
+   * Delete an activity from a personal goal
+   */
+  deleteActivity(goalId: string, activityId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.goalsUrl}/${goalId}/activities/${activityId}`);
+  }
+
+  /**
+   * Delete an entire goal set (all goals in the set)
+   */
+  deleteGoalSet(goalSetId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.goalsUrl}/sets/${goalSetId}`);
+  }
+
+  /**
    * Submit a goal set for evaluation
    */
   submitGoalSetForEvaluation(goalSetId: string): Observable<{ message: string }> {

@@ -173,44 +173,36 @@ public class PersonalGoalService : IPersonalGoalService
 
     private async Task<GoalSetEvaluationInfoDto?> GetEvaluationInfoForGoalSet(Guid goalSetId, int userId)
     {
-        // Find evaluation for this goal set
+        // ? FIXED: Directly find evaluation by GoalSetId instead of title matching
+        // This ensures each goal set has its own unique approval history
         var evaluation = await _context.Set<Evaluation>()
             .Include(e => e.Reviews)
                 .ThenInclude(r => r.Reviewer)
             .Include(e => e.PeerAssignments)
                 .ThenInclude(pa => pa.PeerUser)
-            .Where(e => e.EmployeeId == userId)
-            .Where(e => e.EmployeeGoals.Any()) // Has goals
-            .OrderByDescending(e => e.EvaluationId)
+            .Include(e => e.ReportingManager)
+            .Include(e => e.TeamLead)
+            .Include(e => e.EmployeeGoals)
+            .Where(e => e.GoalSetId == goalSetId && e.EmployeeId == userId) // ? Direct match by GoalSetId
+            .OrderByDescending(e => e.EvaluationId) // Get most recent if multiple exist
             .FirstOrDefaultAsync();
 
         if (evaluation == null)
             return null;
 
-        // Get approval history
+        // Get approval history for THIS SPECIFIC evaluation (using EvaluationId)
         var approvalHistory = await _context.Set<ApprovalHistory>()
             .Include(ah => ah.ActorUser)
-            .Where(ah => ah.EvaluationId == evaluation.EvaluationId)
+            .Where(ah => ah.EvaluationId == evaluation.EvaluationId) // ? Using exact EvaluationId
             .OrderBy(ah => ah.CreatedAt)
             .ToListAsync();
 
         var approvalSteps = new List<GoalSetApprovalStepDto>();
 
-        // Build approval steps for horizontal timeline
-        var allSteps = new List<(string Role, string? ActorName, string Action, string? Comment, DateTime? ActionDate, bool IsCompleted)>
-        {
-            ("Employee", null, "Pending", null, null, false),
-            ("RM", null, "Pending", null, null, false),
-            ("TL", null, "Pending", null, null, false),
-            ("Peer", null, "Pending", null, null, false),
-            ("HOD", null, "Pending", null, null, false)
-        };
-
-        // Update with actual data from approval history
+        // Build approval steps from actual approval history
         foreach (var history in approvalHistory)
         {
             var role = history.ActorRole;
-            if (role == "Employee") role = "Employee";
             
             var existingStep = approvalSteps.FirstOrDefault(s => s.Role == role);
             if (existingStep == null)
@@ -229,7 +221,7 @@ public class PersonalGoalService : IPersonalGoalService
             }
         }
 
-        // Add pending steps based on current status
+        // Add pending steps based on current evaluation status
         var status = evaluation.Status;
         if (status.Contains("Pending_RM"))
         {
@@ -266,7 +258,7 @@ public class PersonalGoalService : IPersonalGoalService
 
         return new GoalSetEvaluationInfoDto
         {
-            EvaluationId = evaluation.EvaluationId,
+            EvaluationId = evaluation.EvaluationId, // ? Return the ACTUAL evaluation ID
             Status = evaluation.Status,
             OverallScore = evaluation.OverallScore,
             SubmittedDate = approvalHistory.FirstOrDefault(ah => ah.Action == "Submitted")?.CreatedAt ?? DateTime.UtcNow,
@@ -558,5 +550,102 @@ public class PersonalGoalService : IPersonalGoalService
             Status = evaluation.Status,
             Message = "Goal set submitted for evaluation successfully. Your Reporting Manager will be notified."
         };
+    }
+
+    public async Task DeletePersonalGoalAsync(Guid goalId, int userId, CancellationToken cancellationToken = default)
+    {
+        var goal = await _context.PersonalGoals
+            .Include(pg => pg.Activities)
+            .FirstOrDefaultAsync(pg => pg.Id == goalId && pg.UserId == userId, cancellationToken);
+
+        if (goal == null)
+            throw new NotFoundException(nameof(PersonalGoal), goalId);
+
+        // Check if goal has been submitted for evaluation
+        if (goal.GoalSetId.HasValue)
+        {
+            var evaluation = await _context.Set<Evaluation>()
+                .FirstOrDefaultAsync(e => e.GoalSetId == goal.GoalSetId && e.EmployeeId == userId, cancellationToken);
+
+            if (evaluation != null)
+            {
+                throw new BusinessRuleException("Cannot delete a goal that has been submitted for evaluation. Please contact your supervisor if you need to make changes.");
+            }
+        }
+
+        // Delete all activities first (due to foreign key constraint)
+        _context.PersonalGoalActivities.RemoveRange(goal.Activities);
+
+        // Delete the goal
+        _context.PersonalGoals.Remove(goal);
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteActivityAsync(Guid goalId, Guid activityId, int userId, CancellationToken cancellationToken = default)
+    {
+        var activity = await _context.PersonalGoalActivities
+            .Include(a => a.PersonalGoal)
+                .ThenInclude(pg => pg.Activities)
+            .FirstOrDefaultAsync(a => a.Id == activityId && a.PersonalGoalId == goalId, cancellationToken);
+
+        if (activity == null)
+            throw new NotFoundException(nameof(PersonalGoalActivity), activityId);
+
+        if (activity.PersonalGoal.UserId != userId)
+            throw new BusinessRuleException("You do not have permission to delete this activity.");
+
+        // Check if goal has been submitted for evaluation
+        if (activity.PersonalGoal.GoalSetId.HasValue)
+        {
+            var evaluation = await _context.Set<Evaluation>()
+                .FirstOrDefaultAsync(e => e.GoalSetId == activity.PersonalGoal.GoalSetId && e.EmployeeId == userId, cancellationToken);
+
+            if (evaluation != null)
+            {
+                throw new BusinessRuleException("Cannot delete an activity from a goal that has been submitted for evaluation.");
+            }
+        }
+
+        // Delete the activity
+        _context.PersonalGoalActivities.Remove(activity);
+
+        // Recalculate goal score after deleting activity
+        await RecalculateGoalScoreFromActivitiesInternalAsync(activity.PersonalGoal);
+
+        activity.PersonalGoal.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteGoalSetAsync(Guid goalSetId, int userId, CancellationToken cancellationToken = default)
+    {
+        var goals = await _context.PersonalGoals
+            .Include(pg => pg.Activities)
+            .Where(pg => pg.GoalSetId == goalSetId && pg.UserId == userId)
+            .ToListAsync(cancellationToken);
+
+        if (!goals.Any())
+            throw new NotFoundException("Goal set not found or you don't have permission to access it.");
+
+        // Check if goal set has been submitted for evaluation
+        var evaluation = await _context.Set<Evaluation>()
+            .FirstOrDefaultAsync(e => e.GoalSetId == goalSetId && e.EmployeeId == userId, cancellationToken);
+
+        if (evaluation != null)
+        {
+            throw new BusinessRuleException("Cannot delete a goal set that has been submitted for evaluation. Please contact your supervisor if you need to make changes.");
+        }
+
+        // Delete all activities from all goals
+        foreach (var goal in goals)
+        {
+            _context.PersonalGoalActivities.RemoveRange(goal.Activities);
+        }
+
+        // Delete all goals in the set
+        _context.PersonalGoals.RemoveRange(goals);
+
+        await _context.SaveChangesAsync(cancellationToken);
     }
 }
