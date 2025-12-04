@@ -214,7 +214,7 @@ public class PersonalGoalService : IPersonalGoalService
                     Action = history.Action,
                     Comment = history.Comment,
                     ActionDate = history.CreatedAt,
-                    IsCompleted = history.Action.Contains("Approved") || history.Action.Contains("Submitted"),
+                    IsCompleted = history.Action.Contains("Approved") || history.Action.Contains("Submitted") || history.Action.Contains("Recommended") || history.Action.Contains("Processed"),
                     IsPending = false,
                     IsRejected = history.Action.Contains("Rejected")
                 });

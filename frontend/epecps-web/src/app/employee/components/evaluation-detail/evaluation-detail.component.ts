@@ -338,7 +338,7 @@ export class EvaluationDetailComponent implements OnInit {
 
   getActionColor(action: string): string {
     const actionLower = action.toLowerCase();
-    if (actionLower.includes('approved')) return 'text-green-600';
+    if (actionLower.includes('approved') || actionLower.includes('recommended') || actionLower.includes('processed')) return 'text-green-600';
     if (actionLower.includes('rejected')) return 'text-red-600';
     if (actionLower.includes('submitted')) return 'text-blue-600';
     return 'text-gray-600';
