@@ -14,6 +14,15 @@
 # Ignore local secrets & local-only configs
 appsettings.*.Development.json
 
+# ?? IMPORTANT: Protect sensitive configuration files
+# Ignore appsettings.json to prevent committing passwords and secrets
+**/appsettings.json
+**/appsettings.*.json
+
+# Allow example/template files
+!**/appsettings.EmailExample.json
+!**/appsettings.Example.json
+
 # --- Angular / Node (epecps-web) ---
 /epecps-web/node_modules/
 /epecps-web/dist/

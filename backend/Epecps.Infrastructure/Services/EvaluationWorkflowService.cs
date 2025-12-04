@@ -15,6 +15,7 @@ namespace Epecps.Infrastructure.Services;
 public class EvaluationWorkflowService : IEvaluationWorkflowService
 {
     private readonly EpecpsDbContext _context;
+    private readonly IEmailService _emailService;
 
     // Evaluation status constants
     private const string STATUS_PENDING_RM_REVIEW = "Pending_RM_Review";
@@ -38,9 +39,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
     // Score threshold for promotion
     private const decimal PROMOTION_THRESHOLD = 80.0m;
 
-    public EvaluationWorkflowService(EpecpsDbContext context)
+    public EvaluationWorkflowService(EpecpsDbContext context, IEmailService emailService)
     {
         _context = context;
+        _emailService = emailService;
     }
 
     public async Task<Evaluation> StartEvaluationForGoalSetAsync(int employeeId, Guid goalSetId, int cycleId, CancellationToken cancellationToken = default)
@@ -181,6 +183,21 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         _context.Set<AuditLog>().Add(auditLog);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // ?? SEND EMAIL to Reporting Manager
+        var reportingManager = await _context.Users.FindAsync(new object[] { reportingManagerId }, cancellationToken);
+        if (reportingManager != null)
+        {
+            await _emailService.SendEvaluationNotificationAsync(
+                reportingManager.Email,
+                reportingManager.FullName,
+                employee.FullName,
+                "Submitted",
+                "RM",
+                "Employee has submitted their goal set for evaluation. Please review and approve.",
+                evaluation.EvaluationId,
+                cancellationToken);
+        }
 
         return evaluation;
     }
@@ -414,6 +431,21 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         _context.Set<Notification>().Add(notification);
 
+        // ?? SEND REJECTION EMAIL to Employee
+        var actor = await _context.Users.FindAsync(new object[] { actorUserId }, cancellationToken);
+        if (actor != null)
+        {
+            await _emailService.SendRejectionNotificationAsync(
+                evaluation.Employee.Email,
+                evaluation.Employee.FullName,
+                evaluation.Employee.FullName,
+                actor.FullName,
+                actorRole,
+                comment,
+                evaluationId,
+                cancellationToken);
+        }
+
         // Create audit log
         var auditLog = new AuditLog
         {
@@ -541,6 +573,34 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         _context.Set<Notification>().Add(notification2);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // ?? SEND EMAIL to both peer reviewers
+        var employee = evaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
+        
+        if (employee != null)
+        {
+            // Email to Peer 1
+            await _emailService.SendEvaluationNotificationAsync(
+                peer1.Email,
+                peer1.FullName,
+                employee.FullName,
+                "Assigned",
+                "Peer Reviewer",
+                "You have been assigned as a peer reviewer. Please review and provide your feedback.",
+                evaluationId,
+                cancellationToken);
+
+            // Email to Peer 2
+            await _emailService.SendEvaluationNotificationAsync(
+                peer2.Email,
+                peer2.FullName,
+                employee.FullName,
+                "Assigned",
+                "Peer Reviewer",
+                "You have been assigned as a peer reviewer. Please review and provide your feedback.",
+                evaluationId,
+                cancellationToken);
+        }
     }
 
     public async Task<IEnumerable<PendingApprovalDto>> GetPendingApprovalsForUserAsync(int userId, CancellationToken cancellationToken = default)
@@ -910,6 +970,21 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 };
 
                 _context.Set<Notification>().Add(hrNotification);
+
+                // ?? SEND EMAIL to HR
+                var hr = await _context.Users.FindAsync(new object[] { hrUserId }, cancellationToken);
+                if (hr != null)
+                {
+                    await _emailService.SendEvaluationNotificationAsync(
+                        hr.Email,
+                        hr.FullName,
+                        evaluation.Employee.FullName,
+                        "Approved",
+                        "HR",
+                        $"GM has approved the promotion. Please process the promotion. Comment: {comment}",
+                        evaluationId,
+                        cancellationToken);
+                }
             }
         }
         else
@@ -924,6 +999,15 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             };
 
             _context.Set<Notification>().Add(employeeNotification);
+
+            // ?? SEND EMAIL to Employee (GM rejected promotion)
+            await _emailService.SendPromotionNotificationAsync(
+                evaluation.Employee.Email,
+                evaluation.Employee.FullName,
+                evaluation.Employee.FullName,
+                false,
+                comment,
+                cancellationToken);
         }
 
         // Create audit log
@@ -1032,21 +1116,22 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             };
 
             _context.Set<Notification>().Add(notification);
+
+            // ?? SEND EMAIL to GM
+            var gm = await _context.Users.FindAsync(new object[] { gmUserId }, cancellationToken);
+            if (gm != null)
+            {
+                await _emailService.SendEvaluationNotificationAsync(
+                    gm.Email,
+                    gm.FullName,
+                    evaluation.Employee.FullName,
+                    "Pending",
+                    "GM",
+                    $"HOD has recommended this employee for promotion. Please make your decision. Comment: {comment}",
+                    evaluationId,
+                    cancellationToken);
+            }
         }
-
-        // Create audit log
-        var auditLog = new AuditLog
-        {
-            ActorUserId = hodUserId,
-            EntityType = "Evaluation",
-            EntityId = evaluationId,
-            Action = "HOD_RECOMMENDED_PROMOTION",
-            BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { Status = oldStatus }),
-            AfterJson = System.Text.Json.JsonSerializer.Serialize(new { Status = evaluation.Status, Comment = comment }),
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Set<AuditLog>().Add(auditLog);
 
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -1111,6 +1196,21 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         };
 
         _context.Set<Notification>().Add(notification);
+
+        // ?? SEND REJECTION EMAIL to Employee
+        var actor = await _context.Users.FindAsync(new object[] { hodUserId }, cancellationToken);
+        if (actor != null)
+        {
+            await _emailService.SendRejectionNotificationAsync(
+                evaluation.Employee.Email,
+                evaluation.Employee.FullName,
+                evaluation.Employee.FullName,
+                actor.FullName,
+                "HOD",
+                comment,
+                evaluationId,
+                cancellationToken);
+        }
 
         // Create audit log
         var auditLog = new AuditLog
@@ -1183,6 +1283,15 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             };
 
             _context.Set<Notification>().Add(employeeNotification);
+
+            // ?? SEND CONGRATULATIONS EMAIL to Employee
+            await _emailService.SendPromotionNotificationAsync(
+                evaluation.Employee.Email,
+                evaluation.Employee.FullName,
+                evaluation.Employee.FullName,
+                true,
+                comment,
+                cancellationToken);
 
             // Create audit log
             var auditLog = new AuditLog
@@ -1320,6 +1429,24 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         _context.Set<Notification>().Add(notification);
 
+        // ?? SEND EMAIL to Team Lead
+        var teamLead = await _context.Users.FindAsync(new object[] { evaluation.TeamLeadId }, cancellationToken);
+        var employee = evaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
+        var rm = evaluation.ReportingManager ?? await _context.Users.FindAsync(new object[] { evaluation.ReportingManagerId }, cancellationToken);
+        
+        if (teamLead != null && employee != null && rm != null)
+        {
+            await _emailService.SendApprovalNotificationAsync(
+                teamLead.Email,
+                teamLead.FullName,
+                employee.FullName,
+                rm.FullName,
+                "RM",
+                "Please review and approve the evaluation, then assign peer reviewers.",
+                evaluation.EvaluationId,
+                cancellationToken);
+        }
+
         await Task.CompletedTask;
     }
 
@@ -1355,6 +1482,23 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             };
 
             _context.Set<Notification>().Add(notification);
+
+            // ?? SEND EMAIL to HOD
+            var hod = await _context.Users.FindAsync(new object[] { hodReview.ReviewerUserId }, cancellationToken);
+            var employee = evaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
+            
+            if (hod != null && employee != null)
+            {
+                await _emailService.SendEvaluationNotificationAsync(
+                    hod.Email,
+                    hod.FullName,
+                    employee.FullName,
+                    "Pending",
+                    "HOD",
+                    "All peer reviews are complete. Please review the evaluation and decide on promotion recommendation.",
+                    evaluation.EvaluationId,
+                    cancellationToken);
+            }
         }
 
         await Task.CompletedTask;

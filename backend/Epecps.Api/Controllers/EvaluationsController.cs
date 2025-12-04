@@ -17,13 +17,16 @@ public class EvaluationsController : ControllerBase
 {
     private readonly IEvaluationWorkflowService _evaluationWorkflowService;
     private readonly IUserSyncService _userSyncService;
+    private readonly IEmailService _emailService;
 
     public EvaluationsController(
         IEvaluationWorkflowService evaluationWorkflowService,
-        IUserSyncService userSyncService)
+        IUserSyncService userSyncService,
+        IEmailService emailService)
     {
         _evaluationWorkflowService = evaluationWorkflowService;
         _userSyncService = userSyncService;
+        _emailService = emailService;
     }
 
     /// <summary>
@@ -255,6 +258,91 @@ public class EvaluationsController : ControllerBase
             : "Promotion processing declined.";
 
         return Ok(new { message });
+    }
+
+    /// <summary>
+    /// TEST ENDPOINT: Send a test email to verify email configuration
+    /// </summary>
+    [HttpPost("test-email")]
+    public async Task<IActionResult> TestEmail(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var testEmail = "dilrukshadev@gmail.com";
+            var testSubject = "EPECPS Email Test - " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            var testBody = @"
+                <h1 style='color: #667eea;'>? Email System Works!</h1>
+                <p>If you receive this email, your EPECPS email configuration is correct.</p>
+                <hr>
+                <p><strong>Configuration Details:</strong></p>
+                <ul>
+                    <li>SMTP Server: smtp.gmail.com</li>
+                    <li>Port: 587</li>
+                    <li>Sender: dilrukshadev@gmail.com</li>
+                    <li>Test Time: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + @"</li>
+                </ul>
+                <p style='color: #666; font-size: 12px;'>This is a test email from EPECPS.</p>
+            ";
+
+            await _emailService.SendEmailAsync(
+                testEmail,
+                "Test Recipient",
+                testSubject,
+                testBody,
+                cancellationToken);
+            
+            return Ok(new 
+            { 
+                success = true,
+                message = "Test email sent successfully! Check your inbox at " + testEmail,
+                details = "If you don't receive the email within 2 minutes, check:\n" +
+                         "1. Spam folder\n" +
+                         "2. Console logs for errors\n" +
+                         "3. Gmail app password is correct"
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new 
+            { 
+                success = false,
+                error = "Failed to send test email",
+                details = ex.Message,
+                innerError = ex.InnerException?.Message,
+                suggestion = "Check:\n" +
+                            "1. appsettings.json has EmailSettings section\n" +
+                            "2. Gmail app password is correct: mshr utli ilwi kkmn\n" +
+                            "3. API has been restarted after config changes"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Get email queue status for debugging
+    /// </summary>
+    [HttpGet("email-status")]
+    public IActionResult GetEmailStatus()
+    {
+        try
+        {
+            return Ok(new 
+            { 
+                success = true,
+                emailServiceConfigured = _emailService != null,
+                message = "Email service is running and configured",
+                note = "Submit a goal set or approve an evaluation to test email sending",
+                checkLogs = "Watch the console for 'Email queued for...' and 'Email sent successfully' messages"
+            });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new 
+            { 
+                success = false,
+                error = ex.Message,
+                note = "Email service might not be properly configured"
+            });
+        }
     }
 
     /// <summary>

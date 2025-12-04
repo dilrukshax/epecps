@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .email-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .email-header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .email-body {
+            padding: 30px;
+        }
+        .greeting {
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        .message-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .message-box h2 {
+            margin-top: 0;
+            color: #667eea;
+            font-size: 18px;
+        }
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .info-table td {
+            padding: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .info-table td:first-child {
+            font-weight: 600;
+            color: #666;
+            width: 140px;
+        }
+        .action-button {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .action-button:hover {
+            opacity: 0.9;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px 30px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            border-top: 1px solid #e9ecef;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .badge-warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .badge-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .badge-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="email-header">
+            <h1>?? EPECPS - Employee Performance Evaluation</h1>
+        </div>
+        
+        <div class="email-body">
+            <p class="greeting">Hello <strong>{{RecipientName}}</strong>,</p>
+            
+            <div class="message-box">
+                <h2>{{MessageTitle}}</h2>
+                <p>{{MessageContent}}</p>
+            </div>
+            
+            {{#if ShowDetailsTable}}
+            <table class="info-table">
+                <tr>
+                    <td>Employee:</td>
+                    <td><strong>{{EmployeeName}}</strong></td>
+                </tr>
+                {{#if Action}}
+                <tr>
+                    <td>Action:</td>
+                    <td><span class="badge {{ActionBadgeClass}}">{{Action}}</span></td>
+                </tr>
+                {{/if}}
+                {{#if Role}}
+                <tr>
+                    <td>Role:</td>
+                    <td>{{Role}}</td>
+                </tr>
+                {{/if}}
+                {{#if EvaluationId}}
+                <tr>
+                    <td>Evaluation ID:</td>
+                    <td>#{{EvaluationId}}</td>
+                </tr>
+                {{/if}}
+                {{#if Comment}}
+                <tr>
+                    <td>Comment:</td>
+                    <td><em>{{Comment}}</em></td>
+                </tr>
+                {{/if}}
+                {{#if NextStep}}
+                <tr>
+                    <td>Next Step:</td>
+                    <td>{{NextStep}}</td>
+                </tr>
+                {{/if}}
+            </table>
+            {{/if}}
+            
+            {{#if ActionUrl}}
+            <div style="text-align: center;">
+                <a href="{{ActionUrl}}" class="action-button">
+                    {{ActionButtonText}}
+                </a>
+            </div>
+            {{/if}}
+            
+            <p style="margin-top: 30px; color: #666; font-size: 14px;">
+                {{AdditionalMessage}}
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p><strong>Employee Performance Evaluation and Competency Progression System</strong></p>
+            <p>This is an automated email. Please do not reply to this message.</p>
+            <p>If you have questions, please contact your HR department.</p>
+        </div>
+    </div>
+</body>
+</html>

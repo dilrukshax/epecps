@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using Microsoft.EntityFrameworkCore;
 using Epecps.Infrastructure.Persistence;
 using Epecps.Application.Interfaces;
+using Epecps.Application.Models;
 using Epecps.Infrastructure.Services;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -14,12 +15,19 @@ var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
 var config = builder.Configuration;
 
+// Email Settings Configuration
+services.Configure<EmailSettings>(config.GetSection("EmailSettings"));
+
 // Database Context
 services.AddDbContext<EpecpsDbContext>(options =>
     options.UseSqlServer(config.GetConnectionString("DefaultConnection")));
 
 // Database Seeder
 services.AddScoped<Epecps.Infrastructure.Data.DatabaseSeeder>();
+
+// Email Services
+services.AddScoped<IEmailService, EmailService>();
+services.AddHostedService<EmailBackgroundService>();
 
 // Admin Framework Services
 services.AddScoped<IScoreTemplateService, ScoreTemplateService>();
