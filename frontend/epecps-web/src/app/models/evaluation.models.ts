@@ -144,3 +144,46 @@ export interface PromotionDecisionDto {
   approve: boolean;
   comment?: string;
 }
+
+// ====== NEW: Goal Action DTOs for RM-first flow ======
+
+/**
+ * Request DTO for starting a goal (after RM approval)
+ */
+export interface StartGoalRequestDto {
+  // Empty - no additional data required to start a goal
+}
+
+/**
+ * Request DTO for completing a goal
+ */
+export interface CompleteGoalRequestDto {
+  evidenceUrl?: string;
+  comment?: string;
+  currentScore?: number;
+}
+
+/**
+ * Response DTO for goal start/complete actions
+ */
+export interface GoalActionResponseDto {
+  goalId: string;
+  status: string;
+  message: string;
+  workflowContinued: boolean;
+  evaluationId?: number;
+  evaluationStatus?: string;
+}
+
+/**
+ * Extended Goal DTO with RM-first flow status information
+ */
+export interface GoalDetailWithStatusDto extends GoalDto {
+  status: string; // PersonalGoalStatus as string
+  startedAt?: Date;
+  completedAt?: Date;
+  completionComment?: string;
+  completionEvidenceUrl?: string;
+  canStart: boolean;
+  canComplete: boolean;
+}

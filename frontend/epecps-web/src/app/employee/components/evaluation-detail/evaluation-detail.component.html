@@ -110,6 +110,60 @@
                     </a>
                   </div>
                 </div>
+
+                <!-- Goal Action Buttons (for goal owner) -->
+                <div *ngIf="isGoalOwner" class="flex flex-col space-y-2 ml-4">
+                  <!-- Start Button -->
+                  <button 
+                    *ngIf="canStartGoal(goal)"
+                    (click)="startGoal(goal)"
+                    [disabled]="isStartingGoal(goal.goalId)"
+                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    <svg 
+                      *ngIf="!isStartingGoal(goal.goalId)"
+                      class="-ml-1 mr-2 h-4 w-4" 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <svg 
+                      *ngIf="isStartingGoal(goal.goalId)"
+                      class="animate-spin -ml-1 mr-2 h-4 w-4" 
+                      fill="none" 
+                      viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {{ isStartingGoal(goal.goalId) ? 'Starting...' : 'Start' }}
+                  </button>
+
+                  <!-- Complete Button -->
+                  <button 
+                    *ngIf="canCompleteGoal(goal)"
+                    (click)="openCompleteGoalModal(goal)"
+                    [disabled]="isCompletingGoal(goal.goalId)"
+                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    <svg 
+                      *ngIf="!isCompletingGoal(goal.goalId)"
+                      class="-ml-1 mr-2 h-4 w-4" 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <svg 
+                      *ngIf="isCompletingGoal(goal.goalId)"
+                      class="animate-spin -ml-1 mr-2 h-4 w-4" 
+                      fill="none" 
+                      viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {{ isCompletingGoal(goal.goalId) ? 'Completing...' : 'Complete' }}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -267,14 +321,35 @@
                     <div>
                       <span class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white"
                             [ngClass]="{
-                              'bg-green-500': item.action.toLowerCase().includes('approved') || item.action.toLowerCase().includes('recommended') || item.action.toLowerCase().includes('processed'),
-                              'bg-red-500': item.action.toLowerCase().includes('rejected'),
-                              'bg-blue-500': item.action.toLowerCase().includes('submitted')
+                              'bg-green-500': item.action.toLowerCase().includes('approved') || item.action.toLowerCase().includes('recommended') || item.action.toLowerCase().includes('processed') || item.action.toLowerCase().includes('completed'),
+                              'bg-red-500': item.action.toLowerCase().includes('rejected') || item.action.toLowerCase().includes('returned'),
+                              'bg-blue-500': item.action.toLowerCase().includes('submitted'),
+                              'bg-teal-500': item.action.toLowerCase().includes('started'),
+                              'bg-purple-500': item.action.toLowerCase().includes('workflow')
                             }">
-                        <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path *ngIf="item.action.toLowerCase().includes('approved') || item.action.toLowerCase().includes('recommended') || item.action.toLowerCase().includes('processed')" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                          <path *ngIf="item.action.toLowerCase().includes('rejected')" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                          <path *ngIf="item.action.toLowerCase().includes('submitted')" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                        <!-- Started Icon -->
+                        <svg *ngIf="item.action.toLowerCase().includes('started')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        </svg>
+                        <!-- Completed Icon -->
+                        <svg *ngIf="item.action.toLowerCase().includes('completed') && !item.action.toLowerCase().includes('workflow')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <!-- Workflow Icon -->
+                        <svg *ngIf="item.action.toLowerCase().includes('workflow')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <!-- Approved Icon -->
+                        <svg *ngIf="(item.action.toLowerCase().includes('approved') || item.action.toLowerCase().includes('recommended') || item.action.toLowerCase().includes('processed')) && !item.action.toLowerCase().includes('completed')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <!-- Rejected/Returned Icon -->
+                        <svg *ngIf="item.action.toLowerCase().includes('rejected') || item.action.toLowerCase().includes('returned')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <!-- Submitted Icon -->
+                        <svg *ngIf="item.action.toLowerCase().includes('submitted')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
                         </svg>
                       </span>
                     </div>
@@ -770,4 +845,95 @@
       </div>
     </div>
   </main>
-</div>
+
+  <!-- Complete Goal Modal -->
+  <div 
+    *ngIf="showCompleteGoalModal"
+    class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-50">
+    <div class="fixed inset-0 z-50 overflow-y-auto">
+      <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+        <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+          <!-- Modal Header -->
+          <div class="bg-green-50 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border-b border-green-200">
+            <div class="flex items-center">
+              <div class="flex-shrink-0 h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="ml-4">
+                <h3 class="text-lg font-semibold text-gray-900">Complete Goal</h3>
+                <p class="text-sm text-gray-500">{{ completeModalGoal?.title }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
+            <div class="space-y-4">
+              <!-- Evidence URL Input -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Evidence URL <span class="text-gray-500">(optional)</span>
+                </label>
+                <input 
+                  type="url"
+                  [(ngModel)]="completeFormEvidenceUrl"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="https://...">
+                <p class="text-xs text-gray-500 mt-1">Link to supporting documentation or proof of completion</p>
+              </div>
+
+              <!-- Comment Input -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Completion Comment <span class="text-gray-500">(optional)</span>
+                </label>
+                <textarea 
+                  [(ngModel)]="completeFormComment"
+                  rows="3"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Describe how you achieved this goal..."></textarea>
+              </div>
+
+              <!-- Info Box -->
+              <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+                <div class="flex">
+                  <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p class="ml-3 text-sm text-blue-700">
+                    Once all goals are completed, the evaluation will automatically advance to the next review stage.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 border-t">
+            <button 
+              (click)="confirmCompleteGoal()"
+              [disabled]="completingGoalId !== null"
+              class="inline-flex w-full justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 sm:ml-3 sm:w-auto disabled:bg-gray-400 disabled:cursor-not-allowed">
+              <svg 
+                *ngIf="completingGoalId"
+                class="animate-spin -ml-1 mr-2 h-4 w-4" 
+                fill="none" 
+                viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ completingGoalId ? 'Completing...' : 'Complete Goal' }}
+            </button>
+            <button 
+              (click)="closeCompleteGoalModal()"
+              [disabled]="completingGoalId !== null"
+              class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto disabled:bg-gray-100 disabled:cursor-not-allowed">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

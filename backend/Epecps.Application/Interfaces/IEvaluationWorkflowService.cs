@@ -11,6 +11,7 @@ public interface IEvaluationWorkflowService
     /// <summary>
     /// Start a new evaluation for a submitted goal set
     /// Creates evaluation record, self-review, initial RM review, and approval history
+    /// Status will be set to PENDING_RM_REVIEW
     /// </summary>
     /// <param name="employeeId">The employee submitting the goals</param>
     /// <param name="goalSetId">The goal set ID to evaluate</param>
@@ -21,6 +22,7 @@ public interface IEvaluationWorkflowService
 
     /// <summary>
     /// Approve the current stage of the evaluation and move to the next stage
+    /// For RM: transitions to APPROVED_BY_RM and notifies employee to start goals
     /// </summary>
     /// <param name="evaluationId">The evaluation ID</param>
     /// <param name="actorUserId">The user performing the approval</param>
@@ -30,12 +32,22 @@ public interface IEvaluationWorkflowService
 
     /// <summary>
     /// Reject the evaluation and return it to the employee
+    /// For RM: transitions to RETURNED_TO_EMPLOYEE
     /// </summary>
     /// <param name="evaluationId">The evaluation ID</param>
     /// <param name="actorUserId">The user performing the rejection</param>
     /// <param name="comment">Required comment explaining the rejection</param>
     /// <param name="cancellationToken">Cancellation token</param>
     Task RejectAsync(int evaluationId, int actorUserId, string comment, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Continue the workflow after employee has completed all goals
+    /// Creates TL review and/or Peer assignments, moves to next stage
+    /// </summary>
+    /// <param name="evaluationId">The evaluation ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The updated evaluation</returns>
+    Task<Evaluation> ContinueWorkflowAfterEmployeeCompletionAsync(int evaluationId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Assign peer reviewers (Team Lead only, during TL review stage)

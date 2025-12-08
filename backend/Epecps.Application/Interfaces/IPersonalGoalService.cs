@@ -50,8 +50,31 @@ public interface IPersonalGoalService
 
     /// <summary>
     /// Submit a goal set for evaluation (starts the approval workflow)
+    /// Creates an evaluation in PENDING_RM_REVIEW status
     /// </summary>
     Task<SubmitGoalSetResponseDto> SubmitGoalSetForEvaluationAsync(Guid goalSetId, int userId, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Start working on a goal after RM approval
+    /// Goal must be in ApprovedByRM status
+    /// </summary>
+    /// <param name="goalId">The goal to start</param>
+    /// <param name="userId">The authenticated user (must be goal owner)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Response with updated goal status</returns>
+    Task<GoalActionResponseDto> StartGoalAsync(Guid goalId, int userId, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Mark a goal as completed
+    /// Goal must be in InProgress status
+    /// If all goals in the evaluation are completed, triggers the workflow to continue
+    /// </summary>
+    /// <param name="goalId">The goal to complete</param>
+    /// <param name="userId">The authenticated user (must be goal owner)</param>
+    /// <param name="dto">Optional completion details (evidence, comment, score)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Response with updated goal status and workflow continuation info</returns>
+    Task<GoalActionResponseDto> CompleteGoalAsync(Guid goalId, int userId, CompleteGoalRequestDto? dto, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Recalculate goal score based on completed activities

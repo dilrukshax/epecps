@@ -135,6 +135,59 @@ public class EmployeeGoalsController : ControllerBase
     }
 
     /// <summary>
+    /// Start working on a goal after RM approval
+    /// Goal must be in ApprovedByRM status
+    /// </summary>
+    [HttpPost("{id}/start")]
+    public async Task<IActionResult> StartGoal(
+        Guid id,
+        [FromBody] StartGoalRequestDto? dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var result = await _personalGoalService.StartGoalAsync(id, userId, cancellationToken);
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Mark a goal as completed
+    /// Goal must be in InProgress status
+    /// If all goals in the evaluation are completed, triggers workflow continuation to TL review
+    /// </summary>
+    [HttpPost("{id}/complete")]
+    public async Task<IActionResult> CompleteGoal(
+        Guid id,
+        [FromBody] CompleteGoalRequestDto? dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var result = await _personalGoalService.CompleteGoalAsync(id, userId, dto, cancellationToken);
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Add a new activity to a personal goal
     /// </summary>
     [HttpPost("{id}/activities")]
@@ -250,17 +303,28 @@ public class EmployeeGoalsController : ControllerBase
     }
 
     /// <summary>
-    /// Submit a goal set for evaluation (starts the approval workflow)
-    /// All goals in the set must be completed (100%) before submission
+    /// Submit a goal set for RM review (starts the approval workflow)
+    /// Goals do not need to be completed - they can be submitted in Draft status
     /// </summary>
     [HttpPost("sets/{goalSetId}/submit-for-evaluation")]
     public async Task<IActionResult> SubmitGoalSetForEvaluation(
         Guid goalSetId,
         CancellationToken cancellationToken)
     {
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        var result = await _personalGoalService.SubmitGoalSetForEvaluationAsync(goalSetId, userId, cancellationToken);
-        return Ok(result);
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var result = await _personalGoalService.SubmitGoalSetForEvaluationAsync(goalSetId, userId, cancellationToken);
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     /// <summary>

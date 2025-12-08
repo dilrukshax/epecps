@@ -60,6 +60,16 @@ public class PersonalGoal
     /// </summary>
     public decimal CurrentScore { get; set; } = 0;
     
+    /// <summary>
+    /// When the employee started working on this goal (after RM approval)
+    /// </summary>
+    public DateTime? StartedAt { get; set; }
+    
+    /// <summary>
+    /// When the employee marked this goal as completed
+    /// </summary>
+    public DateTime? CompletedAt { get; set; }
+    
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 

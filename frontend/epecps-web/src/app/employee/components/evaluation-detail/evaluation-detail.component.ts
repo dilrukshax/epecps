@@ -1,11 +1,14 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { MsalService } from '@azure/msal-angular';
 import { EvaluationService } from '../../../services/evaluation.service';
 import {
   EvaluationDetailDto,
   ReviewDto,
   ApprovalHistoryItemDto,
-  ReviewerRole
+  ReviewerRole,
+  GoalDto,
+  CompleteGoalRequestDto
 } from '../../../models/evaluation.models';
 
 @Component({
@@ -60,12 +63,26 @@ export class EvaluationDetailComponent implements OnInit {
   needsPeerAssignment = false;
   userRoles: string[] = []; // Store all user roles
 
+  // ====== NEW: Employee Goal Actions State ======
+  isGoalOwner = false;
+  canPerformGoalActions = false;
+  startingGoalId: string | null = null;
+  completingGoalId: string | null = null;
+  
+  // Complete goal modal state
+  showCompleteGoalModal = false;
+  completeModalGoal: GoalDto | null = null;
+  completeFormEvidenceUrl = '';
+  completeFormComment = '';
+  completeFormCurrentScore: number | null = null;
+
   ReviewerRole = ReviewerRole;
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private evaluationService: EvaluationService
+    private evaluationService: EvaluationService,
+    private authService: MsalService
   ) {}
 
   ngOnInit(): void {
@@ -83,6 +100,7 @@ export class EvaluationDetailComponent implements OnInit {
       next: (evaluation) => {
         this.evaluation = evaluation;
         this.determineUserRole();
+        this.determineGoalOwnership();
         this.loading = false;
       },
       error: (err) => {
@@ -121,17 +139,17 @@ export class EvaluationDetailComponent implements OnInit {
     // Determine active approver role
     if (status.includes('pending_hod')) {
       // HOD stage - only show HOD promotion panel
-      this.isActiveApprover = false; // Don't show generic approve/reject
+      this.isActiveApprover = false;
       this.showHodActions = true;
       this.currentUserRole = 'HOD';
     } else if (status.includes('pending_gm')) {
       // GM stage - only show GM decision panel
-      this.isActiveApprover = false; // Don't show generic approve/reject
+      this.isActiveApprover = false;
       this.showGmActions = true;
       this.currentUserRole = 'GM';
     } else if (status.includes('pending_hr')) {
       // HR stage - only show HR processing panel
-      this.isActiveApprover = false; // Don't show generic approve/reject
+      this.isActiveApprover = false;
       this.showHrActions = true;
       this.currentUserRole = 'HR';
     } else if (status.includes('pending_rm')) {
@@ -297,6 +315,149 @@ export class EvaluationDetailComponent implements OnInit {
         console.error('Error rejecting evaluation:', err);
       }
     });
+  }
+
+  /** 
+   * Determine if current user is the goal owner and can perform start/complete actions
+   */
+  determineGoalOwnership(): void {
+    if (!this.evaluation) return;
+
+    // Get current user email from MSAL
+    const account = this.authService.instance.getActiveAccount();
+    const currentUserEmail = account?.username?.toLowerCase() || '';
+    
+    // Check if current user is the employee of this evaluation
+    this.isGoalOwner = this.evaluation.employeeEmail?.toLowerCase() === currentUserEmail;
+    
+    // Check if status allows goal actions (ApprovedByRM or similar)
+    const status = this.evaluation.status.toLowerCase();
+    this.canPerformGoalActions = this.isGoalOwner && (
+      status.includes('approved_by_rm') ||
+      status.includes('approvedby') ||
+      status === 'approved_by_rm' ||
+      status === 'approvedbyrm'
+    );
+  }
+
+  // ====== NEW: Goal Action Helpers ======
+
+  /**
+   * Check if a specific goal can be started (must be ApprovedByRM status)
+   */
+  canStartGoal(goal: any): boolean {
+    if (!this.isGoalOwner) return false;
+    // Check goal status if available, otherwise check evaluation status
+    const goalStatus = goal.status?.toLowerCase() || '';
+    const evalStatus = this.evaluation?.status?.toLowerCase() || '';
+    return goalStatus.includes('approved') || evalStatus.includes('approved_by_rm');
+  }
+
+  /**
+   * Check if a specific goal can be completed (must be InProgress status)
+   */
+  canCompleteGoal(goal: any): boolean {
+    if (!this.isGoalOwner) return false;
+    const goalStatus = goal.status?.toLowerCase() || '';
+    return goalStatus.includes('inprogress') || goalStatus === 'in_progress';
+  }
+
+  /**
+   * Start working on a goal
+   */
+  startGoal(goal: GoalDto): void {
+    if (!confirm(`Start working on "${goal.title}"?`)) return;
+
+    this.startingGoalId = goal.goalId.toString();
+
+    this.evaluationService.startGoal(goal.goalId.toString()).subscribe({
+      next: (response) => {
+        this.showToast('success', response.message || 'Goal started successfully!');
+        this.startingGoalId = null;
+        this.loadEvaluation(); // Refresh to show updated status
+      },
+      error: (err) => {
+        this.startingGoalId = null;
+        const errorMessage = err.error?.error || 'Failed to start goal. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error starting goal:', err);
+      }
+    });
+  }
+
+  /**
+   * Open complete goal modal
+   */
+  openCompleteGoalModal(goal: GoalDto): void {
+    this.completeModalGoal = goal;
+    this.completeFormEvidenceUrl = '';
+    this.completeFormComment = '';
+    this.completeFormCurrentScore = null;
+    this.showCompleteGoalModal = true;
+  }
+
+  /**
+   * Close complete goal modal
+   */
+  closeCompleteGoalModal(): void {
+    this.showCompleteGoalModal = false;
+    this.completeModalGoal = null;
+    this.completeFormEvidenceUrl = '';
+    this.completeFormComment = '';
+    this.completeFormCurrentScore = null;
+  }
+
+  /**
+   * Submit goal completion
+   */
+  confirmCompleteGoal(): void {
+    if (!this.completeModalGoal) return;
+
+    const payload: CompleteGoalRequestDto = {};
+    if (this.completeFormEvidenceUrl.trim()) {
+      payload.evidenceUrl = this.completeFormEvidenceUrl.trim();
+    }
+    if (this.completeFormComment.trim()) {
+      payload.comment = this.completeFormComment.trim();
+    }
+    if (this.completeFormCurrentScore !== null) {
+      payload.currentScore = this.completeFormCurrentScore;
+    }
+
+    this.completingGoalId = this.completeModalGoal.goalId.toString();
+
+    this.evaluationService.completeGoal(this.completeModalGoal.goalId.toString(), payload).subscribe({
+      next: (response) => {
+        let message = response.message || 'Goal completed successfully!';
+        if (response.workflowContinued) {
+          message = 'All goals completed! The evaluation has been forwarded for further review.';
+        }
+        this.showToast('success', message);
+        this.completingGoalId = null;
+        this.closeCompleteGoalModal();
+        this.loadEvaluation(); // Refresh to show updated evaluation status
+      },
+      error: (err) => {
+        this.completingGoalId = null;
+        const errorMessage = err.error?.error || 'Failed to complete goal. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error completing goal:', err);
+      }
+    });
+  }
+
+  /**
+   * Check if a goal is currently being started
+   */
+  isStartingGoal(goalId: number): boolean {
+    return this.startingGoalId === goalId.toString();
+  }
+
+  /**
+   * Check if a goal is currently being completed
+   */
+  isCompletingGoal(goalId: number): boolean {
+    return this.completingGoalId === goalId.toString();
   }
 
   getReviewsByRole(role: ReviewerRole): ReviewDto[] {

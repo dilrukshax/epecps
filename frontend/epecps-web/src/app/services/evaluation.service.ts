@@ -10,7 +10,9 @@ import {
   AssignPeersDto,
   PromotionDecisionDto,
   AvailablePeerDto,
-  MyEvaluationDto
+  MyEvaluationDto,
+  GoalActionResponseDto,
+  CompleteGoalRequestDto
 } from '../models/evaluation.models';
 
 @Injectable({
@@ -153,5 +155,41 @@ export class EvaluationService {
       `${this.apiUrl}/api/evaluations/${evaluationId}/hr/process`,
       body
     );
+  }
+
+  // ====== NEW: Goal Start/Complete Methods for RM-first flow ======
+
+  /**
+   * Start working on a goal after RM approval
+   * Goal must be in ApprovedByRM status
+   * @param goalId The GUID of the goal to start
+   */
+  startGoal(goalId: string): Observable<GoalActionResponseDto> {
+    return this.http.post<GoalActionResponseDto>(
+      `${this.apiUrl}/api/employee-goals/${goalId}/start`,
+      {}
+    );
+  }
+
+  /**
+   * Mark a goal as completed
+   * Goal must be in InProgress status
+   * If all goals in the evaluation are completed, triggers workflow continuation
+   * @param goalId The GUID of the goal to complete
+   * @param payload Optional evidence URL and comment
+   */
+  completeGoal(goalId: string, payload?: CompleteGoalRequestDto): Observable<GoalActionResponseDto> {
+    return this.http.post<GoalActionResponseDto>(
+      `${this.apiUrl}/api/employee-goals/${goalId}/complete`,
+      payload || {}
+    );
+  }
+
+  /**
+   * Refresh evaluation detail after goal actions
+   * Useful for updating UI state after start/complete
+   */
+  refreshEvaluationDetail(evaluationId: number): Observable<EvaluationDetailDto> {
+    return this.getEvaluationDetail(evaluationId);
   }
 }
