@@ -387,9 +387,10 @@ export class EvaluationDetailComponent implements OnInit {
 
     // Determine active approver role
     if (status.includes('pending_hod')) {
-      // HOD stage - only show HOD promotion panel
-      this.isActiveApprover = false;
-      this.showHodActions = true;
+      // ✅ FIXED: HOD should have approval buttons like other approvers
+      // HOD has two options: approve without promotion, or recommend for promotion
+      this.isActiveApprover = true;
+      this.showHodActions = false; // We'll use the standard approval panel instead
       this.currentUserRole = 'HOD';
     } else if (status.includes('pending_gm')) {
       // GM stage - only show GM decision panel
@@ -549,12 +550,23 @@ export class EvaluationDetailComponent implements OnInit {
           return;
         }
       }
-      // Check if they are TL/Peer and have selected a score
-      else if ((this.currentUserRole === 'TL' || this.currentUserRole === 'Peer') && this.overallScore) {
+      // Check if they are TL/Peer/HOD and have selected a score
+      else if ((this.currentUserRole === 'TL' || this.currentUserRole === 'Peer' || this.currentUserRole === 'HOD') && this.overallScore) {
         // Submit score first, then approve
         this.submitScoresAndApprove();
         return;
       }
+    }
+
+    // ✅ NEW: For HOD, check if they want to recommend for promotion
+    if (this.currentUserRole === 'HOD' && this.evaluation.overallScore && this.evaluation.overallScore > 80) {
+      // Score is above 80 - ask if they want to recommend for promotion
+      if (confirm('This employee has scored above 80. Do you want to recommend them for promotion to GM?\n\nClick OK to recommend for promotion, or Cancel to just approve without promotion recommendation.')) {
+        // User chose to recommend for promotion
+        this.recommendPromotionToGm();
+        return;
+      }
+      // User chose not to recommend - just proceed with normal approval
     }
 
     // If no scoring requirement or scores already submitted, proceed with normal approval
@@ -615,7 +627,7 @@ export class EvaluationDetailComponent implements OnInit {
         }
       });
     }
-    else if (this.currentUserRole === 'TL' || this.currentUserRole === 'Peer') {
+    else if (this.currentUserRole === 'TL' || this.currentUserRole === 'Peer' || this.currentUserRole === 'HOD') {
       // Submit overall score
       const dto: SubmitOverallScoringDto = {
         overallScore: this.overallScore,
@@ -627,7 +639,18 @@ export class EvaluationDetailComponent implements OnInit {
       this.evaluationService.submitOverallScoring(this.evaluationId, this.pendingReviewId, dto).subscribe({
         next: (scoreResponse) => {
           console.log('Overall Score submitted:', scoreResponse);
-          // Now proceed with approval
+          
+          // ✅ NEW: For HOD, check if they should recommend for promotion
+          if (this.currentUserRole === 'HOD' && this.overallScore >= 8) {
+            // Score is 8+ (out of 10) - ask if they want to recommend for promotion
+            if (confirm('This employee has scored 8 or above. Do you want to recommend them for promotion to GM?\n\nClick OK to recommend for promotion, or Cancel to approve without promotion.')) {
+              // User chose to recommend for promotion
+              this.recommendPromotionToGm();
+              return;
+            }
+          }
+          
+          // Now proceed with approval (without promotion recommendation)
           this.proceedWithApproval();
         },
         error: (err) => {
@@ -903,7 +926,7 @@ export class EvaluationDetailComponent implements OnInit {
   getReviewStatusClass(status: string): string {
     const statusLower = status.toLowerCase();
     if (statusLower === 'completed' || statusLower === 'approved') return 'bg-green-100 text-green-800';
-    if (statusLower === 'pending') return 'bg-yellow-100 text-yellow-800';
+    if (statusLower === 'pending' ) return 'bg-yellow-100 text-yellow-800';
     if (statusLower === 'rejected') return 'bg-red-100 text-red-800';
     return 'bg-gray-100 text-gray-800';
   }
@@ -1203,7 +1226,7 @@ export class EvaluationDetailComponent implements OnInit {
     }
     
     if (pendingReview.reviewerRole === ReviewerRole.HOD) {
-      return 'Please provide your HOD score (1-10). You must submit your score before approving.';
+      return 'Please provide your HOD evaluation score (1-10). You can then approve without promotion, or recommend for promotion to GM.';
     }
     
     if (pendingReview.reviewerRole === ReviewerRole.GM) {
