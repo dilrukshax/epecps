@@ -64,8 +64,22 @@ export interface ReviewDto {
   reviewerRole: ReviewerRole;
   status: string;
   overallComment?: string;
+  overallScore?: number;  // Added: overall score for the review
   submittedAt?: Date;
   items: ReviewItemDto[];
+  scores?: ReviewScoreDto[];  // Added: scores collection
+}
+
+export interface ReviewScoreDto {
+  id: number;
+  evaluationId: number;
+  reviewId: number;
+  reviewerId: number;
+  personalGoalId?: string;
+  goalTitle?: string;
+  scoreValue: number;
+  comment?: string;
+  createdAt: Date;
 }
 
 export interface ReviewItemDto {
@@ -84,6 +98,7 @@ export interface GoalDto {
   description: string;
   weightPct: number;
   evidenceUri?: string;
+  personalGoalId?: string;  // Added: PersonalGoal GUID for linking
 }
 
 export interface ApprovalHistoryItemDto {
@@ -116,13 +131,15 @@ export interface PromotionCaseDto {
   decisionReason?: string;
 }
 
+// ReviewerRole enum - matches backend enum values (C# enum starts at 0)
+// Backend: Self=0, Peer=1, TL=2, RM=3, HOD=4, GM=5
 export enum ReviewerRole {
-  Self = 'Self',
-  Peer = 'Peer',
-  TL = 'TL',
-  RM = 'RM',
-  HOD = 'HOD',
-  GM = 'GM'
+  Self = 0,
+  Peer = 1,
+  TL = 2,
+  RM = 3,
+  HOD = 4,
+  GM = 5
 }
 
 export enum PromotionDecision {
@@ -173,6 +190,44 @@ export interface GoalActionResponseDto {
   workflowContinued: boolean;
   evaluationId?: number;
   evaluationStatus?: string;
+}
+
+// ====== Review Scoring DTOs ======
+
+/**
+ * DTO for submitting RM item-level scores (score per goal)
+ */
+export interface SubmitRmScoringDto {
+  itemScores: RmItemScoreDto[];
+  overallComment?: string;
+}
+
+/**
+ * Individual goal score for RM review
+ */
+export interface RmItemScoreDto {
+  personalGoalId: string;
+  scoreValue: number;  // 1-10
+  comment?: string;
+}
+
+/**
+ * DTO for submitting TL/HOD/GM overall score
+ */
+export interface SubmitOverallScoringDto {
+  overallScore: number;  // 1-10
+  comment?: string;
+}
+
+/**
+ * Response DTO after submitting scores
+ */
+export interface ReviewScoringResponseDto {
+  reviewId: number;
+  evaluationId: number;
+  message: string;
+  calculatedScore: number;
+  evaluationStatus: string;
 }
 
 /**

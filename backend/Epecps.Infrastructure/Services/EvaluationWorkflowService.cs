@@ -108,6 +108,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             var employeeGoal = new EmployeeGoal
             {
                 EvaluationId = evaluation.EvaluationId,
+                PersonalGoalId = personalGoal.Id, // ? Set the PersonalGoalId for proper mapping
                 Title = personalGoal.Title,
                 Description = personalGoal.Description ?? string.Empty,
                 WeightPct = 100m / personalGoals.Count,
@@ -1529,6 +1530,9 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .Include(e => e.Reviews)
                 .ThenInclude(r => r.Reviewer)
             .Include(e => e.Reviews)
+                .ThenInclude(r => r.ReviewScores)
+                    .ThenInclude(rs => rs.PersonalGoal)
+            .Include(e => e.Reviews)
                 .ThenInclude(r => r.ReviewItems)
                     .ThenInclude(ri => ri.Goal)
             .Include(e => e.Reviews)
@@ -1569,7 +1573,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             {
                 Id = ah.Id,
                 ActorUserId = ah.ActorUserId,
-                ActorName = ah.ActorUser.FullName,
+                ActorName = ah.ActorUser != null ? ah.ActorUser.FullName : "Unknown",
                 ActorRole = ah.ActorRole,
                 Action = ah.Action,
                 Comment = ah.Comment,
@@ -1583,24 +1587,25 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         {
             EvaluationId = evaluation.EvaluationId,
             CycleId = evaluation.CycleId,
-            CycleName = evaluation.Cycle.Name,
+            CycleName = evaluation.Cycle?.Name ?? string.Empty,
             EmployeeId = evaluation.EmployeeId,
-            EmployeeName = evaluation.Employee.FullName,
-            EmployeeEmail = evaluation.Employee.Email,
+            EmployeeName = evaluation.Employee?.FullName ?? string.Empty,
+            EmployeeEmail = evaluation.Employee?.Email ?? string.Empty,
             ReportingManagerId = evaluation.ReportingManagerId,
-            ReportingManagerName = evaluation.ReportingManager.FullName,
+            ReportingManagerName = evaluation.ReportingManager?.FullName ?? string.Empty,
             TeamLeadId = evaluation.TeamLeadId,
-            TeamLeadName = evaluation.TeamLead.FullName,
+            TeamLeadName = evaluation.TeamLead?.FullName ?? string.Empty,
             Status = evaluation.Status,
             OverallScore = evaluation.OverallScore,
             Reviews = evaluation.Reviews.Select(r => new ReviewDto
             {
                 ReviewId = r.ReviewId,
                 ReviewerUserId = r.ReviewerUserId,
-                ReviewerName = r.Reviewer.FullName,
+                ReviewerName = r.Reviewer?.FullName ?? string.Empty,
                 ReviewerRole = r.ReviewerRole,
                 Status = r.Status,
                 OverallComment = r.OverallComment,
+                OverallScore = r.OverallScore,
                 SubmittedAt = r.SubmittedAt,
                 Items = r.ReviewItems.Select(ri => new ReviewItemDto
                 {
@@ -1611,22 +1616,37 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     CompetencyName = ri.Competency?.Name,
                     RatingValue = ri.RatingValue,
                     Comment = ri.Comment
+                }).ToList(),
+                // Populate the Scores from ReviewScores collection with GoalTitle
+                Scores = r.ReviewScores.Select(rs => new ReviewScoreDto
+                {
+                    Id = rs.Id,
+                    EvaluationId = rs.EvaluationId,
+                    ReviewId = rs.ReviewId,
+                    ReviewerId = rs.ReviewerId,
+                    PersonalGoalId = rs.PersonalGoalId,
+                    GoalTitle = rs.PersonalGoal?.Title ?? "Unknown Goal",
+                    ScoreValue = rs.ScoreValue,
+                    Comment = rs.Comment,
+                    CreatedAt = rs.CreatedAt
                 }).ToList()
             }).ToList(),
+            // Map EmployeeGoals to GoalDto with PersonalGoalId already stored
             Goals = evaluation.EmployeeGoals.Select(g => new GoalDto
             {
                 GoalId = g.GoalId,
                 Title = g.Title,
                 Description = g.Description,
                 WeightPct = g.WeightPct,
-                EvidenceUri = g.EvidenceUri
+                EvidenceUri = g.EvidenceUri,
+                PersonalGoalId = g.PersonalGoalId // ? Use the PersonalGoalId from EmployeeGoal
             }).ToList(),
             ApprovalHistory = approvalHistory,
             PeerAssignments = evaluation.PeerAssignments.Select(pa => new PeerAssignmentDto
             {
                 PeerAssignmentId = pa.PeerAssignmentId,
                 PeerUserId = pa.PeerUserId,
-                PeerName = pa.PeerUser.FullName
+                PeerName = pa.PeerUser?.FullName ?? string.Empty
             }).ToList(),
             PromotionCase = evaluation.PromotionCases.FirstOrDefault() != null
                 ? new PromotionCaseDto
@@ -1772,8 +1792,8 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             EntityType = "PromotionCase",
             EntityId = promotionCase.PromotionCaseId,
             Action = approve ? "PROMOTION_APPROVED_GM" : "PROMOTION_REJECTED_GM",
-            BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { Decision = PromotionDecision.Pending }),
-            AfterJson = System.Text.Json.JsonSerializer.Serialize(new { promotionCase.GmDecision, Comment = comment }),
+            BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { Status = oldStatus }),
+            AfterJson = System.Text.Json.JsonSerializer.Serialize(new { Status = evaluation.Status }),
             CreatedAt = DateTime.UtcNow
         };
 
@@ -1882,7 +1902,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     evaluation.Employee.FullName,
                     "Pending",
                     "GM",
-                    $"HOD has recommended this employee for promotion. Please make your decision. Comment: {comment}",
+                    "HOD has recommended this employee for promotion. Please make your decision.",
                     evaluationId,
                     cancellationToken);
             }

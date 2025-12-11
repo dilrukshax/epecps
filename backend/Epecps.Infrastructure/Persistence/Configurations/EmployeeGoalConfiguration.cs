@@ -19,5 +19,12 @@ public class EmployeeGoalConfiguration : IEntityTypeConfiguration<EmployeeGoal>
             .WithMany(e => e.EmployeeGoals)
             .HasForeignKey(eg => eg.EvaluationId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(eg => eg.PersonalGoal)
+            .WithMany()
+            .HasForeignKey(eg => eg.PersonalGoalId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(eg => eg.PersonalGoalId);
     }
 }

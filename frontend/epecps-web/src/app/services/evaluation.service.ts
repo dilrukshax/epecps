@@ -12,7 +12,10 @@ import {
   AvailablePeerDto,
   MyEvaluationDto,
   GoalActionResponseDto,
-  CompleteGoalRequestDto
+  CompleteGoalRequestDto,
+  SubmitRmScoringDto,
+  SubmitOverallScoringDto,
+  ReviewScoringResponseDto
 } from '../models/evaluation.models';
 
 @Injectable({
@@ -191,5 +194,33 @@ export class EvaluationService {
    */
   refreshEvaluationDetail(evaluationId: number): Observable<EvaluationDetailDto> {
     return this.getEvaluationDetail(evaluationId);
+  }
+
+  // ====== NEW: Review Scoring Methods ======
+
+  /**
+   * Submit RM review scores (item-level scores for each goal)
+   * @param evaluationId The evaluation ID
+   * @param reviewId The review ID for the RM review
+   * @param payload Item-level scores for each goal
+   */
+  submitRmScoring(evaluationId: number, reviewId: number, payload: SubmitRmScoringDto): Observable<ReviewScoringResponseDto> {
+    return this.http.post<ReviewScoringResponseDto>(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/reviews/${reviewId}/rm-scores`,
+      payload
+    );
+  }
+
+  /**
+   * Submit overall review score (TL/Peer/HOD/GM)
+   * @param evaluationId The evaluation ID
+   * @param reviewId The review ID
+   * @param payload Overall score and comment
+   */
+  submitOverallScoring(evaluationId: number, reviewId: number, payload: SubmitOverallScoringDto): Observable<ReviewScoringResponseDto> {
+    return this.http.post<ReviewScoringResponseDto>(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/reviews/${reviewId}/overall-score`,
+      payload
+    );
   }
 }

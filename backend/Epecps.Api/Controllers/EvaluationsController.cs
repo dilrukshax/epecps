@@ -17,15 +17,18 @@ namespace Epecps.Api.Controllers;
 public class EvaluationsController : ControllerBase
 {
     private readonly IEvaluationWorkflowService _evaluationWorkflowService;
+    private readonly IReviewScoringService _reviewScoringService;
     private readonly IUserSyncService _userSyncService;
     private readonly IEmailService _emailService;
 
     public EvaluationsController(
         IEvaluationWorkflowService evaluationWorkflowService,
+        IReviewScoringService reviewScoringService,
         IUserSyncService userSyncService,
         IEmailService emailService)
     {
         _evaluationWorkflowService = evaluationWorkflowService;
+        _reviewScoringService = reviewScoringService;
         _userSyncService = userSyncService;
         _emailService = emailService;
     }
@@ -580,6 +583,88 @@ public class EvaluationsController : ControllerBase
             .AnyAsync(ur => ur.UserId == userId && ur.Role.Name == roleName, cancellationToken);
         
         return hasRole;
+    }
+
+    /// <summary>
+    /// Submit RM review scores (item-level scoring for each goal)
+    /// RM scores each goal individually on a 1-10 scale
+    /// </summary>
+    [HttpPost("{evaluationId}/reviews/{reviewId}/rm-scores")]
+    public async Task<IActionResult> SubmitRmReviewScoring(
+        int evaluationId,
+        int reviewId,
+        [FromBody] SubmitRmReviewScoringDto dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var result = await _reviewScoringService.SubmitRmReviewScoringAsync(
+                evaluationId,
+                reviewId,
+                userId,
+                dto,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to submit RM scores.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Submit overall review score (TL/Peer/HOD/GM)
+    /// These reviewers provide a single overall score (1-10) for the entire evaluation
+    /// </summary>
+    [HttpPost("{evaluationId}/reviews/{reviewId}/overall-score")]
+    public async Task<IActionResult> SubmitOverallReviewScoring(
+        int evaluationId,
+        int reviewId,
+        [FromBody] SubmitOverallReviewScoringDto dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var result = await _reviewScoringService.SubmitOverallReviewScoringAsync(
+                evaluationId,
+                reviewId,
+                userId,
+                dto,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to submit overall score.", details = ex.Message });
+        }
     }
 }
 

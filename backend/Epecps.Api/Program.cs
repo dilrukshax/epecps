@@ -41,6 +41,7 @@ services.AddScoped<IUserSyncService, UserSyncService>(); // Auto-sync users from
 
 // Evaluation Workflow Services
 services.AddScoped<IEvaluationWorkflowService, EvaluationWorkflowService>();
+services.AddScoped<IReviewScoringService, ReviewScoringService>();
 
 // FluentValidation
 services.AddFluentValidationAutoValidation();

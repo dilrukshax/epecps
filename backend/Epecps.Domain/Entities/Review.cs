@@ -8,10 +8,12 @@ public class Review
     public ReviewerRole ReviewerRole { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? OverallComment { get; set; }
+    public decimal? OverallScore { get; set; }
     public DateTime? SubmittedAt { get; set; }
 
     // Navigation properties
     public Evaluation Evaluation { get; set; } = null!;
     public User Reviewer { get; set; } = null!;
     public ICollection<ReviewItem> ReviewItems { get; set; } = new List<ReviewItem>();
+    public ICollection<ReviewScore> ReviewScores { get; set; } = new List<ReviewScore>();
 }

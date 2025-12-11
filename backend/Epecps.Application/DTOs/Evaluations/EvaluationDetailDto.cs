@@ -35,8 +35,10 @@ public class ReviewDto
     public ReviewerRole ReviewerRole { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? OverallComment { get; set; }
+    public decimal? OverallScore { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public List<ReviewItemDto> Items { get; set; } = new List<ReviewItemDto>();
+    public List<ReviewScoreDto> Scores { get; set; } = new List<ReviewScoreDto>();
 }
 
 public class ReviewItemDto
@@ -53,6 +55,7 @@ public class ReviewItemDto
 public class GoalDto
 {
     public int GoalId { get; set; }
+    public Guid? PersonalGoalId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal WeightPct { get; set; }

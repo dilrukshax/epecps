@@ -30,9 +30,7 @@
           <p class="text-sm text-red-800">{{ error }}</p>
         </div>
         <div class="ml-auto pl-3">
-          <button (click)="loadEvaluation()" class="text-sm font-medium text-red-800 hover:text-red-900">
-            Retry
-          </button>
+          <button (click)="loadEvaluation()" class="text-sm font-medium text-red-800 hover:text-red-900">Retry</button>
         </div>
       </div>
     </div>
@@ -47,14 +45,11 @@
               <h1 class="text-2xl font-bold text-gray-900">Employee Evaluation</h1>
               <p class="mt-1 text-sm text-gray-500">Evaluation ID: #{{ evaluation.evaluationId }}</p>
             </div>
-            <span 
-              class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
-              [ngClass]="getStatusBadgeClass(evaluation.status)">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" [ngClass]="getStatusBadgeClass(evaluation.status)">
               {{ getStatusLabel(evaluation.status) }}
             </span>
           </div>
         </div>
-
         <div class="px-6 py-5">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -62,22 +57,18 @@
               <p class="mt-1 text-lg font-semibold text-gray-900">{{ evaluation.employeeName }}</p>
               <p class="text-sm text-gray-600">{{ evaluation.employeeEmail }}</p>
             </div>
-
             <div>
               <h3 class="text-sm font-medium text-gray-500">Evaluation Cycle</h3>
               <p class="mt-1 text-lg font-semibold text-gray-900">{{ evaluation.cycleName }}</p>
             </div>
-
             <div>
               <h3 class="text-sm font-medium text-gray-500">Reporting Manager</h3>
               <p class="mt-1 text-base text-gray-900">{{ evaluation.reportingManagerName }}</p>
             </div>
-
             <div>
               <h3 class="text-sm font-medium text-gray-500">Team Lead</h3>
               <p class="mt-1 text-base text-gray-900">{{ evaluation.teamLeadName }}</p>
             </div>
-
             <div *ngIf="evaluation.overallScore">
               <h3 class="text-sm font-medium text-gray-500">Overall Score</h3>
               <p class="mt-1 text-2xl font-bold text-primary-600">{{ evaluation.overallScore | number:'1.2-2' }}</p>
@@ -93,220 +84,116 @@
         </div>
         <div class="px-6 py-5">
           <div class="space-y-4">
-            <div 
-              *ngFor="let goal of evaluation.goals"
-              class="border border-gray-200 rounded-lg p-4">
+            <div *ngFor="let goal of evaluation.goals" class="border border-gray-200 rounded-lg p-4">
               <div class="flex items-start justify-between">
                 <div class="flex-1">
                   <h3 class="text-lg font-semibold text-gray-900">{{ goal.title }}</h3>
                   <p class="mt-1 text-sm text-gray-600">{{ goal.description }}</p>
                   <div class="mt-2 flex items-center gap-4 text-sm">
                     <span class="text-gray-500">Weight: <span class="font-medium text-gray-900">{{ goal.weightPct }}%</span></span>
-                    <a *ngIf="goal.evidenceUri" [href]="goal.evidenceUri" target="_blank" class="text-primary-600 hover:text-primary-700 inline-flex items-center">
-                      <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      View Evidence
-                    </a>
                   </div>
                 </div>
-
-                <!-- Goal Action Buttons (for goal owner) -->
-                <div *ngIf="isGoalOwner" class="flex flex-col space-y-2 ml-4">
-                  <!-- Start Button -->
-                  <button 
-                    *ngIf="canStartGoal(goal)"
-                    (click)="startGoal(goal)"
-                    [disabled]="isStartingGoal(goal.goalId)"
-                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                    <svg 
-                      *ngIf="!isStartingGoal(goal.goalId)"
-                      class="-ml-1 mr-2 h-4 w-4" 
-                      fill="none" 
-                      viewBox="0 0 24 24" 
-                      stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <svg 
-                      *ngIf="isStartingGoal(goal.goalId)"
-                      class="animate-spin -ml-1 mr-2 h-4 w-4" 
-                      fill="none" 
-                      viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    {{ isStartingGoal(goal.goalId) ? 'Starting...' : 'Start' }}
-                  </button>
-
-                  <!-- Complete Button -->
-                  <button 
-                    *ngIf="canCompleteGoal(goal)"
-                    (click)="openCompleteGoalModal(goal)"
-                    [disabled]="isCompletingGoal(goal.goalId)"
-                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                    <svg 
-                      *ngIf="!isCompletingGoal(goal.goalId)"
-                      class="-ml-1 mr-2 h-4 w-4" 
-                      fill="none" 
-                      viewBox="0 0 24 24" 
-                      stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <svg 
-                      *ngIf="isCompletingGoal(goal.goalId)"
-                      class="animate-spin -ml-1 mr-2 h-4 w-4" 
-                      fill="none" 
-                      viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    {{ isCompletingGoal(goal.goalId) ? 'Completing...' : 'Complete' }}
-                  </button>
-                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Reviews Section -->
-      <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+      <!-- Reviews & Ratings Section -->
+      <div *ngIf="shouldShowReviewsSection()" class="bg-white shadow-lg rounded-lg overflow-hidden">
         <div class="px-6 py-5 border-b border-gray-200">
           <h2 class="text-xl font-bold text-gray-900">Reviews & Ratings</h2>
+          <p class="mt-1 text-sm text-gray-500">Click a number (1-10) to rate each evaluation item</p>
         </div>
         <div class="px-6 py-5">
-          <div class="space-y-6">
-            <!-- Self Review -->
-            <div *ngIf="getReviewsByRole(ReviewerRole.Self).length > 0">
-              <div *ngFor="let review of getReviewsByRole(ReviewerRole.Self)" class="border-l-4 border-blue-400 pl-4">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-lg font-semibold text-gray-900">{{ getRoleName(review.reviewerRole) }}</h3>
-                  <span 
-                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                    [ngClass]="getReviewStatusClass(review.status)">
-                    {{ review.status }}
+          <div *ngIf="evaluation.goals && evaluation.goals.length > 0; else noGoals" class="space-y-6">
+            <!-- Goal Rating Card -->
+            <div *ngFor="let goal of evaluation.goals; let i = index" class="border border-gray-200 rounded-lg p-6">
+              <div class="flex items-start gap-4 mb-4">
+                <div class="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                  <span class="text-lg font-bold text-indigo-600">{{ i + 1 }}</span>
+                </div>
+                <div class="flex-1">
+                  <h3 class="text-lg font-semibold text-gray-900">{{ goal.title }}</h3>
+                  <p class="mt-1 text-sm text-gray-600">{{ goal.description }}</p>
+                  <p class="mt-1 text-xs text-gray-500">Weight: {{ goal.weightPct }}%</p>
+                </div>
+              </div>
+
+              <!-- Score Selection -->
+              <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-3">Select Score:</label>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-gray-500">Poor</span>
+                  <div class="flex gap-2">
+                    <button
+                      *ngFor="let score of [1,2,3,4,5,6,7,8,9,10]"
+                      (click)="selectGoalScore(goal, score)"
+                      [class.bg-indigo-600]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
+                      [class.text-white]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
+                      [class.bg-gray-100]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
+                      [class.text-gray-700]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
+                      [class.hover:bg-indigo-500]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
+                      [class.hover:bg-gray-200]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
+                      class="w-10 h-10 rounded-lg font-medium text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                      {{ score }}
+                    </button>
+                  </div>
+                  <span class="text-xs text-gray-500">Excellent</span>
+                </div>
+                <div class="mt-2 text-center">
+                  <span *ngIf="rmGoalScores[goal.personalGoalId || goal.goalId]?.score" class="text-sm text-gray-600">
+                    Selected: <span class="font-bold text-indigo-600">{{ rmGoalScores[goal.personalGoalId || goal.goalId]?.score }}/10</span>
                   </span>
                 </div>
-                <p class="text-sm text-gray-600 mb-2">Reviewer: {{ review.reviewerName }}</p>
-                <p *ngIf="review.overallComment" class="text-sm text-gray-700 italic bg-gray-50 p-3 rounded">
-                  "{{ review.overallComment }}"
-                </p>
-                <p *ngIf="review.submittedAt" class="text-xs text-gray-500 mt-2">
-                  Submitted: {{ review.submittedAt | date:'medium' }}
-                </p>
+              </div>
+
+              <!-- Optional Comment -->
+              <div class="mt-4">
+                <input
+                  type="text"
+                  [(ngModel)]="rmGoalScores[goal.personalGoalId || goal.goalId].comment"
+                  *ngIf="rmGoalScores[goal.personalGoalId || goal.goalId]"
+                  placeholder="Add a comment for this goal (optional)"
+                  class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
               </div>
             </div>
 
-            <!-- RM Review -->
-            <div *ngIf="getReviewsByRole(ReviewerRole.RM).length > 0">
-              <div *ngFor="let review of getReviewsByRole(ReviewerRole.RM)" class="border-l-4 border-green-400 pl-4">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-lg font-semibold text-gray-900">{{ getRoleName(review.reviewerRole) }}</h3>
-                  <span 
-                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                    [ngClass]="getReviewStatusClass(review.status)">
-                    {{ review.status }}
-                  </span>
-                </div>
-                <p class="text-sm text-gray-600 mb-2">Reviewer: {{ review.reviewerName }}</p>
-                <p *ngIf="review.overallComment" class="text-sm text-gray-700 italic bg-gray-50 p-3 rounded">
-                  "{{ review.overallComment }}"
-                </p>
-                <p *ngIf="review.submittedAt" class="text-xs text-gray-500 mt-2">
-                  Submitted: {{ review.submittedAt | date:'medium' }}
-                </p>
-              </div>
+            <!-- Overall Comment -->
+            <div class="border border-gray-200 rounded-lg p-6 bg-gray-50">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Overall Comment (Optional)</label>
+              <textarea
+                [(ngModel)]="rmOverallComment"
+                rows="3"
+                placeholder="Add any overall feedback for this evaluation..."
+                class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
             </div>
 
-            <!-- TL Review -->
-            <div *ngIf="getReviewsByRole(ReviewerRole.TL).length > 0">
-              <div *ngFor="let review of getReviewsByRole(ReviewerRole.TL)" class="border-l-4 border-purple-400 pl-4">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-lg font-semibold text-gray-900">{{ getRoleName(review.reviewerRole) }}</h3>
-                  <span 
-                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                    [ngClass]="getReviewStatusClass(review.status)">
-                    {{ review.status }}
-                  </span>
+            <!-- Info Message -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div class="flex">
+                <svg class="h-5 w-5 text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="ml-3">
+                  <p class="text-sm text-blue-800">
+                    <strong>Note:</strong> Your scores will be automatically saved when you click the <strong>Approve</strong> button below.
+                  </p>
                 </div>
-                <p class="text-sm text-gray-600 mb-2">Reviewer: {{ review.reviewerName }}</p>
-                <p *ngIf="review.overallComment" class="text-sm text-gray-700 italic bg-gray-50 p-3 rounded">
-                  "{{ review.overallComment }}"
-                </p>
-                <p *ngIf="review.submittedAt" class="text-xs text-gray-500 mt-2">
-                  Submitted: {{ review.submittedAt | date:'medium' }}
-                </p>
-              </div>
-            </div>
-
-            <!-- Peer Reviews -->
-            <div *ngIf="getReviewsByRole(ReviewerRole.Peer).length > 0">
-              <div *ngFor="let review of getReviewsByRole(ReviewerRole.Peer); let i = index" class="border-l-4 border-yellow-400 pl-4 mb-4">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-lg font-semibold text-gray-900">Peer Review {{ i + 1 }}</h3>
-                  <span 
-                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                    [ngClass]="getReviewStatusClass(review.status)">
-                    {{ review.status }}
-                  </span>
-                </div>
-                <p class="text-sm text-gray-600 mb-2">Reviewer: {{ review.reviewerName }}</p>
-                <p *ngIf="review.overallComment" class="text-sm text-gray-700 italic bg-gray-50 p-3 rounded">
-                  "{{ review.overallComment }}"
-                </p>
-                <p *ngIf="review.submittedAt" class="text-xs text-gray-500 mt-2">
-                  Submitted: {{ review.submittedAt | date:'medium' }}
-                </p>
-              </div>
-            </div>
-
-            <!-- HOD Review -->
-            <div *ngIf="getReviewsByRole(ReviewerRole.HOD).length > 0">
-              <div *ngFor="let review of getReviewsByRole(ReviewerRole.HOD)" class="border-l-4 border-orange-400 pl-4">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-lg font-semibold text-gray-900">{{ getRoleName(review.reviewerRole) }}</h3>
-                  <span 
-                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                    [ngClass]="getReviewStatusClass(review.status)">
-                    {{ review.status }}
-                  </span>
-                </div>
-                <p class="text-sm text-gray-600 mb-2">Reviewer: {{ review.reviewerName }}</p>
-                <p *ngIf="review.overallComment" class="text-sm text-gray-700 italic bg-gray-50 p-3 rounded">
-                  "{{ review.overallComment }}"
-                </p>
-                <p *ngIf="review.submittedAt" class="text-xs text-gray-500 mt-2">
-                  Submitted: {{ review.submittedAt | date:'medium' }}
-                </p>
-              </div>
-            </div>
-
-            <!-- GM Review -->
-            <div *ngIf="getReviewsByRole(ReviewerRole.GM).length > 0">
-              <div *ngFor="let review of getReviewsByRole(ReviewerRole.GM)" class="border-l-4 border-red-400 pl-4">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-lg font-semibold text-gray-900">{{ getRoleName(review.reviewerRole) }}</h3>
-                  <span 
-                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                    [ngClass]="getReviewStatusClass(review.status)">
-                    {{ review.status }}
-                  </span>
-                </div>
-                <p class="text-sm text-gray-600 mb-2">Reviewer: {{ review.reviewerName }}</p>
-                <p *ngIf="review.overallComment" class="text-sm text-gray-700 italic bg-gray-50 p-3 rounded">
-                  "{{ review.overallComment }}"
-                </p>
-                <p *ngIf="review.submittedAt" class="text-xs text-gray-500 mt-2">
-                  Submitted: {{ review.submittedAt | date:'medium' }}
-                </p>
               </div>
             </div>
           </div>
+
+          <ng-template #noGoals>
+            <div class="text-center py-8 text-gray-500">
+              <p class="text-lg font-medium">No evaluation goals found</p>
+              <p class="text-sm">Please add goals before rating.</p>
+            </div>
+          </ng-template>
         </div>
       </div>
 
-      <!-- Approval History Timeline -->
+      <!-- Approval History -->
       <div class="bg-white shadow-lg rounded-lg overflow-hidden">
         <div class="px-6 py-5 border-b border-gray-200">
           <h2 class="text-xl font-bold text-gray-900">Approval History</h2>
@@ -319,54 +206,20 @@
                   <span *ngIf="!last" class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200"></span>
                   <div class="relative flex space-x-3">
                     <div>
-                      <span class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white"
-                            [ngClass]="{
-                              'bg-green-500': item.action.toLowerCase().includes('approved') || item.action.toLowerCase().includes('recommended') || item.action.toLowerCase().includes('processed') || item.action.toLowerCase().includes('completed'),
-                              'bg-red-500': item.action.toLowerCase().includes('rejected') || item.action.toLowerCase().includes('returned'),
-                              'bg-blue-500': item.action.toLowerCase().includes('submitted'),
-                              'bg-teal-500': item.action.toLowerCase().includes('started'),
-                              'bg-purple-500': item.action.toLowerCase().includes('workflow')
-                            }">
-                        <!-- Started Icon -->
-                        <svg *ngIf="item.action.toLowerCase().includes('started')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                        </svg>
-                        <!-- Completed Icon -->
-                        <svg *ngIf="item.action.toLowerCase().includes('completed') && !item.action.toLowerCase().includes('workflow')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <span class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white bg-blue-500">
+                        <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                        </svg>
-                        <!-- Workflow Icon -->
-                        <svg *ngIf="item.action.toLowerCase().includes('workflow')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <!-- Approved Icon -->
-                        <svg *ngIf="(item.action.toLowerCase().includes('approved') || item.action.toLowerCase().includes('recommended') || item.action.toLowerCase().includes('processed')) && !item.action.toLowerCase().includes('completed')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                        </svg>
-                        <!-- Rejected/Returned Icon -->
-                        <svg *ngIf="item.action.toLowerCase().includes('rejected') || item.action.toLowerCase().includes('returned')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        <!-- Submitted Icon -->
-                        <svg *ngIf="item.action.toLowerCase().includes('submitted')" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
                         </svg>
                       </span>
                     </div>
                     <div class="min-w-0 flex-1 pt-1.5">
-                      <div>
-                        <p class="text-sm text-gray-500">
-                          <span class="font-medium text-gray-900">{{ item.actorName }}</span>
-                          <span class="ml-1">({{ item.actorRole }})</span>
-                          <span class="mx-1 font-semibold" [ngClass]="getActionColor(item.action)">{{ item.action }}</span>
-                        </p>
-                        <p *ngIf="item.comment" class="mt-1 text-sm text-gray-600 italic bg-gray-50 p-2 rounded">
-                          "{{ item.comment }}"
-                        </p>
-                        <p class="mt-0.5 text-xs text-gray-400">
-                          {{ item.createdAt | date:'medium' }}
-                        </p>
-                      </div>
+                      <p class="text-sm text-gray-500">
+                        <span class="font-medium text-gray-900">{{ item.actorName }}</span>
+                        <span class="ml-1">({{ item.actorRole }})</span>
+                        <span class="mx-1 font-semibold" [ngClass]="getActionColor(item.action)">{{ item.action }}</span>
+                      </p>
+                      <p *ngIf="item.comment" class="mt-1 text-sm text-gray-600 italic bg-gray-50 p-2 rounded">"{{ item.comment }}"</p>
+                      <p class="mt-0.5 text-xs text-gray-400">{{ item.createdAt | date:'medium' }}</p>
                     </div>
                   </div>
                 </div>
@@ -376,469 +229,43 @@
         </div>
       </div>
 
-      <!-- Action Panel (for peer assignment) -->
-      <div *ngIf="needsPeerAssignment && !showPeerAssignment" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-purple-200">
-        <div class="px-6 py-5 bg-purple-50 border-b border-purple-200">
-          <h2 class="text-xl font-bold text-purple-900">Peer Reviewers Required</h2>
-          <p class="mt-1 text-sm text-purple-700">
-            You are acting as: <span class="font-semibold">Team Lead</span>
-          </p>
-        </div>
-        <div class="px-6 py-5">
-          <p class="text-gray-700 mb-4">
-            Please assign two peer reviewers for this evaluation. After assignment, the evaluation will proceed to peer review stage.
-          </p>
-          <div class="flex gap-4">
-            <button
-              (click)="initiatePeerAssignment()"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
-              <svg class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-              Assign Peer Reviewers
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Peer Assignment Panel -->
-      <div *ngIf="showPeerAssignment" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-purple-200">
-        <div class="px-6 py-5 bg-purple-50 border-b border-purple-200">
-          <h2 class="text-xl font-bold text-purple-900">Assign Peer Reviewers</h2>
-        </div>
-        <div class="px-6 py-5">
-          <div class="space-y-4 mb-6">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                First Peer Reviewer <span class="text-red-600">*</span>
-              </label>
-              <select
-                [(ngModel)]="peerUserId1"
-                [disabled]="loadingPeers"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100">
-                <option [value]="null">{{ loadingPeers ? 'Loading peers...' : 'Select a peer reviewer...' }}</option>
-                <option *ngFor="let peer of availablePeers" [value]="peer.userId">
-                  {{ peer.name }}
-                </option>
-              </select>
-              <p *ngIf="!loadingPeers && availablePeers.length === 0" class="mt-1 text-sm text-red-600">
-                No available peers found. Please check if there are other active users in the system.
-              </p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Second Peer Reviewer <span class="text-red-600">*</span>
-              </label>
-              <select
-                [(ngModel)]="peerUserId2"
-                [disabled]="loadingPeers"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100">
-                <option [value]="null">{{ loadingPeers ? 'Loading peers...' : 'Select a peer reviewer...' }}</option>
-                <option *ngFor="let peer of availablePeers" [value]="peer.userId">
-                  {{ peer.name }}
-                </option>
-              </select>
-              <p *ngIf="!loadingPeers && availablePeers.length === 0" class="mt-1 text-sm text-red-600">
-                No available peers found. Please check if there are other active users in the system.
-              </p>
-            </div>
-            <div class="bg-blue-50 border border-blue-200 rounded-md p-4">
-              <div class="flex">
-                <svg class="h-5 w-5 text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div class="ml-3">
-                  <p class="text-sm text-blue-700">
-                    Select peer reviewers to evaluate this employee's performance. 
-                    For testing purposes, you can select the same user twice if you're the only user in the system.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="flex gap-4">
-            <button
-              (click)="confirmPeerAssignment()"
-              [disabled]="assigningPeers || !peerUserId1 || !peerUserId2"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
-              <svg *ngIf="!assigningPeers" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg *ngIf="assigningPeers" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              {{ assigningPeers ? 'Assigning...' : 'Confirm Assignment' }}
-            </button>
-            <button
-              (click)="cancelPeerAssignment()"
-              [disabled]="assigningPeers"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:bg-gray-100 disabled:cursor-not-allowed">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Action Panel (for active approvers) -->
-      <div *ngIf="isActiveApprover && !needsPeerAssignment && !showCommentBox" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-primary-200">
+      <!-- Action Panel for Active Approvers -->
+      <div *ngIf="isActiveApprover && !showCommentBox" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-primary-200">
         <div class="px-6 py-5 bg-primary-50 border-b border-primary-200">
           <h2 class="text-xl font-bold text-primary-900">Your Action Required</h2>
-          <p class="mt-1 text-sm text-primary-700">
-            You are acting as: <span class="font-semibold">{{ currentUserRole }}</span>
-          </p>
+          <p class="mt-1 text-sm text-primary-700">You are acting as: <span class="font-semibold">{{ currentUserRole }}</span></p>
         </div>
         <div class="px-6 py-5">
-          <p class="text-gray-700 mb-4">
-            Please review the evaluation details above and take appropriate action.
-          </p>
+          <p class="text-gray-700 mb-4">Please review the evaluation details above and take appropriate action.</p>
           <div class="flex gap-4">
-            <button
-              (click)="initiateAction('approve')"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-              <svg class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
+            <button (click)="initiateAction('approve')" class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">
               Approve
             </button>
-            <button
-              (click)="initiateAction('reject')"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-              <svg class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+            <button (click)="initiateAction('reject')" class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700">
               Reject
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Comment Box (shown after clicking Approve/Reject) -->
-      <div *ngIf="showCommentBox" class="bg-white shadow-lg rounded-lg overflow-hidden border-2"
-           [class.border-green-200]="actionType === 'approve'"
-           [class.border-red-200]="actionType === 'reject'">
-        <div class="px-6 py-5 border-b"
-             [class.bg-green-50]="actionType === 'approve'"
-             [class.border-green-200]="actionType === 'approve'"
-             [class.bg-red-50]="actionType === 'reject'"
-             [class.border-red-200]="actionType === 'reject'">
-          <h2 class="text-xl font-bold"
-              [class.text-green-900]="actionType === 'approve'"
-              [class.text-red-900]="actionType === 'reject'">
+      <!-- Comment Box -->
+      <div *ngIf="showCommentBox" class="bg-white shadow-lg rounded-lg overflow-hidden border-2" [ngClass]="actionType === 'approve' ? 'border-green-200' : 'border-red-200'">
+        <div class="px-6 py-5 border-b" [ngClass]="actionType === 'approve' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
+          <h2 class="text-xl font-bold" [ngClass]="actionType === 'approve' ? 'text-green-900' : 'text-red-900'">
             {{ actionType === 'approve' ? 'Approve Evaluation' : 'Reject Evaluation' }}
           </h2>
         </div>
         <div class="px-6 py-5">
           <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Comment <span *ngIf="actionType === 'reject'" class="text-red-600">(required)</span>
-              <span *ngIf="actionType === 'approve'" class="text-gray-500">(optional)</span>
-            </label>
-            <textarea
-              [(ngModel)]="comment"
-              rows="4"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2"
-              [class.focus:ring-green-500]="actionType === 'approve'"
-              [class.focus:ring-red-500]="actionType === 'reject'"
-              [placeholder]="actionType === 'approve' ? 'Add any comments or feedback (optional)...' : 'Please explain why you are rejecting this evaluation...'"></textarea>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Comment</label>
+            <textarea [(ngModel)]="comment" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2"></textarea>
           </div>
           <div class="flex gap-4">
-            <button
-              (click)="confirmAction()"
-              [disabled]="approving || rejecting"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              [class.bg-green-600]="actionType === 'approve'"
-              [class.hover:bg-green-700]="actionType === 'approve' && !approving"
-              [class.focus:ring-green-500]="actionType === 'approve'"
-              [class.bg-red-600]="actionType === 'reject'"
-              [class.hover:bg-red-700]="actionType === 'reject' && !rejecting"
-              [class.focus:ring-red-500]="actionType === 'reject'">
-              <svg *ngIf="!approving && !rejecting" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg *ngIf="approving || rejecting" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              {{ approving || rejecting ? 'Processing...' : 'Confirm ' + (actionType === 'approve' ? 'Approval' : 'Rejection') }}
+            <button (click)="confirmAction()" [disabled]="approving || rejecting" class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white" [ngClass]="actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'">
+              {{ approving || rejecting ? 'Processing...' : 'Confirm' }}
             </button>
-            <button
-              (click)="cancelAction()"
-              [disabled]="approving || rejecting"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:bg-gray-100 disabled:cursor-not-allowed">
+            <button (click)="cancelAction()" class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">
               Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Waiting/Completed State (for non-approvers) -->
-      <div *ngIf="!isActiveApprover && !needsPeerAssignment && !showHodActions && !showGmActions && !showHrActions">
-        <!-- Completed State -->
-        <div *ngIf="evaluation.status.toLowerCase().includes('completed')" class="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-          <svg class="mx-auto h-12 w-12 text-green-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 class="text-lg font-medium text-green-900 mb-2">Evaluation Complete</h3>
-          <p class="text-green-700">
-            This evaluation has been completed. Check the approval history above for details.
-          </p>
-        </div>
-
-        <!-- Rejected State -->
-        <div *ngIf="evaluation.status.toLowerCase().includes('rejected')" class="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <svg class="mx-auto h-12 w-12 text-red-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 class="text-lg font-medium text-red-900 mb-2">Evaluation Rejected</h3>
-          <p class="text-red-700">
-            This evaluation was rejected. Check the approval history above for details and feedback.
-          </p>
-        </div>
-
-        <!-- Waiting/In Progress State -->
-        <div *ngIf="!evaluation.status.toLowerCase().includes('completed') && !evaluation.status.toLowerCase().includes('rejected')" class="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-          <svg class="mx-auto h-12 w-12 text-blue-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 class="text-lg font-medium text-blue-900 mb-2">Waiting for Approval</h3>
-          <p class="text-blue-700">
-            This evaluation is currently being reviewed. You will be notified when action is required.
-          </p>
-        </div>
-      </div>
-
-      <!-- Promotion Case Information -->
-      <div *ngIf="evaluation.promotionCase" class="bg-white shadow-lg rounded-lg overflow-hidden">
-        <div class="px-6 py-5 border-b border-gray-200">
-          <h2 class="text-xl font-bold text-gray-900">Promotion Recommendation</h2>
-        </div>
-        <div class="px-6 py-5">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div *ngIf="evaluation.promotionCase.recommendedByHodName">
-              <h3 class="text-sm font-medium text-gray-500">Recommended By</h3>
-              <p class="mt-1 text-base text-gray-900">{{ evaluation.promotionCase.recommendedByHodName }}</p>
-              <p class="text-sm text-gray-600">{{ evaluation.promotionCase.recommendedAt | date:'medium' }}</p>
-            </div>
-            
-            <div>
-              <h3 class="text-sm font-medium text-gray-500">GM Decision</h3>
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
-                    [ngClass]="{
-                      'bg-yellow-100 text-yellow-800': evaluation.promotionCase.gmDecision === 'Pending',
-                      'bg-green-100 text-green-800': evaluation.promotionCase.gmDecision === 'Approved',
-                      'bg-red-100 text-red-800': evaluation.promotionCase.gmDecision === 'Rejected'
-                    }">
-                {{ evaluation.promotionCase.gmDecision }}
-              </span>
-            </div>
-
-            <div *ngIf="evaluation.promotionCase.gmDecidedByName">
-              <h3 class="text-sm font-medium text-gray-500">GM Decision By</h3>
-              <p class="mt-1 text-base text-gray-900">{{ evaluation.promotionCase.gmDecidedByName }}</p>
-              <p class="text-sm text-gray-600">{{ evaluation.promotionCase.gmDecidedAt | date:'medium' }}</p>
-            </div>
-
-            <div *ngIf="evaluation.promotionCase.decisionReason" class="md:col-span-2">
-              <h3 class="text-sm font-medium text-gray-500">Decision Reason</h3>
-              <p class="mt-1 text-sm text-gray-700 italic bg-gray-50 p-3 rounded">
-                "{{ evaluation.promotionCase.decisionReason }}"
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- HOD Action Panel -->
-      <div *ngIf="showHodActions && currentUserRole === 'HOD'" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-orange-200">
-        <div class="px-6 py-5 bg-orange-50 border-b border-orange-200">
-          <h2 class="text-xl font-bold text-orange-900">HOD Review - Promotion Decision</h2>
-          <p class="mt-1 text-sm text-orange-700">
-            You are acting as: <span class="font-semibold">Head of Department (HOD)</span>
-          </p>
-        </div>
-        <div class="px-6 py-5">
-          <p class="text-gray-700 mb-4">
-            As HOD, you can recommend this employee for promotion to GM, or reject the evaluation.
-          </p>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Comment <span class="text-gray-500">(optional for recommendation, required for rejection)</span>
-            </label>
-            <textarea
-              [(ngModel)]="hodComment"
-              rows="3"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              placeholder="Add your comments or feedback..."></textarea>
-          </div>
-          <div class="flex gap-4">
-            <button
-              (click)="recommendPromotionToGm()"
-              [disabled]="recommendingPromotion || hodRejectingEval"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
-              <svg *ngIf="!recommendingPromotion" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-              <svg *ngIf="recommendingPromotion" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              {{ recommendingPromotion ? 'Recommending...' : 'Recommend to GM' }}
-            </button>
-            <button
-              (click)="hodRejectEvaluation()"
-              [disabled]="recommendingPromotion || hodRejectingEval"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
-              <svg *ngIf="!hodRejectingEval" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <svg *ngIf="hodRejectingEval" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              {{ hodRejectingEval ? 'Rejecting...' : 'Reject Evaluation' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- GM Action Panel -->
-      <div *ngIf="showGmActions && currentUserRole === 'GM'" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-red-200">
-        <div class="px-6 py-5 bg-red-50 border-b border-red-200">
-          <h2 class="text-xl font-bold text-red-900">GM Decision - Promotion Approval</h2>
-          <p class="mt-1 text-sm text-red-700">
-            You are acting as: <span class="font-semibold">General Manager (GM)</span>
-          </p>
-        </div>
-        <div class="px-6 py-5">
-          <p class="text-gray-700 mb-4">
-            HOD has recommended this employee for promotion. Please review and make your decision.
-          </p>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Decision <span class="text-red-600">*</span>
-            </label>
-            <div class="flex gap-4 mb-4">
-              <label class="inline-flex items-center">
-                <input
-                  type="radio"
-                  [(ngModel)]="gmApproveDecision"
-                  [value]="true"
-                  class="form-radio h-4 w-4 text-green-600"
-                  name="gmDecision">
-                <span class="ml-2 text-gray-700">Approve Promotion</span>
-              </label>
-              <label class="inline-flex items-center">
-                <input
-                  type="radio"
-                  [(ngModel)]="gmApproveDecision"
-                  [value]="false"
-                  class="form-radio h-4 w-4 text-red-600"
-                  name="gmDecision">
-                <span class="ml-2 text-gray-700">Decline Promotion</span>
-              </label>
-            </div>
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Comment <span class="text-gray-500">(optional)</span>
-            </label>
-            <textarea
-              [(ngModel)]="gmComment"
-              rows="3"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="Add your decision reason or feedback..."></textarea>
-          </div>
-          <div class="flex gap-4">
-            <button
-              (click)="processGmDecision()"
-              [disabled]="processingGmDecision"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              [class.bg-green-600]="gmApproveDecision"
-              [class.hover:bg-green-700]="gmApproveDecision"
-              [class.focus:ring-green-500]="gmApproveDecision"
-              [class.bg-red-600]="!gmApproveDecision"
-              [class.hover:bg-red-700]="!gmApproveDecision"
-              [class.focus:ring-red-500]="!gmApproveDecision">
-              <svg *ngIf="!processingGmDecision" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg *ngIf="processingGmDecision" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              {{ processingGmDecision ? 'Processing...' : 'Submit Decision' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- HR Action Panel -->
-      <div *ngIf="showHrActions && currentUserRole === 'HR'" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-purple-200">
-        <div class="px-6 py-5 bg-purple-50 border-b border-purple-200">
-          <h2 class="text-xl font-bold text-purple-900">HR Processing - Final Promotion Step</h2>
-          <p class="mt-1 text-sm text-purple-700">
-            You are acting as: <span class="font-semibold">Human Resources (HR)</span>
-          </p>
-        </div>
-        <div class="px-6 py-5">
-          <p class="text-gray-700 mb-4">
-            GM has approved this promotion. Please finalize the promotion processing.
-          </p>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Action <span class="text-red-600">*</span>
-            </label>
-            <div class="flex gap-4 mb-4">
-              <label class="inline-flex items-center">
-                <input
-                  type="radio"
-                  [(ngModel)]="hrProceedDecision"
-                  [value]="true"
-                  class="form-radio h-4 w-4 text-green-600"
-                  name="hrDecision">
-                <span class="ml-2 text-gray-700">Process Promotion</span>
-              </label>
-              <label class="inline-flex items-center">
-                <input
-                  type="radio"
-                  [(ngModel)]="hrProceedDecision"
-                  [value]="false"
-                  class="form-radio h-4 w-4 text-red-600"
-                  name="hrDecision">
-                <span class="ml-2 text-gray-700">Decline Processing</span>
-              </label>
-            </div>
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Comment <span class="text-gray-500">(optional)</span>
-            </label>
-            <textarea
-              [(ngModel)]="hrComment"
-              rows="3"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Add any notes or comments..."></textarea>
-          </div>
-          <div class="flex gap-4">
-            <button
-              (click)="processHrAction()"
-              [disabled]="processingHrAction"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white focus:outline.none focus:ring-2 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              [class.bg-green-600]="hrProceedDecision"
-              [class.hover:bg-green-700]="hrProceedDecision"
-              [class.focus:ring-green-500]="hrProceedDecision"
-              [class.bg-red-600]="!hrProceedDecision"
-              [class.hover:bg-red-700]="!hrProceedDecision"
-              [class.focus:ring-red-500]="!hrProceedDecision">
-              <svg *ngIf="!processingHrAction" class="-ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg *ngIf="processingHrAction" class="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              {{ processingHrAction ? 'Processing...' : (hrProceedDecision ? 'Process Promotion' : 'Decline Processing') }}
             </button>
           </div>
         </div>
@@ -847,89 +274,31 @@
   </main>
 
   <!-- Complete Goal Modal -->
-  <div 
-    *ngIf="showCompleteGoalModal"
-    class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-50">
+  <div *ngIf="showCompleteGoalModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-50">
     <div class="fixed inset-0 z-50 overflow-y-auto">
       <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
         <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
-          <!-- Modal Header -->
           <div class="bg-green-50 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border-b border-green-200">
-            <div class="flex items-center">
-              <div class="flex-shrink-0 h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div class="ml-4">
-                <h3 class="text-lg font-semibold text-gray-900">Complete Goal</h3>
-                <p class="text-sm text-gray-500">{{ completeModalGoal?.title }}</p>
-              </div>
-            </div>
+            <h3 class="text-lg font-semibold text-gray-900">Complete Goal</h3>
+            <p class="text-sm text-gray-500">{{ completeModalGoal?.title }}</p>
           </div>
-
-          <!-- Modal Body -->
           <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
             <div class="space-y-4">
-              <!-- Evidence URL Input -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Evidence URL <span class="text-gray-500">(optional)</span>
-                </label>
-                <input 
-                  type="url"
-                  [(ngModel)]="completeFormEvidenceUrl"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="https://...">
-                <p class="text-xs text-gray-500 mt-1">Link to supporting documentation or proof of completion</p>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Evidence URL (optional)</label>
+                <input type="url" [(ngModel)]="completeFormEvidenceUrl" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="https://...">
               </div>
-
-              <!-- Comment Input -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Completion Comment <span class="text-gray-500">(optional)</span>
-                </label>
-                <textarea 
-                  [(ngModel)]="completeFormComment"
-                  rows="3"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="Describe how you achieved this goal..."></textarea>
-              </div>
-
-              <!-- Info Box -->
-              <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-                <div class="flex">
-                  <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p class="ml-3 text-sm text-blue-700">
-                    Once all goals are completed, the evaluation will automatically advance to the next review stage.
-                  </p>
-                </div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Completion Comment (optional)</label>
+                <textarea [(ngModel)]="completeFormComment" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Describe how you achieved this goal..."></textarea>
               </div>
             </div>
           </div>
-
-          <!-- Modal Footer -->
           <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 border-t">
-            <button 
-              (click)="confirmCompleteGoal()"
-              [disabled]="completingGoalId !== null"
-              class="inline-flex w-full justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 sm:ml-3 sm:w-auto disabled:bg-gray-400 disabled:cursor-not-allowed">
-              <svg 
-                *ngIf="completingGoalId"
-                class="animate-spin -ml-1 mr-2 h-4 w-4" 
-                fill="none" 
-                viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+            <button (click)="confirmCompleteGoal()" [disabled]="completingGoalId !== null" class="inline-flex w-full justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 sm:ml-3 sm:w-auto disabled:bg-gray-400">
               {{ completingGoalId ? 'Completing...' : 'Complete Goal' }}
             </button>
-            <button 
-              (click)="closeCompleteGoalModal()"
-              [disabled]="completingGoalId !== null"
-              class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto disabled:bg-gray-100 disabled:cursor-not-allowed">
+            <button (click)="closeCompleteGoalModal()" [disabled]="completingGoalId !== null" class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto">
               Cancel
             </button>
           </div>
@@ -937,3 +306,4 @@
       </div>
     </div>
   </div>
+</div>
