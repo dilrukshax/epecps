@@ -103,93 +103,99 @@
       <div *ngIf="shouldShowReviewsSection()" class="bg-white shadow-lg rounded-lg overflow-hidden">
         <div class="px-6 py-5 border-b border-gray-200">
           <h2 class="text-xl font-bold text-gray-900">Reviews & Ratings</h2>
-          <p class="mt-1 text-sm text-gray-500">Click a number (1-10) to rate each evaluation item</p>
+          <p class="mt-1 text-sm text-gray-500">Review scores submitted by each approver</p>
         </div>
         <div class="px-6 py-5">
-          <div *ngIf="evaluation.goals && evaluation.goals.length > 0; else noGoals" class="space-y-6">
-            <!-- Goal Rating Card -->
-            <div *ngFor="let goal of evaluation.goals; let i = index" class="border border-gray-200 rounded-lg p-6">
-              <div class="flex items-start gap-4 mb-4">
-                <div class="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                  <span class="text-lg font-bold text-indigo-600">{{ i + 1 }}</span>
+          <!-- Display Reviews by Role -->
+          <div class="space-y-8">
+            <!-- Loop through all reviews and display their scores -->
+            <div *ngFor="let review of evaluation.reviews" class="border-2 border-gray-200 rounded-lg p-6">
+              <!-- Review Header -->
+              <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900">{{ getRoleName(review.reviewerRole) }}</h3>
+                  <p class="text-sm text-gray-600">{{ review.reviewerName }}</p>
                 </div>
-                <div class="flex-1">
-                  <h3 class="text-lg font-semibold text-gray-900">{{ goal.title }}</h3>
-                  <p class="mt-1 text-sm text-gray-600">{{ goal.description }}</p>
-                  <p class="mt-1 text-xs text-gray-500">Weight: {{ goal.weightPct }}%</p>
-                </div>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" [ngClass]="getReviewStatusClass(review.status)">
+                  {{ review.status }}
+                </span>
               </div>
 
-              <!-- Score Selection -->
-              <div class="mt-4">
-                <label class="block text-sm font-medium text-gray-700 mb-3">Select Score:</label>
-                <div class="flex items-center justify-between">
-                  <span class="text-xs text-gray-500">Poor</span>
-                  <div class="flex gap-2">
-                    <button
-                      *ngFor="let score of [1,2,3,4,5,6,7,8,9,10]"
-                      (click)="selectGoalScore(goal, score)"
-                      [class.bg-indigo-600]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
-                      [class.text-white]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
-                      [class.bg-gray-100]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
-                      [class.text-gray-700]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
-                      [class.hover:bg-indigo-500]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
-                      [class.hover:bg-gray-200]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
-                      class="w-10 h-10 rounded-lg font-medium text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                      {{ score }}
-                    </button>
+              <!-- Show Scores if Review is Completed/Approved -->
+              <div *ngIf="review.status.toLowerCase() === 'completed' || review.status.toLowerCase() === 'approved'">
+                <!-- For RM: Show item-level scores -->
+                <div *ngIf="review.reviewerRole === 3 && review.scores && review.scores.length > 0">
+                  <h4 class="text-sm font-medium text-gray-700 mb-4">Goal Scores:</h4>
+                  <div class="space-y-4">
+                    <div *ngFor="let score of review.scores" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1">
+                          <h5 class="font-semibold text-gray-900">{{ score.goalTitle || 'Goal ' + (score.personalGoalId || score.id) }}</h5>
+                        </div>
+                        <div class="ml-4">
+                          <span class="inline-flex items-center px-3 py-1 rounded-full text-lg font-bold bg-indigo-100 text-indigo-800">
+                            {{ score.scoreValue }}/10
+                          </span>
+                        </div>
+                      </div>
+                      <p *ngIf="score.comment" class="text-sm text-gray-600 italic mt-2 pl-3 border-l-2 border-gray-300">
+                        "{{ score.comment }}"
+                      </p>
+                    </div>
                   </div>
-                  <span class="text-xs text-gray-500">Excellent</span>
                 </div>
-                <div class="mt-2 text-center">
-                  <span *ngIf="rmGoalScores[goal.personalGoalId || goal.goalId]?.score" class="text-sm text-gray-600">
-                    Selected: <span class="font-bold text-indigo-600">{{ rmGoalScores[goal.personalGoalId || goal.goalId]?.score }}/10</span>
-                  </span>
+
+                <!-- For TL/Peer/HOD/GM: Show overall score -->
+                <div *ngIf="review.reviewerRole !== 3 && review.overallScore !== null && review.overallScore !== undefined">
+                  <div class="flex items-center gap-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg">
+                    <div class="flex-shrink-0">
+                      <div class="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center">
+                        <span class="text-3xl font-bold text-white">{{ review.overallScore }}</span>
+                      </div>
+                    </div>
+                    <div class="flex-1">
+                      <h4 class="text-lg font-semibold text-gray-900">Overall Score</h4>
+                      <p class="text-sm text-gray-600">Score out of 10</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Overall Comment (if any) -->
+                <div *ngIf="review.overallComment" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h4 class="text-sm font-medium text-gray-700 mb-2">Overall Comment:</h4>
+                  <p class="text-sm text-gray-800 italic">"{{ review.overallComment }}"</p>
+                </div>
+
+                <!-- Submission Timestamp -->
+                <div *ngIf="review.submittedAt" class="mt-3 text-xs text-gray-500">
+                  Submitted on: {{ review.submittedAt | date:'medium' }}
                 </div>
               </div>
 
-              <!-- Optional Comment -->
-              <div class="mt-4">
-                <input
-                  type="text"
-                  [(ngModel)]="rmGoalScores[goal.personalGoalId || goal.goalId].comment"
-                  *ngIf="rmGoalScores[goal.personalGoalId || goal.goalId]"
-                  placeholder="Add a comment for this goal (optional)"
-                  class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-              </div>
-            </div>
-
-            <!-- Overall Comment -->
-            <div class="border border-gray-200 rounded-lg p-6 bg-gray-50">
-              <label class="block text-sm font-medium text-gray-700 mb-2">Overall Comment (Optional)</label>
-              <textarea
-                [(ngModel)]="rmOverallComment"
-                rows="3"
-                placeholder="Add any overall feedback for this evaluation..."
-                class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-            </div>
-
-            <!-- Info Message -->
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div class="flex">
-                <svg class="h-5 w-5 text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <!-- Pending Review Message -->
+              <div *ngIf="review.status.toLowerCase() === 'pending'" class="text-center py-6">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <div class="ml-3">
-                  <p class="text-sm text-blue-800">
-                    <strong>Note:</strong> Your scores will be automatically saved when you click the <strong>Approve</strong> button below.
-                  </p>
-                </div>
+                <p class="mt-2 text-sm text-gray-600">Awaiting review from {{ review.reviewerName }}</p>
               </div>
+
+              <!-- If current user can score this review, show scoring panel -->
+              <div *ngIf="canScoreReview(review) && review.status.toLowerCase() === 'pending'" class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <button 
+                  (click)="openScoringPanel(review)" 
+                  class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+                  Submit Your Scores
+                </button>
+              </div>
+            </div>
+
+            <!-- No Reviews Message -->
+            <div *ngIf="!evaluation.reviews || evaluation.reviews.length === 0" class="text-center py-8 text-gray-500">
+              <p class="text-lg font-medium">No reviews available yet</p>
+              <p class="text-sm">Reviews will appear here as they are submitted.</p>
             </div>
           </div>
-
-          <ng-template #noGoals>
-            <div class="text-center py-8 text-gray-500">
-              <p class="text-lg font-medium">No evaluation goals found</p>
-              <p class="text-sm">Please add goals before rating.</p>
-            </div>
-          </ng-template>
         </div>
       </div>
 
@@ -299,6 +305,129 @@
               {{ completingGoalId ? 'Completing...' : 'Complete Goal' }}
             </button>
             <button (click)="closeCompleteGoalModal()" [disabled]="completingGoalId !== null" class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scoring Modal -->
+  <div *ngIf="showScoringPanel" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-50">
+    <div class="fixed inset-0 z-50 overflow-y-auto">
+      <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+        <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-4xl">
+          <div class="bg-indigo-50 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border-b border-indigo-200">
+            <h3 class="text-lg font-semibold text-gray-900">Submit Your Scores</h3>
+            <p class="text-sm text-gray-500">{{ getPendingScoringLabel() }}</p>
+          </div>
+          
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 max-h-[60vh] overflow-y-auto">
+            <!-- RM Item-Level Scoring -->
+            <div *ngIf="isPendingReviewItemLevel()" class="space-y-6">
+              <div *ngFor="let goal of evaluation?.goals; let i = index" class="border border-gray-200 rounded-lg p-6">
+                <div class="flex items-start gap-4 mb-4">
+                  <div class="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <span class="text-lg font-bold text-indigo-600">{{ i + 1 }}</span>
+                  </div>
+                  <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ goal.title }}</h3>
+                    <p class="mt-1 text-sm text-gray-600">{{ goal.description }}</p>
+                    <p class="mt-1 text-xs text-gray-500">Weight: {{ goal.weightPct }}%</p>
+                  </div>
+                </div>
+
+                <!-- Score Selection -->
+                <div class="mt-4">
+                  <label class="block text-sm font-medium text-gray-700 mb-3">Select Score:</label>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-500">Poor</span>
+                    <div class="flex gap-2">
+                      <button
+                        *ngFor="let score of [1,2,3,4,5,6,7,8,9,10]"
+                        (click)="selectGoalScore(goal, score)"
+                        [class.bg-indigo-600]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
+                        [class.text-white]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
+                        [class.bg-gray-100]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
+                        [class.text-gray-700]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
+                        [class.hover:bg-indigo-500]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
+                        [class.hover:bg-gray-200]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
+                        class="w-10 h-10 rounded-lg font-medium text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                        {{ score }}
+                      </button>
+                    </div>
+                    <span class="text-xs text-gray-500">Excellent</span>
+                  </div>
+                </div>
+
+                <!-- Optional Comment -->
+                <div class="mt-4">
+                  <input
+                    type="text"
+                    [(ngModel)]="rmGoalScores[goal.personalGoalId || goal.goalId].comment"
+                    *ngIf="rmGoalScores[goal.personalGoalId || goal.goalId]"
+                    placeholder="Add a comment for this goal (optional)"
+                    class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </div>
+              </div>
+
+              <!-- Overall Comment for RM -->
+              <div class="border border-gray-200 rounded-lg p-6 bg-gray-50">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Overall Comment (Optional)</label>
+                <textarea
+                  [(ngModel)]="rmOverallComment"
+                  rows="3"
+                  placeholder="Add any overall feedback for this evaluation..."
+                  class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+            </div>
+
+            <!-- Overall Scoring (TL/Peer/HOD/GM) -->
+            <div *ngIf="!isPendingReviewItemLevel()" class="space-y-6">
+              <div class="border border-gray-200 rounded-lg p-6">
+                <label class="block text-sm font-medium text-gray-700 mb-4">Overall Evaluation Score (1-10):</label>
+                <div class="flex items-center justify-center gap-3 mb-6">
+                  <button
+                    *ngFor="let score of [1,2,3,4,5,6,7,8,9,10]"
+                    (click)="overallScore = score"
+                    [class.bg-indigo-600]="overallScore === score"
+                    [class.text-white]="overallScore === score"
+                    [class.bg-gray-100]="overallScore !== score"
+                    [class.text-gray-700]="overallScore !== score"
+                    [class.hover:bg-indigo-500]="overallScore === score"
+                    [class.hover:bg-gray-200]="overallScore !== score"
+                    class="w-12 h-12 rounded-lg font-bold text-lg transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    {{ score }}
+                  </button>
+                </div>
+                <div class="text-center mb-4">
+                  <span class="text-sm text-gray-600">Selected: <span class="font-bold text-indigo-600 text-xl">{{ overallScore }}/10</span></span>
+                </div>
+              </div>
+
+              <div class="border border-gray-200 rounded-lg p-6 bg-gray-50">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Comment (Optional)</label>
+                <textarea
+                  [(ngModel)]="overallComment"
+                  rows="4"
+                  placeholder="Add your overall feedback for this evaluation..."
+                  class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 border-t">
+            <button 
+              (click)="submitPendingScores()" 
+              [disabled]="submittingScores" 
+              class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 sm:ml-3 sm:w-auto disabled:bg-gray-400">
+              {{ submittingScores ? 'Submitting...' : 'Submit Scores' }}
+            </button>
+            <button 
+              (click)="closeScoringPanel()" 
+              [disabled]="submittingScores" 
+              class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto">
               Cancel
             </button>
           </div>

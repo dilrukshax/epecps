@@ -927,6 +927,47 @@ export class EvaluationDetailComponent implements OnInit {
     { queryParams: { refresh: new Date().getTime() }};
   }
 
+  /**
+   * Get the pending review object for the scoring modal
+   */
+  getPendingReview(): ReviewDto | undefined {
+    if (!this.pendingReviewId || !this.evaluation) return undefined;
+    return this.evaluation.reviews.find(r => r.reviewId === this.pendingReviewId);
+  }
+
+  /**
+   * Get the reviewer role for the pending review
+   */
+  getPendingReviewerRole(): number {
+    const review = this.getPendingReview();
+    return review?.reviewerRole || 0;
+  }
+
+  /**
+   * Check if the pending review uses item-level scoring
+   */
+  isPendingReviewItemLevel(): boolean {
+    return this.isItemLevelScoring(this.getPendingReviewerRole());
+  }
+
+  /**
+   * Get the scoring type label for the pending review
+   */
+  getPendingScoringLabel(): string {
+    return this.getScoringTypeLabel(this.getPendingReviewerRole());
+  }
+
+  /**
+   * Submit scores based on review type
+   */
+  submitPendingScores(): void {
+    if (this.isPendingReviewItemLevel()) {
+      this.submitRmScores();
+    } else {
+      this.submitOverallScore();
+    }
+  }
+
   private showToast(type: 'success' | 'error', message: string): void {
     const toast = document.createElement('div');
     toast.className = `fixed top-4 right-4 px-6 py-4 rounded-lg shadow-lg z-50 ${
