@@ -80,7 +80,6 @@ export class EvaluationDetailComponent implements OnInit {
   completeFormCurrentScore: number | null = null;
 
   // ====== Scoring State ======
-  showScoringPanel = false;
   submittingScores = false;
   pendingReviewId: number | null = null;
   
@@ -148,6 +147,13 @@ export class EvaluationDetailComponent implements OnInit {
       const isCurrentUserReview = reviewerEmail.includes(currentUserEmail.split('@')[0].toLowerCase());
       
       if (!isCurrentUserReview) return false;
+      
+      // ✅ NEW: Skip scoring for RM's FIRST approval (Pending_RM_Review)
+      // RM only needs to score after employee completes goals (Pending_RM_Review_PostCompletion)
+      if (r.reviewerRole === ReviewerRole.RM && 
+          this.evaluation!.status === 'Pending_RM_Review') {
+        return false; // No scoring needed for first RM approval
+      }
       
       // For peer reviews, only show the first pending one
       if (r.reviewerRole === ReviewerRole.Peer) {
@@ -247,23 +253,6 @@ export class EvaluationDetailComponent implements OnInit {
   }
 
   /**
-   * Open scoring panel for a specific review
-   */
-  openScoringPanel(review: ReviewDto): void {
-    this.pendingReviewId = review.reviewId;
-    this.initializeScoringForReview(review);
-    this.showScoringPanel = true;
-  }
-
-  /**
-   * Close scoring panel
-   */
-  closeScoringPanel(): void {
-    this.showScoringPanel = false;
-    this.pendingReviewId = null;
-  }
-
-  /**
    * Submit RM item-level scores
    */
   submitRmScores(): void {
@@ -286,7 +275,6 @@ export class EvaluationDetailComponent implements OnInit {
       next: (response) => {
         this.showToast('success', response.message || 'Scores submitted successfully!');
         this.submittingScores = false;
-        this.closeScoringPanel();
         this.loadEvaluation();
       },
       error: (err) => {
@@ -315,7 +303,6 @@ export class EvaluationDetailComponent implements OnInit {
       next: (response) => {
         this.showToast('success', response.message || 'Score submitted successfully!');
         this.submittingScores = false;
-        this.closeScoringPanel();
         this.loadEvaluation();
       },
       error: (err) => {
@@ -325,28 +312,6 @@ export class EvaluationDetailComponent implements OnInit {
         console.error('Error submitting overall score:', err);
       }
     });
-  }
-
-  /**
-   * Check if current user can score a specific review
-   */
-  canScoreReview(review: ReviewDto): boolean {
-    if (review.status.toLowerCase() !== 'pending') return false;
-    
-    // Check if user is the reviewer
-    const account = this.authService.instance.getActiveAccount();
-    const currentUserEmail = account?.username?.toLowerCase() || '';
-    
-    // Simple check - in real app, compare user IDs
-    return review.reviewerName.toLowerCase().includes(currentUserEmail.split('@')[0].toLowerCase());
-  }
-
-  /**
-   * Get the scoring type label based on reviewer role
-   */
-  getScoringTypeLabel(role: number): string {
-    if (role === 3) return 'Item-Level Scoring (1-10 per goal)';
-    return 'Overall Scoring (1-10)';
   }
 
   /**
@@ -377,6 +342,21 @@ export class EvaluationDetailComponent implements OnInit {
    */
   isItemLevelScoring(role: number): boolean {
     return role === 3; // RM = 3
+  }
+
+  /**
+   * ✅ NEW: Check if there are any scores to display in Reviews & Ratings section
+   */
+  hasAnyScores(): boolean {
+    if (!this.evaluation || !this.evaluation.reviews) return false;
+    
+    return this.evaluation.reviews.some(review => {
+      const isCompleted = review.status.toLowerCase() === 'completed' || review.status.toLowerCase() === 'approved';
+      const hasRmScores = review.reviewerRole === ReviewerRole.RM && review.scores && review.scores.length > 0;
+      const hasOverallScore = review.reviewerRole !== ReviewerRole.RM && review.overallScore !== null && review.overallScore !== undefined;
+      
+      return isCompleted && (hasRmScores || hasOverallScore);
+    });
   }
 
   determineUserRole(): void {
@@ -1002,7 +982,26 @@ export class EvaluationDetailComponent implements OnInit {
    * Get the scoring type label for the pending review
    */
   getPendingScoringLabel(): string {
-    return this.getScoringTypeLabel(this.getPendingReviewerRole());
+    if (!this.evaluation || !this.pendingReviewId) return 'Submit Your Scores';
+    
+    const pendingReview = this.evaluation.reviews.find(r => r.reviewId === this.pendingReviewId);
+    if (!pendingReview) return 'Submit Your Scores';
+    
+    const roleName = this.getRoleName(pendingReview.reviewerRole);
+    
+    // ✅ NEW: Special label for RM post-completion scoring
+    if (pendingReview.reviewerRole === ReviewerRole.RM && 
+        this.evaluation.status === 'Pending_RM_Review_PostCompletion') {
+      return `${roleName} Scoring - Rate Each Completed Goal`;
+    }
+    
+    // For item-level scoring (RM)
+    if (pendingReview.reviewerRole === ReviewerRole.RM) {
+      return `${roleName} Scoring - Rate Each Goal (1-10)`;
+    }
+    
+    // For overall scoring (TL, Peer, HOD, GM)
+    return `${roleName} Scoring - Overall Evaluation (1-10)`;
   }
 
   /**
@@ -1178,20 +1177,40 @@ export class EvaluationDetailComponent implements OnInit {
    * ✅ NEW: Helper to show score submission status in UI
    */
   getScoreSubmissionStatus(): string {
-    if (!this.hasPendingScoringRequirement) {
-      return 'No scoring required';
+    if (!this.evaluation || !this.pendingReviewId) return '';
+    
+    const pendingReview = this.evaluation.reviews.find(r => r.reviewId === this.pendingReviewId);
+    if (!pendingReview) return '';
+    
+    // ✅ NEW: Different messages for RM based on evaluation stage
+    if (pendingReview.reviewerRole === ReviewerRole.RM) {
+      if (this.evaluation.status === 'Pending_RM_Review') {
+        // First RM approval - no scoring needed
+        return 'Review and approve/reject the goal set. No scoring required at this stage.';
+      } else if (this.evaluation.status === 'Pending_RM_Review_PostCompletion') {
+        // Second RM approval - scoring required
+        return 'Please score each completed goal (1-10). You must submit scores before approving.';
+      }
     }
-
-    if (this.currentUserRole === 'RM') {
-      const hasScores = this.hasAllScoresSelected();
-      return hasScores ? 'Scores ready to submit' : 'Please score all goals';
+    
+    // For other roles (TL, Peer, HOD, GM)
+    if (pendingReview.reviewerRole === ReviewerRole.TL) {
+      return 'Please provide an overall score (1-10) for this evaluation. You must submit your score before approving.';
     }
-
-    if ((this.currentUserRole === 'TL' || this.currentUserRole === 'Peer') && this.overallScore) {
-      return 'Score ready to submit';
+    
+    if (pendingReview.reviewerRole === ReviewerRole.Peer) {
+      return 'Please provide your peer review score (1-10). You must submit your score before approving.';
     }
-
-    return 'Score required before approval';
+    
+    if (pendingReview.reviewerRole === ReviewerRole.HOD) {
+      return 'Please provide your HOD score (1-10). You must submit your score before approving.';
+    }
+    
+    if (pendingReview.reviewerRole === ReviewerRole.GM) {
+      return 'Please provide your GM score (1-10). You must submit your score before approving.';
+    }
+    
+    return 'Please submit your scores before approving this evaluation.';
   }
 
   /**
