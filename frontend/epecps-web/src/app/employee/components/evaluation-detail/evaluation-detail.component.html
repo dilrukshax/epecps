@@ -108,93 +108,95 @@
         <div class="px-6 py-5">
           <!-- Display Reviews by Role -->
           <div class="space-y-8">
-            <!-- Loop through all reviews and display their scores -->
-            <div *ngFor="let review of evaluation.reviews" class="border-2 border-gray-200 rounded-lg p-6">
-              <!-- Review Header -->
-              <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-900">{{ getRoleName(review.reviewerRole) }}</h3>
-                  <p class="text-sm text-gray-600">{{ review.reviewerName }}</p>
+            <!-- Loop through all reviews and display (with filtering for sequential peer reviews) -->
+            <ng-container *ngFor="let review of evaluation.reviews; let i = index">
+              <div *ngIf="shouldDisplayReview(review, i)" class="border-2 border-gray-200 rounded-lg p-6">
+                <!-- Review Header -->
+                <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
+                  <div>
+                    <h3 class="text-lg font-semibold text-gray-900">{{ getRoleName(review.reviewerRole) }}</h3>
+                    <p class="text-sm text-gray-600">{{ review.reviewerName }}</p>
+                  </div>
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" [ngClass]="getReviewStatusClass(review.status)">
+                    {{ review.status }}
+                  </span>
                 </div>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" [ngClass]="getReviewStatusClass(review.status)">
-                  {{ review.status }}
-                </span>
-              </div>
 
-              <!-- Show Scores if Review is Completed/Approved AND has scores -->
-              <div *ngIf="(review.status.toLowerCase() === 'completed' || review.status.toLowerCase() === 'approved') && 
-                          ((review.reviewerRole === 3 && review.scores && review.scores.length > 0) || 
-                           (review.reviewerRole !== 3 && review.overallScore !== null && review.overallScore !== undefined))">
-                
-                <!-- For RM: Show item-level scores -->
-                <div *ngIf="review.reviewerRole === 3 && review.scores && review.scores.length > 0">
-                  <h4 class="text-sm font-medium text-gray-700 mb-4">Goal Scores:</h4>
-                  <div class="space-y-4">
-                    <div *ngFor="let score of review.scores" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                      <div class="flex items-start justify-between mb-2">
-                        <div class="flex-1">
-                          <h5 class="font-semibold text-gray-900">{{ score.goalTitle || 'Goal ' + (score.personalGoalId || score.id) }}</h5>
+                <!-- Show Scores if Review is Completed/Approved AND has scores -->
+                <div *ngIf="(review.status.toLowerCase() === 'completed' || review.status.toLowerCase() === 'approved') && 
+                            ((review.reviewerRole === 3 && review.scores && review.scores.length > 0) || 
+                             (review.reviewerRole !== 3 && review.overallScore !== null && review.overallScore !== undefined))">
+                  
+                  <!-- For RM: Show item-level scores -->
+                  <div *ngIf="review.reviewerRole === 3 && review.scores && review.scores.length > 0">
+                    <h4 class="text-sm font-medium text-gray-700 mb-4">Goal Scores:</h4>
+                    <div class="space-y-4">
+                      <div *ngFor="let score of review.scores" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <div class="flex items-start justify-between mb-2">
+                          <div class="flex-1">
+                            <h5 class="font-semibold text-gray-900">{{ score.goalTitle || 'Goal ' + (score.personalGoalId || score.id) }}</h5>
+                          </div>
+                          <div class="ml-4">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-lg font-bold bg-indigo-100 text-indigo-800">
+                              {{ score.scoreValue }}/10
+                            </span>
+                          </div>
                         </div>
-                        <div class="ml-4">
-                          <span class="inline-flex items-center px-3 py-1 rounded-full text-lg font-bold bg-indigo-100 text-indigo-800">
-                            {{ score.scoreValue }}/10
-                          </span>
+                        <p *ngIf="score.comment" class="text-sm text-gray-600 italic mt-2 pl-3 border-l-2 border-gray-300">
+                          "{{ score.comment }}"
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- For TL/Peer/HOD/GM: Show overall score -->
+                  <div *ngIf="review.reviewerRole !== 3 && review.overallScore !== null && review.overallScore !== undefined">
+                    <div class="flex items-center gap-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg">
+                      <div class="flex-shrink-0">
+                        <div class="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center">
+                          <span class="text-3xl font-bold text-white">{{ review.overallScore }}</span>
                         </div>
                       </div>
-                      <p *ngIf="score.comment" class="text-sm text-gray-600 italic mt-2 pl-3 border-l-2 border-gray-300">
-                        "{{ score.comment }}"
-                      </p>
+                      <div class="flex-1">
+                        <h4 class="text-lg font-semibold text-gray-900">Overall Score</h4>
+                        <p class="text-sm text-gray-600">Score out of 10</p>
+                      </div>
                     </div>
+                  </div>
+
+                  <!-- Overall Comment -->
+                  <div *ngIf="review.overallComment" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Overall Comment:</h4>
+                    <p class="text-sm text-gray-800 italic">"{{ review.overallComment }}"</p>
+                  </div>
+
+                  <!-- Submission Timestamp -->
+                  <div *ngIf="review.submittedAt" class="mt-3 text-xs text-gray-500">
+                    Submitted on: {{ review.submittedAt | date:'medium' }}
                   </div>
                 </div>
 
-                <!-- For TL/Peer/HOD/GM: Show overall score -->
-                <div *ngIf="review.reviewerRole !== 3 && review.overallScore !== null && review.overallScore !== undefined">
-                  <div class="flex items-center gap-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg">
-                    <div class="flex-shrink-0">
-                      <div class="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center">
-                        <span class="text-3xl font-bold text-white">{{ review.overallScore }}</span>
-                      </div>
-                    </div>
-                    <div class="flex-1">
-                      <h4 class="text-lg font-semibold text-gray-900">Overall Score</h4>
-                      <p class="text-sm text-gray-600">Score out of 10</p>
-                    </div>
+                <!-- Pending Review Message -->
+                <div *ngIf="review.status.toLowerCase() === 'pending'" class="text-center py-6">
+                  <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p class="mt-2 text-sm text-gray-600">Awaiting review from {{ review.reviewerName }}</p>
+                  
+                  <!-- Show scores button if current user can score -->
+                  <div *ngIf="canScoreReview(review)" class="mt-4">
+                    <button 
+                      (click)="openScoringPanel(review)" 
+                      class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+                      <svg class="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                      Submit Your Scores
+                    </button>
                   </div>
                 </div>
-
-                <!-- Overall Comment (if any) -->
-                <div *ngIf="review.overallComment" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <h4 class="text-sm font-medium text-gray-700 mb-2">Overall Comment:</h4>
-                  <p class="text-sm text-gray-800 italic">"{{ review.overallComment }}"</p>
-                </div>
-
-                <!-- Submission Timestamp -->
-                <div *ngIf="review.submittedAt" class="mt-3 text-xs text-gray-500">
-                  Submitted on: {{ review.submittedAt | date:'medium' }}
-                </div>
               </div>
-
-              <!-- ✅ UPDATED: Pending Review Message -->
-              <div *ngIf="review.status.toLowerCase() === 'pending'" class="text-center py-6">
-                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p class="mt-2 text-sm text-gray-600">Awaiting review from {{ review.reviewerName }}</p>
-                
-                <!-- ✅ Show scores button if current user can score -->
-                <div *ngIf="canScoreReview(review)" class="mt-4">
-                  <button 
-                    (click)="openScoringPanel(review)" 
-                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
-                    <svg class="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
-                    Submit Your Scores
-                  </button>
-                </div>
-              </div>
-            </div>
+            </ng-container>
 
             <!-- No Reviews Message -->
             <div *ngIf="!evaluation.reviews || evaluation.reviews.length === 0" class="text-center py-8 text-gray-500">
@@ -245,7 +247,13 @@
       <div *ngIf="isActiveApprover && !showCommentBox" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-primary-200">
         <div class="px-6 py-5 bg-primary-50 border-b border-primary-200">
           <h2 class="text-xl font-bold text-primary-900">Your Action Required</h2>
-          <p class="mt-1 text-sm text-primary-700">You are acting as: <span class="font-semibold">{{ currentUserRole }}</span></p>
+          <p class="mt-1 text-sm text-primary-700">
+            You are acting as: <span class="font-semibold">{{ currentUserRole }}</span>
+            <!-- ✅ Show peer review number if applicable -->
+            <span *ngIf="currentUserRole === 'Peer' && evaluation" class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+              {{ getPeerReviewNumber() }}
+            </span>
+          </p>
         </div>
         <div class="px-6 py-5">
           <p class="text-gray-700 mb-4">Please review the evaluation details above and take appropriate action.</p>
@@ -432,7 +440,7 @@
               <button 
                 (click)="cancelPeerAssignment()" 
                 [disabled]="assigningPeers" 
-                class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-gray-300 textBase font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
                 Cancel
               </button>
             </div>

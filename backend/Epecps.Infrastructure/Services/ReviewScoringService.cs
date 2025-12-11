@@ -149,11 +149,12 @@ public class ReviewScoringService : IReviewScoringService
         // Calculate average score
         decimal averageScore = totalScore / dto.ItemScores.Count;
 
-        // Update review
+        // Update review (scores only - status remains "Pending" until formal approval)
         review.OverallScore = averageScore;
         review.OverallComment = dto.OverallComment ?? review.OverallComment;
-        review.Status = "Completed";
-        review.SubmittedAt = DateTime.UtcNow;
+        // ? FIX: Don't change status to "Completed" here - that happens in ApproveAsync
+        // review.Status = "Completed";  // Removed - status stays "Pending"
+        review.SubmittedAt = DateTime.UtcNow;  // Track when scores were submitted
 
         // Create approval history
         var approvalHistory = new ApprovalHistory
@@ -303,11 +304,12 @@ public class ReviewScoringService : IReviewScoringService
             _context.Set<ReviewScoreHistory>().Add(createHistory);
         }
 
-        // Update review
+        // Update review (scores only - status remains "Pending" until formal approval)
         review.OverallScore = dto.OverallScore;
         review.OverallComment = dto.Comment ?? review.OverallComment;
-        review.Status = "Completed";
-        review.SubmittedAt = DateTime.UtcNow;
+        // ? FIX: Don't change status to "Completed" here - that happens in ApproveAsync
+        // review.Status = "Completed";  // Removed - status stays "Pending"
+        review.SubmittedAt = DateTime.UtcNow;  // Track when scores were submitted
 
         // Create approval history
         var approvalHistory = new ApprovalHistory

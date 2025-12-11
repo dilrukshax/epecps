@@ -213,7 +213,19 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
     public async Task ApproveAsync(int evaluationId, int actorUserId, string? comment, CancellationToken cancellationToken = default)
     {
+        // ? FIX: Reload evaluation with fresh data from database each time to avoid stale data
         var evaluation = await _context.Set<Evaluation>()
+            .Include(e => e.Reviews)
+            .Include(e => e.PeerAssignments)
+            .Include(e => e.Employee)
+            .AsNoTracking() // Use AsNoTracking to ensure we get fresh data
+            .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+        if (evaluation == null)
+            throw new NotFoundException(nameof(Evaluation), evaluationId);
+
+        // ? FIX: Now re-attach to track changes
+        evaluation = await _context.Set<Evaluation>()
             .Include(e => e.Reviews)
             .Include(e => e.PeerAssignments)
             .Include(e => e.Employee)
@@ -355,7 +367,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 if (peerAssignment == null)
                     throw new BusinessRuleException("Only assigned peer reviewers can approve at this stage.");
                 
-                // Find the specific peer review for this user that is still pending
+                // ? FIX: Find the FIRST pending peer review for this user (allows same user to approve twice)
                 currentReview = evaluation.Reviews
                     .Where(r => r.ReviewerRole == ReviewerRole.Peer && 
                                r.ReviewerUserId == actorUserId && 
@@ -364,7 +376,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     .FirstOrDefault();
                 
                 if (currentReview == null)
-                    throw new BusinessRuleException("You have already approved this evaluation.");
+                    throw new BusinessRuleException("You have already completed all your peer reviews for this evaluation.");
                 
                 actorRole = "Peer";
                 break;
@@ -388,6 +400,13 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             currentReview.Status = REVIEW_STATUS_APPROVED;
             currentReview.OverallComment = comment ?? currentReview.OverallComment;
             currentReview.SubmittedAt = DateTime.UtcNow;
+            
+            // ? FIX: Explicitly mark the review as modified to ensure EF tracks the changes
+            _context.Entry(currentReview).State = EntityState.Modified;
+            
+            // ? FIX: Save changes immediately to ensure review status is persisted
+            // This prevents issues with subsequent checks and ensures atomicity
+            await _context.SaveChangesAsync(cancellationToken);
         }
         
         // Check if we need to transition after peer reviews (must be done AFTER updating the review)

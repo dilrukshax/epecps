@@ -140,11 +140,31 @@ export class EvaluationDetailComponent implements OnInit {
     const account = this.authService.instance.getActiveAccount();
     const currentUserEmail = account?.username?.toLowerCase() || '';
 
-    // Find pending review for current user
-    const pendingReview = this.evaluation.reviews.find(r => 
-      r.status.toLowerCase() === 'pending' && 
-      r.reviewerName.toLowerCase().includes(currentUserEmail.split('@')[0].toLowerCase())
-    );
+    // ✅ FIX: Find only the FIRST pending review for current user (for sequential peer reviews)
+    const pendingReview = this.evaluation.reviews.find((r, index) => {
+      if (r.status.toLowerCase() !== 'pending') return false;
+      
+      const reviewerEmail = r.reviewerName.toLowerCase();
+      const isCurrentUserReview = reviewerEmail.includes(currentUserEmail.split('@')[0].toLowerCase());
+      
+      if (!isCurrentUserReview) return false;
+      
+      // For peer reviews, only show the first pending one
+      if (r.reviewerRole === ReviewerRole.Peer) {
+        const allPeerReviewsByCurrentUser = this.evaluation!.reviews
+          .filter(rev => rev.reviewerRole === ReviewerRole.Peer && 
+                        rev.reviewerName.toLowerCase().includes(currentUserEmail.split('@')[0].toLowerCase()));
+        
+        const pendingPeerReviews = allPeerReviewsByCurrentUser.filter(rev => rev.status.toLowerCase() === 'pending');
+        
+        // Only process if this is the first pending peer review
+        if (pendingPeerReviews.length > 0) {
+          return r.reviewId === pendingPeerReviews[0].reviewId;
+        }
+      }
+      
+      return true;
+    });
 
     if (pendingReview) {
       this.pendingReviewId = pendingReview.reviewId;
@@ -330,6 +350,29 @@ export class EvaluationDetailComponent implements OnInit {
   }
 
   /**
+   * ✅ NEW: Get which peer review number the user is on
+   */
+  getPeerReviewNumber(): string {
+    if (!this.evaluation || this.currentUserRole !== 'Peer') return '';
+    
+    const account = this.authService.instance.getActiveAccount();
+    const currentUserEmail = account?.username?.toLowerCase() || '';
+    
+    const allPeerReviewsByCurrentUser = this.evaluation.reviews
+      .filter(r => r.reviewerRole === ReviewerRole.Peer && 
+                   r.reviewerName.toLowerCase().includes(currentUserEmail.split('@')[0].toLowerCase()))
+      .sort((a, b) => a.reviewId - b.reviewId);
+    
+    const completedCount = allPeerReviewsByCurrentUser.filter(r => 
+      r.status.toLowerCase() === 'approved' || r.status.toLowerCase() === 'completed'
+    ).length;
+    
+    const totalCount = allPeerReviewsByCurrentUser.length;
+    
+    return `Peer Review ${completedCount + 1} of ${totalCount}`;
+  }
+
+  /**
    * Check if review requires item-level scoring (RM only)
    */
   isItemLevelScoring(role: number): boolean {
@@ -352,10 +395,11 @@ export class EvaluationDetailComponent implements OnInit {
     this.showGmActions = false;
     this.showHrActions = false;
     
-    // Check if peer assignment is needed
+    // ✅ FIX: Check if peer assignment is needed - TL has already approved at this stage
+    // So we should NOT show the approval section, only the peer assignment section
     if (status.includes('pending_peer_assignment')) {
       this.needsPeerAssignment = true;
-      this.isActiveApprover = true;
+      this.isActiveApprover = false; // ✅ FIXED: Set to false since TL already approved
       this.currentUserRole = 'TL';
       this.loadAvailablePeers();
       return;
@@ -386,8 +430,20 @@ export class EvaluationDetailComponent implements OnInit {
       this.isActiveApprover = true;
       this.currentUserRole = 'TL';
     } else if (status.includes('pending_peer')) {
-      this.isActiveApprover = true;
-      this.currentUserRole = 'Peer';
+      // ✅ FIX: For peer reviews, check if current user has a pending review
+      const account = this.authService.instance.getActiveAccount();
+      const currentUserEmail = account?.username?.toLowerCase() || '';
+      
+      const currentUserPendingPeerReview = this.evaluation.reviews.find(r => 
+        r.reviewerRole === ReviewerRole.Peer && 
+        r.status.toLowerCase() === 'pending' &&
+        r.reviewerName.toLowerCase().includes(currentUserEmail.split('@')[0].toLowerCase())
+      );
+      
+      if (currentUserPendingPeerReview) {
+        this.isActiveApprover = true;
+        this.currentUserRole = 'Peer';
+      }
     }
   }
 
@@ -1136,5 +1192,41 @@ export class EvaluationDetailComponent implements OnInit {
     }
 
     return 'Score required before approval';
+  }
+
+  /**
+   * ✅ NEW: Check if a review should be displayed (for sequential peer reviews)
+   * For peers: only show the first pending review for the current user
+   */
+  shouldDisplayReview(review: ReviewDto, index: number): boolean {
+    if (!review) return false;
+    
+    // Get current user info
+    const account = this.authService.instance.getActiveAccount();
+    const currentUserEmail = account?.username?.toLowerCase() || '';
+    const reviewerEmail = review.reviewerName.toLowerCase();
+    
+    // Check if this review belongs to current user
+    const isCurrentUserReview = reviewerEmail.includes(currentUserEmail.split('@')[0].toLowerCase());
+    
+    // For peer reviews by current user
+    if (review.reviewerRole === ReviewerRole.Peer && isCurrentUserReview) {
+      // If this review is pending, check if there's an earlier pending review by the same user
+      if (review.status.toLowerCase() === 'pending' && this.evaluation) {
+        const allPeerReviewsByCurrentUser = this.evaluation.reviews
+          .filter(r => r.reviewerRole === ReviewerRole.Peer && 
+                       r.reviewerName.toLowerCase().includes(currentUserEmail.split('@')[0].toLowerCase()));
+        
+        // Find the first pending review
+        const firstPendingIndex = allPeerReviewsByCurrentUser.findIndex(r => r.status.toLowerCase() === 'pending');
+        const currentReviewIndex = allPeerReviewsByCurrentUser.findIndex(r => r.reviewId === review.reviewId);
+        
+        // Only show if this is the first pending review
+        return currentReviewIndex === firstPendingIndex;
+      }
+    }
+    
+    // For all other reviews (non-peer or completed), show normally
+    return true;
   }
 }
