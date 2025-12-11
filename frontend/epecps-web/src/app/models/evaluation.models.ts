@@ -242,3 +242,82 @@ export interface GoalDetailWithStatusDto extends GoalDto {
   canStart: boolean;
   canComplete: boolean;
 }
+
+// ========== NEW: Bulk Approval DTOs ==========
+
+/**
+ * DTO for bulk approval candidates (evaluations eligible for bulk approval)
+ */
+export interface BulkApprovalCandidateDto {
+  evaluationId: number;
+  employeeId: number;
+  employeeName: string;
+  employeeEmail: string;
+  status: string;
+  overallScore?: number;
+  scorePercentage: number; // Score as percentage (0-100)
+  isEligibleForPromotion: boolean; // Score >= 80%
+  cycleId: number;
+  cycleName: string;
+  lastReviewedAt?: Date;
+  recommendedByHodName?: string;
+  recommendedAt?: Date;
+}
+
+/**
+ * Request DTO for bulk approval
+ */
+export interface BulkApprovalRequestDto {
+  evaluationIds: number[];
+  comment?: string;
+}
+
+/**
+ * Response DTO for bulk approval operations
+ */
+export interface BulkApprovalResponseDto {
+  totalRequested: number;
+  successCount: number;
+  failedCount: number;
+  message: string;
+  results: BulkApprovalResultItemDto[];
+}
+
+/**
+ * Individual result item for bulk approval
+ */
+export interface BulkApprovalResultItemDto {
+  evaluationId: number;
+  employeeName: string;
+  success: boolean;
+  message: string;
+  newStatus?: string;
+}
+
+/**
+ * Summary stats for bulk approval dashboard
+ */
+export interface BulkApprovalStatsDto {
+  pendingGmApproval: number;
+  pendingHrProcessing: number;
+  eligibleForPromotion: number; // Score >= 80%
+  notEligibleForPromotion: number; // Score < 80%
+  averageScore: number;
+}
+
+/**
+ * DTO for HOD score submission
+ */
+export interface HodScoreSubmissionDto {
+  score: number; // 1-10
+  comment?: string;
+}
+
+/**
+ * Response DTO for HOD score submission
+ */
+export interface HodScoreSubmissionResponseDto {
+  message: string;
+  score: number;
+  scorePercentage: number;
+}

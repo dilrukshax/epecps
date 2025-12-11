@@ -15,7 +15,13 @@ import {
   CompleteGoalRequestDto,
   SubmitRmScoringDto,
   SubmitOverallScoringDto,
-  ReviewScoringResponseDto
+  ReviewScoringResponseDto,
+  BulkApprovalStatsDto,
+  BulkApprovalCandidateDto,
+  BulkApprovalRequestDto,
+  BulkApprovalResponseDto,
+  HodScoreSubmissionDto,
+  HodScoreSubmissionResponseDto
 } from '../models/evaluation.models';
 
 @Injectable({
@@ -220,6 +226,67 @@ export class EvaluationService {
   submitOverallScoring(evaluationId: number, reviewId: number, payload: SubmitOverallScoringDto): Observable<ReviewScoringResponseDto> {
     return this.http.post<ReviewScoringResponseDto>(
       `${this.apiUrl}/api/evaluations/${evaluationId}/reviews/${reviewId}/overall-score`,
+      payload
+    );
+  }
+
+  // ========== NEW: Bulk Approval Methods ==========
+
+  /**
+   * Get bulk approval statistics for GM/HR dashboard
+   */
+  getBulkApprovalStats(): Observable<BulkApprovalStatsDto> {
+    return this.http.get<BulkApprovalStatsDto>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/stats`
+    );
+  }
+
+  /**
+   * Get all evaluations pending GM approval (for bulk approval)
+   */
+  getPendingGmBulkApprovals(): Observable<BulkApprovalCandidateDto[]> {
+    return this.http.get<BulkApprovalCandidateDto[]>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/gm-pending`
+    );
+  }
+
+  /**
+   * Get all evaluations pending HR processing (for bulk processing)
+   */
+  getPendingHrBulkProcessing(): Observable<BulkApprovalCandidateDto[]> {
+    return this.http.get<BulkApprovalCandidateDto[]>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/hr-pending`
+    );
+  }
+
+  /**
+   * GM bulk approves multiple evaluations at once
+   */
+  gmBulkApprove(request: BulkApprovalRequestDto): Observable<BulkApprovalResponseDto> {
+    return this.http.post<BulkApprovalResponseDto>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/gm-approve`,
+      request
+    );
+  }
+
+  /**
+   * HR bulk processes multiple promotions at once
+   */
+  hrBulkProcess(request: BulkApprovalRequestDto): Observable<BulkApprovalResponseDto> {
+    return this.http.post<BulkApprovalResponseDto>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/hr-process`,
+      request
+    );
+  }
+
+  /**
+   * HOD submits overall score for an evaluation
+   * If score >= 8 (80%), auto-recommends to GM
+   * If score < 8 (80%), directly completes without promotion
+   */
+  hodSubmitScore(evaluationId: number, payload: HodScoreSubmissionDto): Observable<HodScoreSubmissionResponseDto> {
+    return this.http.post<HodScoreSubmissionResponseDto>(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/hod/submit-score`,
       payload
     );
   }

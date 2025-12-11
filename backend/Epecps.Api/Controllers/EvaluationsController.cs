@@ -666,6 +666,205 @@ public class EvaluationsController : ControllerBase
             return StatusCode(500, new { error = "Failed to submit overall score.", details = ex.Message });
         }
     }
+
+    // ========== NEW: Bulk Approval Endpoints ==========
+
+    /// <summary>
+    /// Get bulk approval statistics for GM/HR dashboard
+    /// </summary>
+    [HttpGet("bulk-approval/stats")]
+    public async Task<IActionResult> GetBulkApprovalStats(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var stats = await _evaluationWorkflowService.GetBulkApprovalStatsAsync(userId, cancellationToken);
+            return Ok(stats);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to get bulk approval stats.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get all evaluations pending GM approval (for bulk approval)
+    /// </summary>
+    [HttpGet("bulk-approval/gm-pending")]
+    public async Task<IActionResult> GetPendingGmBulkApprovals(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var evaluations = await _evaluationWorkflowService.GetPendingGmBulkApprovalsAsync(userId, cancellationToken);
+            return Ok(evaluations);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to get pending GM approvals.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get all evaluations pending HR processing (for bulk processing)
+    /// </summary>
+    [HttpGet("bulk-approval/hr-pending")]
+    public async Task<IActionResult> GetPendingHrBulkProcessing(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var evaluations = await _evaluationWorkflowService.GetPendingHrBulkProcessingAsync(userId, cancellationToken);
+            return Ok(evaluations);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to get pending HR processing.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// GM bulk approves multiple evaluations at once
+    /// </summary>
+    [HttpPost("bulk-approval/gm-approve")]
+    public async Task<IActionResult> GmBulkApprove(
+        [FromBody] BulkApprovalRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            if (!await UserHasRoleAsync(userId, "GM", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the GM role to perform this action." });
+            }
+
+            var result = await _evaluationWorkflowService.GmBulkApproveAsync(userId, request, cancellationToken);
+            return Ok(result);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to process bulk approval.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// HR bulk processes multiple promotions at once
+    /// </summary>
+    [HttpPost("bulk-approval/hr-process")]
+    public async Task<IActionResult> HrBulkProcess(
+        [FromBody] BulkApprovalRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            if (!await UserHasRoleAsync(userId, "HR", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the HR role to perform this action." });
+            }
+
+            var result = await _evaluationWorkflowService.HrBulkProcessAsync(userId, request, cancellationToken);
+            return Ok(result);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to process bulk HR processing.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// HOD submits overall score for an evaluation
+    /// If score >= 8 (80%), auto-recommends to GM
+    /// If score < 8 (80%), directly completes without promotion
+    /// </summary>
+    [HttpPost("{evaluationId}/hod/submit-score")]
+    public async Task<IActionResult> HodSubmitScore(
+        int evaluationId,
+        [FromBody] HodScoreSubmissionDto dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            if (!await UserHasRoleAsync(userId, "HOD", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the HOD role to perform this action." });
+            }
+
+            await _evaluationWorkflowService.HodSubmitScoreAsync(
+                evaluationId,
+                userId,
+                dto.Score,
+                dto.Comment,
+                cancellationToken);
+
+            var message = dto.Score >= 8 
+                ? "Score submitted successfully. Employee has been auto-recommended for promotion to GM." 
+                : "Score submitted successfully. Evaluation completed without promotion.";
+
+            return Ok(new { message, score = dto.Score, scorePercentage = dto.Score * 10 });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to submit HOD score.", details = ex.Message });
+        }
+    }
 }
 
 /// <summary>
@@ -683,5 +882,14 @@ public class PromotionDecisionDto
 public class HrProcessDto
 {
     public bool Proceed { get; set; }
+    public string? Comment { get; set; }
+}
+
+/// <summary>
+/// DTO for HOD score submission
+/// </summary>
+public class HodScoreSubmissionDto
+{
+    public decimal Score { get; set; }
     public string? Comment { get; set; }
 }

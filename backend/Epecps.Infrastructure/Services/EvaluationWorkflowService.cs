@@ -888,7 +888,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
     private async Task TransitionAfterHodReviewAsync(Evaluation evaluation, int hodUserId, CancellationToken cancellationToken)
     {
-        // Calculate overall score from all review items
+        // Calculate overall score from all review items or review scores
         var allReviewItems = await _context.Set<ReviewItem>()
             .Where(ri => evaluation.Reviews.Select(r => r.ReviewId).Contains(ri.ReviewId))
             .ToListAsync(cancellationToken);
@@ -896,6 +896,19 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         if (allReviewItems.Any())
         {
             evaluation.OverallScore = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+        }
+        else
+        {
+            // Try ReviewScores if ReviewItems are empty
+            var allReviewScores = await _context.Set<ReviewScore>()
+                .Where(rs => evaluation.Reviews.Select(r => r.ReviewId).Contains(rs.ReviewId))
+                .ToListAsync(cancellationToken);
+            
+            if (allReviewScores.Any())
+            {
+                // Convert 1-10 scores to percentage (multiply by 10)
+                evaluation.OverallScore = Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
+            }
         }
 
         // Check if score > 80 for promotion
@@ -1151,6 +1164,9 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .Include(e => e.Employee)
                 .Include(e => e.Cycle)
                 .Include(e => e.Reviews)
+                .ThenInclude(r => r.ReviewScores)
+                .Include(e => e.Reviews)
+                .ThenInclude(r => r.ReviewItems)
                 .Where(e => (e.Status == STATUS_PENDING_GM_DECISION || e.Status.Contains("Completed")) &&
                            e.EmployeeId != userId)
                 .Select(e => new MyEvaluationDto
@@ -1375,7 +1391,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             var hrApprovals = await _context.Set<Evaluation>()
                 .Include(e => e.Employee)
                 .Include(e => e.Cycle)
-                .Include(e => e.PromotionCases)
+                .Include(e => e.Reviews)
                 .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING)
                 .Select(e => new PendingApprovalDto
                 {
@@ -1384,9 +1400,9 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     EmployeeName = e.Employee.FullName,
                     Status = e.Status,
                     RequiredRole = "HR",
-                    SubmittedDate = e.PromotionCases
-                        .Where(pc => pc.GmDecidedAt != null)
-                        .Select(pc => pc.GmDecidedAt)
+                    SubmittedDate = e.Reviews
+                        .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                        .Select(r => r.SubmittedAt)
                         .FirstOrDefault(),
                     CycleId = e.CycleId,
                     CycleName = e.Cycle.Name
@@ -1397,6 +1413,438 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         }
 
         return pendingApprovals.OrderByDescending(p => p.SubmittedDate);
+    }
+
+    public async Task<BulkApprovalStatsDto> GetBulkApprovalStatsAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var userRoles = await GetUserRolesAsync(userId, cancellationToken);
+        
+        if (!userRoles.Contains("GM") && !userRoles.Contains("HR"))
+            throw new BusinessRuleException("Only GM or HR can view bulk approval statistics.");
+
+        var pendingGmCount = await _context.Set<Evaluation>()
+            .Where(e => e.Status == STATUS_PENDING_GM_DECISION)
+            .CountAsync(cancellationToken);
+
+        var pendingHrCount = await _context.Set<Evaluation>()
+            .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING)
+            .CountAsync(cancellationToken);
+
+        // Get evaluations with their reviews to calculate scores
+        var evaluations = await _context.Set<Evaluation>()
+            .Include(e => e.Reviews)
+                .ThenInclude(r => r.ReviewScores)
+            .Include(e => e.Reviews)
+                .ThenInclude(r => r.ReviewItems)
+            .Where(e => e.Status == STATUS_PENDING_GM_DECISION || e.Status == STATUS_PENDING_HR_PROCESSING)
+            .ToListAsync(cancellationToken);
+
+        // Calculate scores for each evaluation
+        var calculatedScores = evaluations.Select(e =>
+        {
+            if (e.OverallScore.HasValue && e.OverallScore.Value > 0)
+                return e.OverallScore.Value;
+            
+            var allReviewScores = e.Reviews
+                .Where(r => r.ReviewScores != null)
+                .SelectMany(r => r.ReviewScores)
+                .ToList();
+            
+            if (allReviewScores.Any())
+                return Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
+            
+            var allReviewItems = e.Reviews
+                .Where(r => r.ReviewItems != null)
+                .SelectMany(r => r.ReviewItems)
+                .ToList();
+            
+            if (allReviewItems.Any())
+                return Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+            
+            var hodReview = e.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD && r.OverallScore.HasValue);
+            if (hodReview?.OverallScore.HasValue == true)
+                return hodReview.OverallScore.Value * 10m;
+            
+            return 0m;
+        }).ToList();
+
+        var eligibleCount = calculatedScores.Count(s => s >= PROMOTION_THRESHOLD);
+        var notEligibleCount = calculatedScores.Count(s => s < PROMOTION_THRESHOLD);
+        var avgScore = calculatedScores.Any() ? calculatedScores.Average() : 0m;
+
+        return new BulkApprovalStatsDto
+        {
+            PendingGmApproval = pendingGmCount,
+            PendingHrProcessing = pendingHrCount,
+            EligibleForPromotion = eligibleCount,
+            NotEligibleForPromotion = notEligibleCount,
+            AverageScore = Math.Round(avgScore, 2)
+        };
+    }
+
+    public async Task<IEnumerable<BulkApprovalCandidateDto>> GetPendingGmBulkApprovalsAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var userRoles = await GetUserRolesAsync(userId, cancellationToken);
+        
+        if (!userRoles.Contains("GM"))
+            throw new BusinessRuleException("Only GM can view pending bulk approvals.");
+
+        var evaluations = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Include(e => e.PromotionCases)
+                .ThenInclude(pc => pc.RecommendedByHod)
+            .Include(e => e.Reviews)
+                .ThenInclude(r => r.ReviewScores)
+            .Include(e => e.Reviews)
+                .ThenInclude(r => r.ReviewItems)
+            .Where(e => e.Status == STATUS_PENDING_GM_DECISION)
+            .OrderByDescending(e => e.OverallScore)
+            .ToListAsync(cancellationToken);
+
+        return evaluations.Select(e => 
+        {
+            var promotionCase = e.PromotionCases.FirstOrDefault();
+            
+            // Calculate score - use OverallScore if available, otherwise calculate from reviews
+            decimal scorePercentage = 0m;
+            
+            if (e.OverallScore.HasValue && e.OverallScore.Value > 0)
+            {
+                scorePercentage = e.OverallScore.Value;
+            }
+            else
+            {
+                // Try to calculate from ReviewScores
+                var allReviewScores = e.Reviews
+                    .Where(r => r.ReviewScores != null)
+                    .SelectMany(r => r.ReviewScores)
+                    .ToList();
+                
+                if (allReviewScores.Any())
+                {
+                    scorePercentage = Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
+                }
+                else
+                {
+                    var allReviewItems = e.Reviews
+                        .Where(r => r.ReviewItems != null)
+                        .SelectMany(r => r.ReviewItems)
+                        .ToList();
+                    
+                    if (allReviewItems.Any())
+                    {
+                        scorePercentage = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                    }
+                    else
+                    {
+                        var hodReview = e.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD && r.OverallScore.HasValue);
+                        if (hodReview?.OverallScore.HasValue == true)
+                            scorePercentage = hodReview.OverallScore.Value * 10m;
+                    }
+                }
+            }
+            
+            return new BulkApprovalCandidateDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee?.FullName ?? "Unknown",
+                EmployeeEmail = e.Employee?.Email ?? "",
+                Status = e.Status,
+                OverallScore = e.OverallScore ?? scorePercentage,
+                ScorePercentage = scorePercentage,
+                IsEligibleForPromotion = scorePercentage >= PROMOTION_THRESHOLD,
+                CycleId = e.CycleId,
+                CycleName = e.Cycle?.Name ?? "",
+                LastReviewedAt = promotionCase?.GmDecidedAt,
+                RecommendedByHodName = promotionCase?.RecommendedByHod?.FullName,
+                RecommendedAt = promotionCase?.RecommendedAt
+            };
+        });
+    }
+
+    public async Task<IEnumerable<BulkApprovalCandidateDto>> GetPendingHrBulkProcessingAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var userRoles = await GetUserRolesAsync(userId, cancellationToken);
+        
+        if (!userRoles.Contains("HR"))
+            throw new BusinessRuleException("Only HR can view pending bulk processing.");
+
+        var evaluations = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Include(e => e.PromotionCases)
+                .ThenInclude(pc => pc.RecommendedByHod)
+            .Include(e => e.PromotionCases)
+                .ThenInclude(pc => pc.GmDecidedBy)
+            .Include(e => e.Reviews)
+                .ThenInclude(r => r.ReviewScores)
+            .Include(e => e.Reviews)
+                .ThenInclude(r => r.ReviewItems)
+            .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING)
+            .OrderByDescending(e => e.OverallScore)
+            .ToListAsync(cancellationToken);
+
+        return evaluations.Select(e => 
+        {
+            var promotionCase = e.PromotionCases.FirstOrDefault();
+            
+            // Calculate score - use OverallScore if available, otherwise calculate from reviews
+            decimal scorePercentage = 0m;
+            
+            if (e.OverallScore.HasValue && e.OverallScore.Value > 0)
+            {
+                scorePercentage = e.OverallScore.Value;
+            }
+            else
+            {
+                // Try to calculate from ReviewScores
+                var allReviewScores = e.Reviews
+                    .Where(r => r.ReviewScores != null)
+                    .SelectMany(r => r.ReviewScores)
+                    .ToList();
+                
+                if (allReviewScores.Any())
+                {
+                    scorePercentage = Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
+                }
+                else
+                {
+                    var allReviewItems = e.Reviews
+                        .Where(r => r.ReviewItems != null)
+                        .SelectMany(r => r.ReviewItems)
+                        .ToList();
+                    
+                    if (allReviewItems.Any())
+                    {
+                        scorePercentage = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                    }
+                    else
+                    {
+                        var hodReview = e.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD && r.OverallScore.HasValue);
+                        if (hodReview?.OverallScore.HasValue == true)
+                            scorePercentage = hodReview.OverallScore.Value * 10m;
+                    }
+                }
+            }
+            
+            return new BulkApprovalCandidateDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee?.FullName ?? "Unknown",
+                EmployeeEmail = e.Employee?.Email ?? "",
+                Status = e.Status,
+                OverallScore = e.OverallScore ?? scorePercentage,
+                ScorePercentage = scorePercentage,
+                IsEligibleForPromotion = scorePercentage >= PROMOTION_THRESHOLD,
+                CycleId = e.CycleId,
+                CycleName = e.Cycle?.Name ?? "",
+                LastReviewedAt = promotionCase?.GmDecidedAt,
+                RecommendedByHodName = promotionCase?.RecommendedByHod?.FullName,
+                RecommendedAt = promotionCase?.RecommendedAt
+            };
+        });
+    }
+
+    public async Task<BulkApprovalResponseDto> GmBulkApproveAsync(int gmUserId, BulkApprovalRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var userRoles = await GetUserRolesAsync(gmUserId, cancellationToken);
+        
+        if (!userRoles.Contains("GM"))
+            throw new BusinessRuleException("Only GM can perform bulk approvals.");
+
+        if (request.EvaluationIds == null || !request.EvaluationIds.Any())
+            throw new BusinessRuleException("At least one evaluation must be selected for bulk approval.");
+
+        var results = new List<BulkApprovalResultItemDto>();
+        var successCount = 0;
+        var failedCount = 0;
+
+        foreach (var evaluationId in request.EvaluationIds)
+        {
+            try
+            {
+                await ProcessPromotionDecisionAsync(evaluationId, gmUserId, true, request.Comment ?? "Bulk approved by GM", cancellationToken);
+                
+                var evaluation = await _context.Set<Evaluation>()
+                    .Include(e => e.Employee)
+                    .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+                results.Add(new BulkApprovalResultItemDto
+                {
+                    EvaluationId = evaluationId,
+                    EmployeeName = evaluation?.Employee?.FullName ?? "Unknown",
+                    Success = true,
+                    Message = "Approved successfully",
+                    NewStatus = STATUS_PENDING_HR_PROCESSING
+                });
+                successCount++;
+            }
+            catch (Exception ex)
+            {
+                var evaluation = await _context.Set<Evaluation>()
+                    .Include(e => e.Employee)
+                    .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+                results.Add(new BulkApprovalResultItemDto
+                {
+                    EvaluationId = evaluationId,
+                    EmployeeName = evaluation?.Employee?.FullName ?? "Unknown",
+                    Success = false,
+                    Message = ex.Message
+                });
+                failedCount++;
+            }
+        }
+
+        return new BulkApprovalResponseDto
+        {
+            TotalRequested = request.EvaluationIds.Count,
+            SuccessCount = successCount,
+            FailedCount = failedCount,
+            Message = $"Bulk approval completed: {successCount} approved, {failedCount} failed",
+            Results = results
+        };
+    }
+
+    public async Task<BulkApprovalResponseDto> HrBulkProcessAsync(int hrUserId, BulkApprovalRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var userRoles = await GetUserRolesAsync(hrUserId, cancellationToken);
+        
+        if (!userRoles.Contains("HR"))
+            throw new BusinessRuleException("Only HR can perform bulk processing.");
+
+        if (request.EvaluationIds == null || !request.EvaluationIds.Any())
+            throw new BusinessRuleException("At least one evaluation must be selected for bulk processing.");
+
+        var results = new List<BulkApprovalResultItemDto>();
+        var successCount = 0;
+        var failedCount = 0;
+
+        foreach (var evaluationId in request.EvaluationIds)
+        {
+            try
+            {
+                await FinalizePromotionByHrAsync(evaluationId, hrUserId, true, request.Comment ?? "Bulk processed by HR", cancellationToken);
+                
+                var evaluation = await _context.Set<Evaluation>()
+                    .Include(e => e.Employee)
+                    .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+                results.Add(new BulkApprovalResultItemDto
+                {
+                    EvaluationId = evaluationId,
+                    EmployeeName = evaluation?.Employee?.FullName ?? "Unknown",
+                    Success = true,
+                    Message = "Promotion processed successfully",
+                    NewStatus = STATUS_COMPLETED_PROMOTION_APPROVED
+                });
+                successCount++;
+            }
+            catch (Exception ex)
+            {
+                var evaluation = await _context.Set<Evaluation>()
+                    .Include(e => e.Employee)
+                    .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+                results.Add(new BulkApprovalResultItemDto
+                {
+                    EvaluationId = evaluationId,
+                    EmployeeName = evaluation?.Employee?.FullName ?? "Unknown",
+                    Success = false,
+                    Message = ex.Message
+                });
+                failedCount++;
+            }
+        }
+
+        return new BulkApprovalResponseDto
+        {
+            TotalRequested = request.EvaluationIds.Count,
+            SuccessCount = successCount,
+            FailedCount = failedCount,
+            Message = $"Bulk processing completed: {successCount} processed, {failedCount} failed",
+            Results = results
+        };
+    }
+
+    public async Task HodSubmitScoreAsync(int evaluationId, int hodUserId, decimal score, string? comment, CancellationToken cancellationToken = default)
+    {
+        var userRoles = await GetUserRolesAsync(hodUserId, cancellationToken);
+        
+        if (!userRoles.Contains("HOD"))
+            throw new BusinessRuleException("Only HOD can submit scores at this stage.");
+
+        var evaluation = await _context.Set<Evaluation>()
+            .Include(e => e.Reviews)
+            .Include(e => e.Employee)
+            .Include(e => e.PromotionCases)
+            .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+        if (evaluation == null)
+            throw new NotFoundException(nameof(Evaluation), evaluationId);
+
+        if (evaluation.Status != STATUS_PENDING_HOD_REVIEW)
+            throw new BusinessRuleException($"Evaluation must be at HOD review stage. Current status: {evaluation.Status}");
+
+        if (score < 1 || score > 10)
+            throw new BusinessRuleException("Score must be between 1 and 10.");
+
+        var oldStatus = evaluation.Status;
+        var scorePercentage = score * 10m;
+        evaluation.OverallScore = scorePercentage;
+
+        var hodReview = evaluation.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD);
+        if (hodReview != null)
+        {
+            hodReview.Status = REVIEW_STATUS_APPROVED;
+            hodReview.OverallComment = comment;
+            hodReview.OverallScore = score;
+            hodReview.SubmittedAt = DateTime.UtcNow;
+        }
+
+        if (scorePercentage >= PROMOTION_THRESHOLD)
+        {
+            var promotionCase = evaluation.PromotionCases.FirstOrDefault();
+            if (promotionCase == null)
+            {
+                promotionCase = new PromotionCase
+                {
+                    EvaluationId = evaluation.EvaluationId,
+                    RecommendedByHodId = hodUserId,
+                    RecommendedAt = DateTime.UtcNow,
+                    GmDecision = PromotionDecision.Pending
+                };
+                _context.Set<PromotionCase>().Add(promotionCase);
+            }
+            else
+            {
+                promotionCase.RecommendedByHodId = hodUserId;
+                promotionCase.RecommendedAt = DateTime.UtcNow;
+                promotionCase.GmDecision = PromotionDecision.Pending;
+            }
+
+            evaluation.Status = STATUS_PENDING_GM_DECISION;
+
+            // Notify GM for second approval
+            var gmNotification = new Notification
+            {
+                UserId = evaluation.ReportingManagerId,
+                Subject = $"Goals Completed - Final Review Required: {evaluation.Employee?.FullName ?? "Employee"}",
+                Channel = "Email",
+                SentAt = DateTime.UtcNow
+            };
+
+            _context.Set<Notification>().Add(gmNotification);
+        }
+        else
+        {
+            evaluation.Status = STATUS_COMPLETED_NO_PROMOTION;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task AssignPeerReviewersAsync(int evaluationId, int teamLeadUserId, int peerUserId1, int peerUserId2, CancellationToken cancellationToken = default)
@@ -1415,11 +1863,6 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         if (evaluation.Status != STATUS_PENDING_PEER_ASSIGNMENT)
             throw new BusinessRuleException("Peer reviewers can only be assigned after Team Lead approval.");
 
-        // Removed validation: Allow same user for single-user testing
-        // In production with multiple users, uncomment this line:
-        // if (peerUserId1 == peerUserId2)
-        //     throw new BusinessRuleException("Peer reviewers must be different users.");
-
         // Verify peer users exist
         var peer1 = await _context.Users.FindAsync(new object[] { peerUserId1 }, cancellationToken);
         var peer2 = await _context.Users.FindAsync(new object[] { peerUserId2 }, cancellationToken);
@@ -1430,701 +1873,257 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         var oldStatus = evaluation.Status;
 
         // Create peer assignments
-        var peerAssignment1 = new PeerAssignment
-        {
-            EvaluationId = evaluationId,
-            PeerUserId = peerUserId1
-        };
-
-        var peerAssignment2 = new PeerAssignment
-        {
-            EvaluationId = evaluationId,
-            PeerUserId = peerUserId2
-        };
+        var peerAssignment1 = new PeerAssignment { EvaluationId = evaluationId, PeerUserId = peerUserId1 };
+        var peerAssignment2 = new PeerAssignment { EvaluationId = evaluationId, PeerUserId = peerUserId2 };
 
         _context.Set<PeerAssignment>().Add(peerAssignment1);
         _context.Set<PeerAssignment>().Add(peerAssignment2);
 
         // Create peer review records
-        var peerReview1 = new Review
-        {
-            EvaluationId = evaluationId,
-            ReviewerUserId = peerUserId1,
-            ReviewerRole = ReviewerRole.Peer,
-            Status = REVIEW_STATUS_PENDING,
-            OverallComment = null,
-            SubmittedAt = null
-        };
-
-        var peerReview2 = new Review
-        {
-            EvaluationId = evaluationId,
-            ReviewerUserId = peerUserId2,
-            ReviewerRole = ReviewerRole.Peer,
-            Status = REVIEW_STATUS_PENDING,
-            OverallComment = null,
-            SubmittedAt = null
-        };
+        var peerReview1 = new Review { EvaluationId = evaluationId, ReviewerUserId = peerUserId1, ReviewerRole = ReviewerRole.Peer, Status = REVIEW_STATUS_PENDING };
+        var peerReview2 = new Review { EvaluationId = evaluationId, ReviewerUserId = peerUserId2, ReviewerRole = ReviewerRole.Peer, Status = REVIEW_STATUS_PENDING };
 
         _context.Set<Review>().Add(peerReview1);
         _context.Set<Review>().Add(peerReview2);
 
-        // Update evaluation status
         evaluation.Status = STATUS_PENDING_PEER_REVIEWS;
 
         // Create approval history
         var approvalHistory = new ApprovalHistory
         {
-            EvaluationId = evaluationId,
-            ReviewId = null,
-            ActorUserId = teamLeadUserId,
-            ActorRole = "TL",
-            Action = "AssignedPeers",
-            Comment = $"Assigned peer reviewers: {peer1.FullName}, {peer2.FullName}",
-            FromStatus = oldStatus,
-            ToStatus = evaluation.Status,
-            CreatedAt = DateTime.UtcNow
+            EvaluationId = evaluationId, ActorUserId = teamLeadUserId, ActorRole = "TL",
+            Action = "AssignedPeers", Comment = $"Assigned peer reviewers: {peer1.FullName}, {peer2.FullName}",
+            FromStatus = oldStatus, ToStatus = evaluation.Status, CreatedAt = DateTime.UtcNow
         };
-
         _context.Set<ApprovalHistory>().Add(approvalHistory);
 
-        // Notify both peers
-        var notification1 = new Notification
-        {
-            UserId = peerUserId1,
-            Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}",
-            Channel = "Email",
-            SentAt = DateTime.UtcNow
-        };
-
-        var notification2 = new Notification
-        {
-            UserId = peerUserId2,
-            Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}",
-            Channel = "Email",
-            SentAt = DateTime.UtcNow
-        };
-
-        _context.Set<Notification>().Add(notification1);
-        _context.Set<Notification>().Add(notification2);
+        // Notify peers
+        _context.Set<Notification>().Add(new Notification { UserId = peerUserId1, Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}", Channel = "Email", SentAt = DateTime.UtcNow });
+        _context.Set<Notification>().Add(new Notification { UserId = peerUserId2, Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}", Channel = "Email", SentAt = DateTime.UtcNow });
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // ?? SEND EMAIL to both peer reviewers
+        // Send emails to peer reviewers
         var employee = evaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
-        
         if (employee != null)
         {
-            // Email to Peer 1
-            await _emailService.SendEvaluationNotificationAsync(
-                peer1.Email,
-                peer1.FullName,
-                employee.FullName,
-                "Assigned",
-                "Peer Reviewer",
-                "You have been assigned as a peer reviewer. Please review and provide your feedback.",
-                evaluationId,
-                cancellationToken);
-
-            // Email to Peer 2
-            await _emailService.SendEvaluationNotificationAsync(
-                peer2.Email,
-                peer2.FullName,
-                employee.FullName,
-                "Assigned",
-                "Peer Reviewer",
-                "You have been assigned as a peer reviewer. Please review and provide your feedback.",
-                evaluationId,
-                cancellationToken);
+            await _emailService.SendEvaluationNotificationAsync(peer1.Email, peer1.FullName, employee.FullName, "Assigned", "Peer Reviewer", "You have been assigned as a peer reviewer.", evaluationId, cancellationToken);
+            await _emailService.SendEvaluationNotificationAsync(peer2.Email, peer2.FullName, employee.FullName, "Assigned", "Peer Reviewer", "You have been assigned as a peer reviewer.", evaluationId, cancellationToken);
         }
     }
 
     public async Task<EvaluationDetailDto> GetEvaluationDetailsAsync(int evaluationId, int userId, CancellationToken cancellationToken = default)
     {
         var evaluation = await _context.Set<Evaluation>()
-            .Include(e => e.Employee)
-            .Include(e => e.ReportingManager)
-            .Include(e => e.TeamLead)
-            .Include(e => e.Cycle)
-            .Include(e => e.Reviews)
-                .ThenInclude(r => r.Reviewer)
-            .Include(e => e.Reviews)
-                .ThenInclude(r => r.ReviewScores)
-                    .ThenInclude(rs => rs.PersonalGoal)
-            .Include(e => e.Reviews)
-                .ThenInclude(r => r.ReviewItems)
-                    .ThenInclude(ri => ri.Goal)
-            .Include(e => e.Reviews)
-                .ThenInclude(r => r.ReviewItems)
-                    .ThenInclude(ri => ri.Competency)
+            .Include(e => e.Employee).Include(e => e.ReportingManager).Include(e => e.TeamLead).Include(e => e.Cycle)
+            .Include(e => e.Reviews).ThenInclude(r => r.Reviewer)
+            .Include(e => e.Reviews).ThenInclude(r => r.ReviewScores)
+            .Include(e => e.Reviews).ThenInclude(r => r.ReviewItems)
             .Include(e => e.EmployeeGoals)
-            .Include(e => e.PeerAssignments)
-                .ThenInclude(pa => pa.PeerUser)
-            .Include(e => e.PromotionCases)
-                .ThenInclude(pc => pc.RecommendedByHod)
-            .Include(e => e.PromotionCases)
-                .ThenInclude(pc => pc.GmDecidedBy)
+            .Include(e => e.PeerAssignments).ThenInclude(pa => pa.PeerUser)
+            .Include(e => e.PromotionCases).ThenInclude(pc => pc.RecommendedByHod)
+            .Include(e => e.PromotionCases).ThenInclude(pc => pc.GmDecidedBy)
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
 
         if (evaluation == null)
             throw new NotFoundException(nameof(Evaluation), evaluationId);
 
-        // Authorization check - user must be involved in the evaluation
         var userRoles = await GetUserRolesAsync(userId, cancellationToken);
-        var isAuthorized = userId == evaluation.EmployeeId ||
-                          userId == evaluation.ReportingManagerId ||
-                          userId == evaluation.TeamLeadId ||
-                          evaluation.PeerAssignments.Any(pa => pa.PeerUserId == userId) ||
-                          userRoles.Contains("HOD") ||
-                          userRoles.Contains("GM") ||
-                          userRoles.Contains("HR") ||
-                          userRoles.Contains("Admin");
+        var isAuthorized = userId == evaluation.EmployeeId || userId == evaluation.ReportingManagerId || userId == evaluation.TeamLeadId ||
+            evaluation.PeerAssignments.Any(pa => pa.PeerUserId == userId) || userRoles.Contains("HOD") || userRoles.Contains("GM") || userRoles.Contains("HR") || userRoles.Contains("Admin");
 
         if (!isAuthorized)
             throw new BusinessRuleException("You do not have permission to view this evaluation.");
 
-        // Get approval history
         var approvalHistory = await _context.Set<ApprovalHistory>()
-            .Include(ah => ah.ActorUser)
-            .Where(ah => ah.EvaluationId == evaluationId)
-            .OrderBy(ah => ah.CreatedAt)
-            .Select(ah => new ApprovalHistoryItemDto
-            {
-                Id = ah.Id,
-                ActorUserId = ah.ActorUserId,
-                ActorName = ah.ActorUser != null ? ah.ActorUser.FullName : "Unknown",
-                ActorRole = ah.ActorRole,
-                Action = ah.Action,
-                Comment = ah.Comment,
-                FromStatus = ah.FromStatus,
-                ToStatus = ah.ToStatus,
-                CreatedAt = ah.CreatedAt
-            })
+            .Include(ah => ah.ActorUser).Where(ah => ah.EvaluationId == evaluationId).OrderBy(ah => ah.CreatedAt)
+            .Select(ah => new ApprovalHistoryItemDto { Id = ah.Id, ActorUserId = ah.ActorUserId, ActorName = ah.ActorUser != null ? ah.ActorUser.FullName : "Unknown", ActorRole = ah.ActorRole, Action = ah.Action, Comment = ah.Comment, FromStatus = ah.FromStatus, ToStatus = ah.ToStatus, CreatedAt = ah.CreatedAt })
             .ToListAsync(cancellationToken);
 
-        var dto = new EvaluationDetailDto
+        return new EvaluationDetailDto
         {
-            EvaluationId = evaluation.EvaluationId,
-            CycleId = evaluation.CycleId,
-            CycleName = evaluation.Cycle?.Name ?? string.Empty,
-            EmployeeId = evaluation.EmployeeId,
-            EmployeeName = evaluation.Employee?.FullName ?? string.Empty,
-            EmployeeEmail = evaluation.Employee?.Email ?? string.Empty,
-            ReportingManagerId = evaluation.ReportingManagerId,
-            ReportingManagerName = evaluation.ReportingManager?.FullName ?? string.Empty,
-            TeamLeadId = evaluation.TeamLeadId,
-            TeamLeadName = evaluation.TeamLead?.FullName ?? string.Empty,
-            Status = evaluation.Status,
-            OverallScore = evaluation.OverallScore,
+            EvaluationId = evaluation.EvaluationId, CycleId = evaluation.CycleId, CycleName = evaluation.Cycle?.Name ?? "", EmployeeId = evaluation.EmployeeId,
+            EmployeeName = evaluation.Employee?.FullName ?? "", EmployeeEmail = evaluation.Employee?.Email ?? "",
+            ReportingManagerId = evaluation.ReportingManagerId, ReportingManagerName = evaluation.ReportingManager?.FullName ?? "",
+            TeamLeadId = evaluation.TeamLeadId, TeamLeadName = evaluation.TeamLead?.FullName ?? "",
+            Status = evaluation.Status, OverallScore = evaluation.OverallScore,
             Reviews = evaluation.Reviews.Select(r => new ReviewDto
             {
-                ReviewId = r.ReviewId,
-                ReviewerUserId = r.ReviewerUserId,
-                ReviewerName = r.Reviewer?.FullName ?? string.Empty,
-                ReviewerRole = r.ReviewerRole,
-                Status = r.Status,
-                OverallComment = r.OverallComment,
-                OverallScore = r.OverallScore,
-                SubmittedAt = r.SubmittedAt,
-                Items = r.ReviewItems.Select(ri => new ReviewItemDto
-                {
-                    ItemId = ri.ItemId,
-                    GoalId = ri.GoalId,
-                    GoalTitle = ri.Goal?.Title,
-                    CompetencyId = ri.CompetencyId,
-                    CompetencyName = ri.Competency?.Name,
-                    RatingValue = ri.RatingValue,
-                    Comment = ri.Comment
-                }).ToList(),
-                // Populate the Scores from ReviewScores collection with GoalTitle
-                Scores = r.ReviewScores.Select(rs => new ReviewScoreDto
-                {
-                    Id = rs.Id,
-                    EvaluationId = rs.EvaluationId,
-                    ReviewId = rs.ReviewId,
-                    ReviewerId = rs.ReviewerId,
-                    PersonalGoalId = rs.PersonalGoalId,
-                    GoalTitle = rs.PersonalGoal?.Title ?? "Unknown Goal",
-                    ScoreValue = rs.ScoreValue,
-                    Comment = rs.Comment,
-                    CreatedAt = rs.CreatedAt
-                }).ToList()
+                ReviewId = r.ReviewId, ReviewerUserId = r.ReviewerUserId, ReviewerName = r.Reviewer?.FullName ?? "",
+                ReviewerRole = r.ReviewerRole, Status = r.Status, OverallComment = r.OverallComment, OverallScore = r.OverallScore, SubmittedAt = r.SubmittedAt,
+                Items = r.ReviewItems.Select(ri => new ReviewItemDto { ItemId = ri.ItemId, GoalId = ri.GoalId, GoalTitle = ri.Goal?.Title, CompetencyId = ri.CompetencyId, CompetencyName = ri.Competency?.Name, RatingValue = ri.RatingValue, Comment = ri.Comment }).ToList(),
+                Scores = r.ReviewScores.Select(rs => new ReviewScoreDto { Id = rs.Id, EvaluationId = rs.EvaluationId, ReviewId = rs.ReviewId, ReviewerId = rs.ReviewerId, PersonalGoalId = rs.PersonalGoalId, GoalTitle = rs.PersonalGoal?.Title ?? "Unknown Goal", ScoreValue = rs.ScoreValue, Comment = rs.Comment, CreatedAt = rs.CreatedAt }).ToList()
             }).ToList(),
-            // Map EmployeeGoals to GoalDto with PersonalGoalId already stored
-            Goals = evaluation.EmployeeGoals.Select(g => new GoalDto
-            {
-                GoalId = g.GoalId,
-                Title = g.Title,
-                Description = g.Description,
-                WeightPct = g.WeightPct,
-                EvidenceUri = g.EvidenceUri,
-                PersonalGoalId = g.PersonalGoalId // ? Use the PersonalGoalId from EmployeeGoal
-            }).ToList(),
+            Goals = evaluation.EmployeeGoals.Select(g => new GoalDto { GoalId = g.GoalId, Title = g.Title, Description = g.Description, WeightPct = g.WeightPct, EvidenceUri = g.EvidenceUri, PersonalGoalId = g.PersonalGoalId }).ToList(),
             ApprovalHistory = approvalHistory,
-            PeerAssignments = evaluation.PeerAssignments.Select(pa => new PeerAssignmentDto
-            {
-                PeerAssignmentId = pa.PeerAssignmentId,
-                PeerUserId = pa.PeerUserId,
-                PeerName = pa.PeerUser?.FullName ?? string.Empty
-            }).ToList(),
+            PeerAssignments = evaluation.PeerAssignments.Select(pa => new PeerAssignmentDto { PeerAssignmentId = pa.PeerAssignmentId, PeerUserId = pa.PeerUserId, PeerName = pa.PeerUser?.FullName ?? "" }).ToList(),
             PromotionCase = evaluation.PromotionCases.FirstOrDefault() != null
-                ? new PromotionCaseDto
-                {
-                    PromotionCaseId = evaluation.PromotionCases.First().PromotionCaseId,
-                    RecommendedByHodId = evaluation.PromotionCases.First().RecommendedByHodId,
-                    RecommendedByHodName = evaluation.PromotionCases.First().RecommendedByHod?.FullName,
-                    RecommendedAt = evaluation.PromotionCases.First().RecommendedAt,
-                    GmDecision = evaluation.PromotionCases.First().GmDecision,
-                    GmDecidedById = evaluation.PromotionCases.First().GmDecidedById,
-                    GmDecidedByName = evaluation.PromotionCases.First().GmDecidedBy?.FullName,
-                    GmDecidedAt = evaluation.PromotionCases.First().GmDecidedAt,
-                    DecisionReason = evaluation.PromotionCases.First().DecisionReason
-                }
+                ? new PromotionCaseDto { PromotionCaseId = evaluation.PromotionCases.First().PromotionCaseId, RecommendedByHodId = evaluation.PromotionCases.First().RecommendedByHodId, RecommendedByHodName = evaluation.PromotionCases.First().RecommendedByHod?.FullName, RecommendedAt = evaluation.PromotionCases.First().RecommendedAt, GmDecision = evaluation.PromotionCases.First().GmDecision, GmDecidedById = evaluation.PromotionCases.First().GmDecidedById, GmDecidedByName = evaluation.PromotionCases.First().GmDecidedBy?.FullName, GmDecidedAt = evaluation.PromotionCases.First().GmDecidedAt, DecisionReason = evaluation.PromotionCases.First().DecisionReason }
                 : null
         };
-
-        return dto;
     }
 
     public async Task ProcessPromotionDecisionAsync(int evaluationId, int gmUserId, bool approve, string? comment, CancellationToken cancellationToken = default)
     {
         var evaluation = await _context.Set<Evaluation>()
-            .Include(e => e.PromotionCases)
-            .Include(e => e.Employee)
+            .Include(e => e.PromotionCases).Include(e => e.Employee)
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
 
-        if (evaluation == null)
-            throw new NotFoundException(nameof(Evaluation), evaluationId);
-
-        if (evaluation.Status != STATUS_PENDING_GM_DECISION)
-            throw new BusinessRuleException("Promotion decision can only be made when evaluation is pending GM decision.");
+        if (evaluation == null) throw new NotFoundException(nameof(Evaluation), evaluationId);
+        if (evaluation.Status != STATUS_PENDING_GM_DECISION) throw new BusinessRuleException("Promotion decision can only be made when evaluation is pending GM decision.");
 
         var userRoles = await GetUserRolesAsync(gmUserId, cancellationToken);
-        if (!userRoles.Contains("GM"))
-            throw new BusinessRuleException("Only GM can make promotion decisions.");
+        if (!userRoles.Contains("GM")) throw new BusinessRuleException("Only GM can make promotion decisions.");
 
         var promotionCase = evaluation.PromotionCases.FirstOrDefault();
-        if (promotionCase == null)
-            throw new NotFoundException("Promotion case not found for this evaluation.");
+        if (promotionCase == null) throw new NotFoundException("Promotion case not found for this evaluation.");
 
         var oldStatus = evaluation.Status;
-
-        // Update promotion case
         promotionCase.GmDecision = approve ? PromotionDecision.Approved : PromotionDecision.Rejected;
         promotionCase.GmDecidedById = gmUserId;
         promotionCase.GmDecidedAt = DateTime.UtcNow;
         promotionCase.DecisionReason = comment;
 
-        // Update evaluation status
+        evaluation.Status = approve ? STATUS_PENDING_HR_PROCESSING : STATUS_COMPLETED_PROMOTION_REJECTED;
+
+        _context.Set<ApprovalHistory>().Add(new ApprovalHistory { EvaluationId = evaluationId, ActorUserId = gmUserId, ActorRole = "GM", Action = approve ? "GmApprovedPromotion" : "GmRejectedPromotion", Comment = comment, FromStatus = oldStatus, ToStatus = evaluation.Status, CreatedAt = DateTime.UtcNow });
+
         if (approve)
         {
-            // GM approved - send to HR for processing
-            evaluation.Status = STATUS_PENDING_HR_PROCESSING;
-        }
-        else
-        {
-            // GM rejected - mark as completed
-            evaluation.Status = STATUS_COMPLETED_PROMOTION_REJECTED;
-        }
-
-        // Create approval history
-        var approvalHistory = new ApprovalHistory
-        {
-            EvaluationId = evaluationId,
-            ReviewId = null,
-            ActorUserId = gmUserId,
-            ActorRole = "GM",
-            Action = approve ? "GmApprovedPromotion" : "GmRejectedPromotion",
-            Comment = comment,
-            FromStatus = oldStatus,
-            ToStatus = evaluation.Status,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Set<ApprovalHistory>().Add(approvalHistory);
-
-        // Notify HR if approved
-        if (approve)
-        {
-            // Get HR users
-            var hrUsers = await _context.Set<UserRole>()
-                .Include(ur => ur.Role)
-                .Where(ur => ur.Role.Name == "HR")
-                .Select(ur => ur.UserId)
-                .ToListAsync(cancellationToken);
-
+            var hrUsers = await _context.Set<UserRole>().Include(ur => ur.Role).Where(ur => ur.Role.Name == "HR").Select(ur => ur.UserId).ToListAsync(cancellationToken);
             foreach (var hrUserId in hrUsers)
             {
-                var hrNotification = new Notification
-                {
-                    UserId = hrUserId,
-                    Subject = $"Promotion Approved by GM: {evaluation.Employee.FullName} - Awaiting HR Processing",
-                    Channel = "Email",
-                    SentAt = DateTime.UtcNow
-                };
-
-                _context.Set<Notification>().Add(hrNotification);
-
-                // ?? SEND EMAIL to HR
+                _context.Set<Notification>().Add(new Notification { UserId = hrUserId, Subject = $"Promotion Approved by GM: {evaluation.Employee.FullName}", Channel = "Email", SentAt = DateTime.UtcNow });
                 var hr = await _context.Users.FindAsync(new object[] { hrUserId }, cancellationToken);
-                if (hr != null)
-                {
-                    await _emailService.SendEvaluationNotificationAsync(
-                        hr.Email,
-                        hr.FullName,
-                        evaluation.Employee.FullName,
-                        "Approved",
-                        "HR",
-                        $"GM has approved the promotion. Please process the promotion. Comment: {comment}",
-                        evaluationId,
-                        cancellationToken);
-                }
+                if (hr != null) await _emailService.SendEvaluationNotificationAsync(hr.Email, hr.FullName, evaluation.Employee.FullName, "Approved", "HR", $"GM has approved the promotion. Comment: {comment}", evaluationId, cancellationToken);
             }
         }
         else
         {
-            // Notify employee about GM rejection
-            var employeeNotification = new Notification
-            {
-                UserId = evaluation.EmployeeId,
-                Subject = "Evaluation Complete - Continue your excellent work!",
-                Channel = "Email",
-                SentAt = DateTime.UtcNow
-            };
-
-            _context.Set<Notification>().Add(employeeNotification);
-
-            // ?? SEND EMAIL to Employee (GM rejected promotion)
-            await _emailService.SendPromotionNotificationAsync(
-                evaluation.Employee.Email,
-                evaluation.Employee.FullName,
-                evaluation.Employee.FullName,
-                false,
-                comment,
-                cancellationToken);
+            _context.Set<Notification>().Add(new Notification { UserId = evaluation.EmployeeId, Subject = "Evaluation Complete", Channel = "Email", SentAt = DateTime.UtcNow });
+            await _emailService.SendPromotionNotificationAsync(evaluation.Employee.Email, evaluation.Employee.FullName, evaluation.Employee.FullName, false, comment, cancellationToken);
         }
 
-        // Create audit log
-        var auditLog = new AuditLog
-        {
-            ActorUserId = gmUserId,
-            EntityType = "PromotionCase",
-            EntityId = promotionCase.PromotionCaseId,
-            Action = approve ? "PROMOTION_APPROVED_GM" : "PROMOTION_REJECTED_GM",
-            BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { Status = oldStatus }),
-            AfterJson = System.Text.Json.JsonSerializer.Serialize(new { Status = evaluation.Status }),
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Set<AuditLog>().Add(auditLog);
-
+        _context.Set<AuditLog>().Add(new AuditLog { ActorUserId = gmUserId, EntityType = "PromotionCase", EntityId = promotionCase.PromotionCaseId, Action = approve ? "PROMOTION_APPROVED_GM" : "PROMOTION_REJECTED_GM", BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { Status = oldStatus }), AfterJson = System.Text.Json.JsonSerializer.Serialize(new { Status = evaluation.Status }), CreatedAt = DateTime.UtcNow });
         await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task RecommendForPromotionAsync(int evaluationId, int hodUserId, string? comment, CancellationToken cancellationToken = default)
     {
         var evaluation = await _context.Set<Evaluation>()
-            .Include(e => e.Reviews)
-            .Include(e => e.PromotionCases)
-            .Include(e => e.Employee)
+            .Include(e => e.Reviews).ThenInclude(r => r.ReviewScores)
+            .Include(e => e.Reviews).ThenInclude(r => r.ReviewItems)
+            .Include(e => e.PromotionCases).Include(e => e.Employee)
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
 
-        if (evaluation == null)
-            throw new NotFoundException(nameof(Evaluation), evaluationId);
-
-        if (evaluation.Status != STATUS_PENDING_HOD_REVIEW)
-            throw new BusinessRuleException("Promotion can only be recommended when evaluation is at HOD review stage.");
+        if (evaluation == null) throw new NotFoundException(nameof(Evaluation), evaluationId);
+        if (evaluation.Status != STATUS_PENDING_HOD_REVIEW) throw new BusinessRuleException("Promotion can only be recommended when evaluation is at HOD review stage.");
 
         var userRoles = await GetUserRolesAsync(hodUserId, cancellationToken);
-        if (!userRoles.Contains("HOD"))
-            throw new BusinessRuleException("Only HOD can recommend for promotion.");
+        if (!userRoles.Contains("HOD")) throw new BusinessRuleException("Only HOD can recommend for promotion.");
 
         var oldStatus = evaluation.Status;
 
-        // Update HOD review to approved
-        var hodReview = evaluation.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD);
-        if (hodReview != null)
+        // Calculate overall score if not already set
+        if (!evaluation.OverallScore.HasValue || evaluation.OverallScore.Value == 0)
         {
-            hodReview.Status = REVIEW_STATUS_APPROVED;
-            hodReview.OverallComment = comment ?? hodReview.OverallComment;
-            hodReview.SubmittedAt = DateTime.UtcNow;
-        }
-
-        // Create or update promotion case
-        var promotionCase = evaluation.PromotionCases.FirstOrDefault();
-        if (promotionCase == null)
-        {
-            promotionCase = new PromotionCase
+            var allReviewScores = evaluation.Reviews.SelectMany(r => r.ReviewScores).ToList();
+            if (allReviewScores.Any())
+                evaluation.OverallScore = Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
+            else
             {
-                EvaluationId = evaluationId,
-                RecommendedByHodId = hodUserId,
-                RecommendedAt = DateTime.UtcNow,
-                GmDecision = PromotionDecision.Pending,
-                GmDecidedById = null,
-                GmDecidedAt = null,
-                DecisionReason = null
-            };
-            _context.Set<PromotionCase>().Add(promotionCase);
-        }
-        else
-        {
-            promotionCase.RecommendedByHodId = hodUserId;
-            promotionCase.RecommendedAt = DateTime.UtcNow;
-            promotionCase.GmDecision = PromotionDecision.Pending;
-        }
-
-        // Update evaluation status
-        evaluation.Status = STATUS_PENDING_GM_DECISION;
-
-        // Create approval history
-        var approvalHistory = new ApprovalHistory
-        {
-            EvaluationId = evaluationId,
-            ReviewId = hodReview?.ReviewId,
-            ActorUserId = hodUserId,
-            ActorRole = "HOD",
-            Action = "HodRecommendedPromotion",
-            Comment = comment,
-            FromStatus = oldStatus,
-            ToStatus = evaluation.Status,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Set<ApprovalHistory>().Add(approvalHistory);
-
-        // Notify GM users
-        var gmUsers = await _context.Set<UserRole>()
-            .Include(ur => ur.Role)
-            .Where(ur => ur.Role.Name == "GM")
-            .Select(ur => ur.UserId)
-            .ToListAsync(cancellationToken);
-
-        foreach (var gmUserId in gmUsers)
-        {
-            var notification = new Notification
-            {
-                UserId = gmUserId,
-                Subject = $"Promotion Recommendation from HOD: {evaluation.Employee.FullName}",
-                Channel = "Email",
-                SentAt = DateTime.UtcNow
-            };
-
-            _context.Set<Notification>().Add(notification);
-
-            // ?? SEND EMAIL to GM
-            var gm = await _context.Users.FindAsync(new object[] { gmUserId }, cancellationToken);
-            if (gm != null)
-            {
-                await _emailService.SendEvaluationNotificationAsync(
-                    gm.Email,
-                    gm.FullName,
-                    evaluation.Employee.FullName,
-                    "Pending",
-                    "GM",
-                    "HOD has recommended this employee for promotion. Please make your decision.",
-                    evaluationId,
-                    cancellationToken);
+                var allReviewItems = evaluation.Reviews.SelectMany(r => r.ReviewItems).ToList();
+                if (allReviewItems.Any())
+                    evaluation.OverallScore = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                else
+                    evaluation.OverallScore = PROMOTION_THRESHOLD;
             }
         }
 
+        var hodReview = evaluation.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD);
+        if (hodReview != null) { hodReview.Status = REVIEW_STATUS_APPROVED; hodReview.OverallComment = comment; hodReview.SubmittedAt = DateTime.UtcNow; }
+
+        var promotionCase = evaluation.PromotionCases.FirstOrDefault();
+        if (promotionCase == null)
+        {
+            promotionCase = new PromotionCase { EvaluationId = evaluationId, RecommendedByHodId = hodUserId, RecommendedAt = DateTime.UtcNow, GmDecision = PromotionDecision.Pending };
+            _context.Set<PromotionCase>().Add(promotionCase);
+        }
+        else { promotionCase.RecommendedByHodId = hodUserId; promotionCase.RecommendedAt = DateTime.UtcNow; promotionCase.GmDecision = PromotionDecision.Pending; }
+
+        evaluation.Status = STATUS_PENDING_GM_DECISION;
+        _context.Set<ApprovalHistory>().Add(new ApprovalHistory { EvaluationId = evaluationId, ReviewId = hodReview?.ReviewId, ActorUserId = hodUserId, ActorRole = "HOD", Action = "HodRecommendedPromotion", Comment = comment, FromStatus = oldStatus, ToStatus = evaluation.Status, CreatedAt = DateTime.UtcNow });
+
+        var gmUsers = await _context.Set<UserRole>().Include(ur => ur.Role).Where(ur => ur.Role.Name == "GM").Select(ur => ur.UserId).ToListAsync(cancellationToken);
+        foreach (var gmUserId in gmUsers)
+        {
+            _context.Set<Notification>().Add(new Notification { UserId = gmUserId, Subject = $"Promotion Recommendation from HOD: {evaluation.Employee.FullName}", Channel = "Email", SentAt = DateTime.UtcNow });
+            var gm = await _context.Users.FindAsync(new object[] { gmUserId }, cancellationToken);
+            if (gm != null) await _emailService.SendEvaluationNotificationAsync(gm.Email, gm.FullName, evaluation.Employee.FullName, "Pending", "GM", "HOD has recommended this employee for promotion.", evaluationId, cancellationToken);
+        }
         await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task RejectAtHodAsync(int evaluationId, int hodUserId, string comment, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(comment))
-            throw new BusinessRuleException("A comment is required when rejecting at HOD stage.");
+        if (string.IsNullOrWhiteSpace(comment)) throw new BusinessRuleException("A comment is required when rejecting at HOD stage.");
 
-        var evaluation = await _context.Set<Evaluation>()
-            .Include(e => e.Reviews)
-            .Include(e => e.Employee)
+        var evaluation = await _context.Set<Evaluation>().Include(e => e.Reviews).Include(e => e.Employee)
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
 
-        if (evaluation == null)
-            throw new NotFoundException(nameof(Evaluation), evaluationId);
-
-        if (evaluation.Status != STATUS_PENDING_HOD_REVIEW)
-            throw new BusinessRuleException("Evaluation can only be rejected when at HOD review stage.");
+        if (evaluation == null) throw new NotFoundException(nameof(Evaluation), evaluationId);
+        if (evaluation.Status != STATUS_PENDING_HOD_REVIEW) throw new BusinessRuleException("Evaluation can only be rejected when at HOD review stage.");
 
         var userRoles = await GetUserRolesAsync(hodUserId, cancellationToken);
-        if (!userRoles.Contains("HOD"))
-            throw new BusinessRuleException("Only HOD can reject at this stage.");
+        if (!userRoles.Contains("HOD")) throw new BusinessRuleException("Only HOD can reject at this stage.");
 
         var oldStatus = evaluation.Status;
-
-        // Update HOD review to rejected
         var hodReview = evaluation.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD);
-        if (hodReview != null)
-        {
-            hodReview.Status = REVIEW_STATUS_REJECTED;
-            hodReview.OverallComment = comment;
-            hodReview.SubmittedAt = DateTime.UtcNow;
-        }
+        if (hodReview != null) { hodReview.Status = REVIEW_STATUS_REJECTED; hodReview.OverallComment = comment; hodReview.SubmittedAt = DateTime.UtcNow; }
 
-        // Update evaluation status
         evaluation.Status = STATUS_REJECTED;
+        _context.Set<ApprovalHistory>().Add(new ApprovalHistory { EvaluationId = evaluationId, ReviewId = hodReview?.ReviewId, ActorUserId = hodUserId, ActorRole = "HOD", Action = "HodRejected", Comment = comment, FromStatus = oldStatus, ToStatus = evaluation.Status, CreatedAt = DateTime.UtcNow });
+        _context.Set<Notification>().Add(new Notification { UserId = evaluation.EmployeeId, Subject = "Evaluation Rejected by HOD", Channel = "Email", SentAt = DateTime.UtcNow });
 
-        // Create approval history
-        var approvalHistory = new ApprovalHistory
-        {
-            EvaluationId = evaluationId,
-            ReviewId = hodReview?.ReviewId,
-            ActorUserId = hodUserId,
-            ActorRole = "HOD",
-            Action = "HodRejected",
-            Comment = comment,
-            FromStatus = oldStatus,
-            ToStatus = evaluation.Status,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Set<ApprovalHistory>().Add(approvalHistory);
-
-        // Notify employee
-        var notification = new Notification
-        {
-            UserId = evaluation.EmployeeId,
-            Subject = "Evaluation Rejected by HOD",
-            Channel = "Email",
-            SentAt = DateTime.UtcNow
-        };
-
-        _context.Set<Notification>().Add(notification);
-
-        // Send rejection email to Employee
         var actor = await _context.Users.FindAsync(new object[] { hodUserId }, cancellationToken);
-        if (actor != null)
-        {
-            await _emailService.SendRejectionNotificationAsync(
-                evaluation.Employee.Email,
-                evaluation.Employee.FullName,
-                evaluation.Employee.FullName,
-                actor.FullName,
-                "HOD",
-                comment,
-                evaluationId,
-                cancellationToken);
-        }
+        if (actor != null) await _emailService.SendRejectionNotificationAsync(evaluation.Employee.Email, evaluation.Employee.FullName, evaluation.Employee.FullName, actor.FullName, "HOD", comment, evaluationId, cancellationToken);
 
-        // Create audit log
-        var auditLog = new AuditLog
-        {
-            ActorUserId = hodUserId,
-            EntityType = "Evaluation",
-            EntityId = evaluationId,
-            Action = "EVALUATION_REJECTED_HOD",
-            BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { Status = oldStatus }),
-            AfterJson = System.Text.Json.JsonSerializer.Serialize(new { Status = evaluation.Status, Comment = comment }),
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Set<AuditLog>().Add(auditLog);
-
+        _context.Set<AuditLog>().Add(new AuditLog { ActorUserId = hodUserId, EntityType = "Evaluation", EntityId = evaluationId, Action = "EVALUATION_REJECTED_HOD", BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { Status = oldStatus }), AfterJson = System.Text.Json.JsonSerializer.Serialize(new { Status = evaluation.Status, Comment = comment }), CreatedAt = DateTime.UtcNow });
         await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task FinalizePromotionByHrAsync(int evaluationId, int hrUserId, bool proceed, string? comment, CancellationToken cancellationToken = default)
     {
-        var evaluation = await _context.Set<Evaluation>()
-            .Include(e => e.PromotionCases)
-            .Include(e => e.Employee)
+        var evaluation = await _context.Set<Evaluation>().Include(e => e.PromotionCases).Include(e => e.Employee)
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
 
-        if (evaluation == null)
-            throw new NotFoundException(nameof(Evaluation), evaluationId);
-
-        if (evaluation.Status != STATUS_PENDING_HR_PROCESSING)
-            throw new BusinessRuleException("HR can only process promotion when it's pending HR processing.");
+        if (evaluation == null) throw new NotFoundException(nameof(Evaluation), evaluationId);
+        if (evaluation.Status != STATUS_PENDING_HR_PROCESSING) throw new BusinessRuleException("HR can only process promotion when it's pending HR processing.");
 
         var userRoles = await GetUserRolesAsync(hrUserId, cancellationToken);
-        if (!userRoles.Contains("HR"))
-            throw new BusinessRuleException("Only HR can process promotions.");
+        if (!userRoles.Contains("HR")) throw new BusinessRuleException("Only HR can process promotions.");
 
         var promotionCase = evaluation.PromotionCases.FirstOrDefault();
-        if (promotionCase == null || promotionCase.GmDecision != PromotionDecision.Approved)
-            throw new BusinessRuleException("Promotion case must be approved by GM before HR processing.");
+        if (promotionCase == null || promotionCase.GmDecision != PromotionDecision.Approved) throw new BusinessRuleException("Promotion case must be approved by GM before HR processing.");
 
         var oldStatus = evaluation.Status;
 
         if (proceed)
         {
-            // HR processed promotion successfully
             evaluation.Status = STATUS_COMPLETED_PROMOTION_APPROVED;
-
-            // Create approval history
-            var approvalHistory = new ApprovalHistory
-            {
-                EvaluationId = evaluationId,
-                ReviewId = null,
-                ActorUserId = hrUserId,
-                ActorRole = "HR",
-                Action = "HrProcessedPromotion",
-                Comment = comment,
-                FromStatus = oldStatus,
-                ToStatus = evaluation.Status,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Set<ApprovalHistory>().Add(approvalHistory);
-
-            // Notify employee with congratulations
-            var employeeNotification = new Notification
-            {
-                UserId = evaluation.EmployeeId,
-                Subject = "Congratulations! Your promotion has been processed",
-                Channel = "Email",
-                SentAt = DateTime.UtcNow
-            };
-
-            _context.Set<Notification>().Add(employeeNotification);
-
-            // ?? SEND CONGRATULATIONS EMAIL to Employee
-            await _emailService.SendPromotionNotificationAsync(
-                evaluation.Employee.Email,
-                evaluation.Employee.FullName,
-                evaluation.Employee.FullName,
-                true,
-                comment,
-                cancellationToken);
-
-            // Create audit log
-            var auditLog = new AuditLog
-            {
-                ActorUserId = hrUserId,
-                EntityType = "PromotionCase",
-                EntityId = promotionCase.PromotionCaseId,
-                Action = "PROMOTION_PROCESSED_HR",
-                BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { Status = oldStatus }),
-                AfterJson = System.Text.Json.JsonSerializer.Serialize(new { Status = evaluation.Status, Comment = comment }),
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Set<AuditLog>().Add(auditLog);
+            _context.Set<ApprovalHistory>().Add(new ApprovalHistory { EvaluationId = evaluationId, ActorUserId = hrUserId, ActorRole = "HR", Action = "HrProcessedPromotion", Comment = comment, FromStatus = oldStatus, ToStatus = evaluation.Status, CreatedAt = DateTime.UtcNow });
+            _context.Set<Notification>().Add(new Notification { UserId = evaluation.EmployeeId, Subject = "Congratulations! Your promotion has been processed", Channel = "Email", SentAt = DateTime.UtcNow });
+            await _emailService.SendPromotionNotificationAsync(evaluation.Employee.Email, evaluation.Employee.FullName, evaluation.Employee.FullName, true, comment, cancellationToken);
+            _context.Set<AuditLog>().Add(new AuditLog { ActorUserId = hrUserId, EntityType = "PromotionCase", EntityId = promotionCase.PromotionCaseId, Action = "PROMOTION_PROCESSED_HR", BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { Status = oldStatus }), AfterJson = System.Text.Json.JsonSerializer.Serialize(new { Status = evaluation.Status, Comment = comment }), CreatedAt = DateTime.UtcNow });
         }
         else
         {
-            // Notify employee about GM rejection
-            var employeeNotification = new Notification
-            {
-                UserId = evaluation.EmployeeId,
-                Subject = "Evaluation Complete - Continue your excellent work!",
-                Channel = "Email",
-                SentAt = DateTime.UtcNow
-            };
-
-            _context.Set<Notification>().Add(employeeNotification);
-
-            // ?? SEND EMAIL to Employee (GM rejected promotion)
-            await _emailService.SendPromotionNotificationAsync(
-                evaluation.Employee.Email,
-                evaluation.Employee.FullName,
-                evaluation.Employee.FullName,
-                false,
-                comment,
-                cancellationToken);
+            _context.Set<Notification>().Add(new Notification { UserId = evaluation.EmployeeId, Subject = "Evaluation Complete", Channel = "Email", SentAt = DateTime.UtcNow });
+            await _emailService.SendPromotionNotificationAsync(evaluation.Employee.Email, evaluation.Employee.FullName, evaluation.Employee.FullName, false, comment, cancellationToken);
         }
 
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
+
 
