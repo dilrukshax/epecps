@@ -121,8 +121,11 @@
                 </span>
               </div>
 
-              <!-- Show Scores if Review is Completed/Approved -->
-              <div *ngIf="review.status.toLowerCase() === 'completed' || review.status.toLowerCase() === 'approved'">
+              <!-- Show Scores if Review is Completed/Approved AND has scores -->
+              <div *ngIf="(review.status.toLowerCase() === 'completed' || review.status.toLowerCase() === 'approved') && 
+                          ((review.reviewerRole === 3 && review.scores && review.scores.length > 0) || 
+                           (review.reviewerRole !== 3 && review.overallScore !== null && review.overallScore !== undefined))">
+                
                 <!-- For RM: Show item-level scores -->
                 <div *ngIf="review.reviewerRole === 3 && review.scores && review.scores.length > 0">
                   <h4 class="text-sm font-medium text-gray-700 mb-4">Goal Scores:</h4>
@@ -172,21 +175,24 @@
                 </div>
               </div>
 
-              <!-- Pending Review Message -->
+              <!-- ✅ UPDATED: Pending Review Message -->
               <div *ngIf="review.status.toLowerCase() === 'pending'" class="text-center py-6">
                 <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p class="mt-2 text-sm text-gray-600">Awaiting review from {{ review.reviewerName }}</p>
-              </div>
-
-              <!-- If current user can score this review, show scoring panel -->
-              <div *ngIf="canScoreReview(review) && review.status.toLowerCase() === 'pending'" class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <button 
-                  (click)="openScoringPanel(review)" 
-                  class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
-                  Submit Your Scores
-                </button>
+                
+                <!-- ✅ Show scores button if current user can score -->
+                <div *ngIf="canScoreReview(review)" class="mt-4">
+                  <button 
+                    (click)="openScoringPanel(review)" 
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+                    <svg class="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    Submit Your Scores
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -243,6 +249,32 @@
         </div>
         <div class="px-6 py-5">
           <p class="text-gray-700 mb-4">Please review the evaluation details above and take appropriate action.</p>
+          
+          <!-- ✅ NEW: Show scoring requirement status -->
+          <div *ngIf="hasPendingScoringRequirement" class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div class="flex items-start">
+              <svg class="h-5 w-5 text-yellow-400 mt-0.5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div class="flex-1">
+                <h3 class="text-sm font-medium text-yellow-800">Scoring Required</h3>
+                <p class="text-sm text-yellow-700 mt-1">{{ getScoreSubmissionStatus() }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ✅ UPDATED: Show scoring button if scores needed -->
+          <div *ngIf="hasPendingScoringRequirement && pendingReviewId" class="mb-4">
+            <button 
+              (click)="openScoringPanel(getPendingReview()!)" 
+              class="w-full inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+              <svg class="-ml-0.5 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              Submit Scores First
+            </button>
+          </div>
+
           <div class="flex gap-4">
             <button (click)="initiateAction('approve')" class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">
               Approve
@@ -260,19 +292,159 @@
           <h2 class="text-xl font-bold" [ngClass]="actionType === 'approve' ? 'text-green-900' : 'text-red-900'">
             {{ actionType === 'approve' ? 'Approve Evaluation' : 'Reject Evaluation' }}
           </h2>
+          <!-- ✅ NEW: Show info about score submission -->
+          <p *ngIf="actionType === 'approve' && hasPendingScoringRequirement" class="text-sm mt-1" [ngClass]="actionType === 'approve' ? 'text-green-700' : 'text-red-700'">
+            Your scores will be submitted automatically when you approve
+          </p>
         </div>
         <div class="px-6 py-5">
           <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Comment</label>
-            <textarea [(ngModel)]="comment" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2"></textarea>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Comment {{ actionType === 'reject' ? '(Required)' : '(Optional)' }}</label>
+            <textarea [(ngModel)]="comment" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2" [placeholder]="actionType === 'reject' ? 'Please explain why you are rejecting...' : 'Add a comment (optional)'"></textarea>
           </div>
           <div class="flex gap-4">
             <button (click)="confirmAction()" [disabled]="approving || rejecting" class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white" [ngClass]="actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'">
-              {{ approving || rejecting ? 'Processing...' : 'Confirm' }}
+              <span *ngIf="approving || rejecting" class="inline-flex items-center">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {{ actionType === 'approve' ? 'Submitting & Approving...' : 'Rejecting...' }}
+              </span>
+              <span *ngIf="!approving && !rejecting">
+                Confirm {{ actionType === 'approve' ? 'Approval' : 'Rejection' }}
+              </span>
             </button>
-            <button (click)="cancelAction()" class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">
+            <button (click)="cancelAction()" [disabled]="approving || rejecting" class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50">
               Cancel
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ✅ NEW: Peer Assignment Panel (for Team Lead) -->
+      <div *ngIf="needsPeerAssignment && !showPeerAssignment" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-yellow-200">
+        <div class="px-6 py-5 bg-yellow-50 border-b border-yellow-200">
+          <h2 class="text-xl font-bold text-yellow-900">🎯 Peer Assignment Required</h2>
+          <p class="mt-1 text-sm text-yellow-700">You are acting as: <span class="font-semibold">Team Lead</span></p>
+        </div>
+        <div class="px-6 py-5">
+          <p class="text-gray-700 mb-4">Please assign two peer reviewers to evaluate this employee's performance.</p>
+          <div class="flex gap-4">
+            <button 
+              (click)="initiatePeerAssignment()" 
+              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+              <svg class="-ml-0.5 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Assign Peer Reviewers
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ✅ NEW: Peer Assignment Form -->
+      <div *ngIf="showPeerAssignment" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-indigo-200">
+        <div class="px-6 py-5 bg-indigo-50 border-b border-indigo-200">
+          <h2 class="text-xl font-bold text-indigo-900">Assign Peer Reviewers</h2>
+          <p class="mt-1 text-sm text-indigo-700">Select two colleagues to provide peer feedback</p>
+        </div>
+        <div class="px-6 py-5">
+          <!-- Loading State -->
+          <div *ngIf="loadingPeers" class="text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <p class="mt-2 text-sm text-gray-600">Loading available peers...</p>
+          </div>
+
+          <!-- Peer Selection Form -->
+          <div *ngIf="!loadingPeers" class="space-y-6">
+            <!-- Peer 1 Selection -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                <span class="flex items-center">
+                  <svg class="h-5 w-5 text-indigo-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  First Peer Reviewer
+                </span>
+              </label>
+              <select 
+                [(ngModel)]="peerUserId1" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                [disabled]="assigningPeers">
+                <option [ngValue]="null">Select first peer reviewer...</option>
+                <option *ngFor="let peer of availablePeers" [ngValue]="peer.userId">
+                  {{ peer.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Peer 2 Selection -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                <span class="flex items-center">
+                  <svg class="h-5 w-5 text-indigo-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Second Peer Reviewer
+                </span>
+              </label>
+              <select 
+                [(ngModel)]="peerUserId2" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                [disabled]="assigningPeers">
+                <option [ngValue]="null">Select second peer reviewer...</option>
+                <option *ngFor="let peer of availablePeers" [ngValue]="peer.userId">
+                  {{ peer.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Helper Text -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div class="flex">
+                <svg class="h-5 w-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="text-sm text-blue-700">
+                  <p class="font-medium mb-1">Selection Guidelines:</p>
+                  <ul class="list-disc list-inside space-y-1">
+                    <li>Choose colleagues who have worked closely with the employee</li>
+                    <li>Ideally select peers from the same department or project team</li>
+                    <li>Both reviewers must complete their review before proceeding to HOD</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-4 pt-2">
+              <button 
+                (click)="confirmPeerAssignment()" 
+                [disabled]="assigningPeers || !peerUserId1 || !peerUserId2" 
+                class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                <svg *ngIf="!assigningPeers" class="-ml-0.5 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <div *ngIf="assigningPeers" class="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                {{ assigningPeers ? 'Assigning...' : 'Confirm Assignment' }}
+              </button>
+              <button 
+                (click)="cancelPeerAssignment()" 
+                [disabled]="assigningPeers" 
+                class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <!-- No Peers Available Message -->
+          <div *ngIf="!loadingPeers && availablePeers.length === 0" class="text-center py-8">
+            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No Peers Available</h3>
+            <p class="text-gray-600">No users found for peer assignment. Please contact your system administrator.</p>
           </div>
         </div>
       </div>

@@ -94,6 +94,9 @@ export class EvaluationDetailComponent implements OnInit {
 
   ReviewerRole = ReviewerRole;
 
+  // ✅ NEW: Track if current user has a pending scoring requirement
+  hasPendingScoringRequirement = false;
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -145,7 +148,10 @@ export class EvaluationDetailComponent implements OnInit {
 
     if (pendingReview) {
       this.pendingReviewId = pendingReview.reviewId;
+      this.hasPendingScoringRequirement = true;
       this.initializeScoringForReview(pendingReview);
+    } else {
+      this.hasPendingScoringRequirement = false;
     }
   }
 
@@ -492,134 +498,112 @@ export class EvaluationDetailComponent implements OnInit {
   approveEvaluation(): void {
     if (this.approving || !this.evaluation) return;
 
-    // Check if user is RM and has pending review with scores
-    if (this.currentUserRole === 'RM' && this.pendingReviewId) {
-      // Check if scores have been entered
-      const hasScores = this.hasAllScoresSelected();
-      
-      if (hasScores) {
-        // Submit scores first, then approve
-        this.approving = true;
-        this.error = null;
-
-        // Prepare score submission
-        const itemScores: RmItemScoreDto[] = [];
+    // ✅ NEW: Check if user has pending scoring requirement that hasn't been fulfilled
+    if (this.hasPendingScoringRequirement && this.pendingReviewId) {
+      // Check if they are RM and have selected scores
+      if (this.currentUserRole === 'RM') {
+        const hasScores = this.hasAllScoresSelected();
         
-        for (const goal of this.evaluation.goals) {
-          const goalKey = goal.personalGoalId || goal.goalId.toString();
-          const scoreData = this.rmGoalScores[goalKey];
-          
-          if (scoreData && scoreData.score > 0) {
-            if (goal.personalGoalId) {
-              itemScores.push({
-                personalGoalId: goal.personalGoalId,
-                scoreValue: scoreData.score,
-                comment: scoreData.comment || undefined
-              });
-            } else {
-              this.approving = false;
-              this.showToast('error', `Goal "${goal.title}" is missing personalGoalId. Cannot submit scores.`);
-              return;
-            }
+        if (hasScores) {
+          // Submit scores first, then approve
+          this.submitScoresAndApprove();
+          return;
+        } else {
+          this.showToast('error', 'Please score all goals before approving.');
+          return;
+        }
+      }
+      // Check if they are TL/Peer and have selected a score
+      else if ((this.currentUserRole === 'TL' || this.currentUserRole === 'Peer') && this.overallScore) {
+        // Submit score first, then approve
+        this.submitScoresAndApprove();
+        return;
+      }
+    }
+
+    // If no scoring requirement or scores already submitted, proceed with normal approval
+    this.proceedWithApproval();
+  }
+
+  /**
+   * ✅ NEW: Combined method to submit scores and approve in one flow
+   */
+  private submitScoresAndApprove(): void {
+    if (!this.evaluation || !this.pendingReviewId) return;
+
+    this.approving = true;
+    this.error = null;
+
+    // Determine which type of score to submit
+    if (this.currentUserRole === 'RM') {
+      // Submit RM item-level scores
+      const itemScores: RmItemScoreDto[] = [];
+      
+      for (const goal of this.evaluation.goals) {
+        const goalKey = goal.personalGoalId || goal.goalId.toString();
+        const scoreData = this.rmGoalScores[goalKey];
+        
+        if (scoreData && scoreData.score > 0) {
+          if (goal.personalGoalId) {
+            itemScores.push({
+              personalGoalId: goal.personalGoalId,
+              scoreValue: scoreData.score,
+              comment: scoreData.comment || undefined
+            });
+          } else {
+            this.approving = false;
+            this.showToast('error', `Goal "${goal.title}" is missing personalGoalId. Cannot submit scores.`);
+            return;
           }
         }
-
-        const scoreDto: SubmitRmScoringDto = {
-          itemScores,
-          overallComment: this.rmOverallComment || undefined
-        };
-
-        // Submit scores first
-        this.evaluationService.submitRmScoring(this.evaluationId, this.pendingReviewId, scoreDto).subscribe({
-          next: (scoreResponse) => {
-            console.log('RM Scores submitted:', scoreResponse);
-            // Now proceed with approval
-            this.proceedWithApproval();
-          },
-          error: (err) => {
-            this.approving = false;
-            const errorMessage = err.error?.error || 'Failed to submit scores. Please try again.';
-            this.showToast('error', errorMessage);
-            console.error('Error submitting RM scores:', err);
-          }
-        });
-      } else {
-        // No scores entered, just proceed with approval (user may not want to score yet)
-        this.proceedWithApproval();
       }
+
+      const scoreDto: SubmitRmScoringDto = {
+        itemScores,
+        overallComment: this.rmOverallComment || this.comment || undefined
+      };
+
+      console.log('Submitting RM scores:', scoreDto);
+
+      this.evaluationService.submitRmScoring(this.evaluationId, this.pendingReviewId, scoreDto).subscribe({
+        next: (scoreResponse) => {
+          console.log('RM Scores submitted:', scoreResponse);
+          // Now proceed with approval
+          this.proceedWithApproval();
+        },
+        error: (err) => {
+          this.approving = false;
+          const errorMessage = err.error?.error || 'Failed to submit scores. Please try again.';
+          this.showToast('error', errorMessage);
+          console.error('Error submitting RM scores:', err);
+        }
+      });
     }
-    // ✅ NEW: Add TL score submission before approval
-    else if (this.currentUserRole === 'TL' && this.pendingReviewId) {
-      console.log('TL approval - checking if scores entered');
-      console.log('Overall score:', this.overallScore);
-      console.log('Overall comment:', this.overallComment);
-      
-      // Check if TL has entered a score (different from default 5 or explicitly set)
-      if (this.overallScore && this.overallScore > 0) {
-        this.approving = true;
-        this.error = null;
+    else if (this.currentUserRole === 'TL' || this.currentUserRole === 'Peer') {
+      // Submit overall score
+      const dto: SubmitOverallScoringDto = {
+        overallScore: this.overallScore,
+        comment: this.overallComment || this.comment || undefined
+      };
 
-        // Submit TL overall score first
-        const dto: SubmitOverallScoringDto = {
-          overallScore: this.overallScore,
-          comment: this.overallComment || this.comment || undefined
-        };
+      console.log('Submitting overall score:', dto);
 
-        console.log('Submitting TL overall score:', dto);
-
-        this.evaluationService.submitOverallScoring(this.evaluationId, this.pendingReviewId, dto).subscribe({
-          next: (scoreResponse) => {
-            console.log('TL Score submitted:', scoreResponse);
-            // Now proceed with approval
-            this.proceedWithApproval();
-          },
-          error: (err) => {
-            this.approving = false;
-            const errorMessage = err.error?.error || 'Failed to submit score. Please try again.';
-            this.showToast('error', errorMessage);
-            console.error('Error submitting TL score:', err);
-          }
-        });
-      } else {
-        // No score entered, just proceed with approval
-        console.log('No TL score entered, proceeding with approval only');
-        this.proceedWithApproval();
-      }
-    }
-    // ✅ NEW: Add Peer score submission before approval
-    else if (this.currentUserRole === 'Peer' && this.pendingReviewId) {
-      console.log('Peer approval - checking if scores entered');
-      
-      if (this.overallScore && this.overallScore > 0) {
-        this.approving = true;
-        this.error = null;
-
-        const dto: SubmitOverallScoringDto = {
-          overallScore: this.overallScore,
-          comment: this.overallComment || this.comment || undefined
-        };
-
-        console.log('Submitting Peer overall score:', dto);
-
-        this.evaluationService.submitOverallScoring(this.evaluationId, this.pendingReviewId, dto).subscribe({
-          next: (scoreResponse) => {
-            console.log('Peer Score submitted:', scoreResponse);
-            this.proceedWithApproval();
-          },
-          error: (err) => {
-            this.approving = false;
-            const errorMessage = err.error?.error || 'Failed to submit score. Please try again.';
-            this.showToast('error', errorMessage);
-            console.error('Error submitting Peer score:', err);
-          }
-        });
-      } else {
-        console.log('No Peer score entered, proceeding with approval only');
-        this.proceedWithApproval();
-      }
+      this.evaluationService.submitOverallScoring(this.evaluationId, this.pendingReviewId, dto).subscribe({
+        next: (scoreResponse) => {
+          console.log('Overall Score submitted:', scoreResponse);
+          // Now proceed with approval
+          this.proceedWithApproval();
+        },
+        error: (err) => {
+          this.approving = false;
+          const errorMessage = err.error?.error || 'Failed to submit score. Please try again.';
+          this.showToast('error', errorMessage);
+          console.error('Error submitting overall score:', err);
+        }
+      });
     }
     else {
-      // Not RM/TL/Peer or no pending review, proceed with normal approval
+      // No scoring requirement, proceed with normal approval
       this.proceedWithApproval();
     }
   }
@@ -630,17 +614,25 @@ export class EvaluationDetailComponent implements OnInit {
   private proceedWithApproval(): void {
     if (!this.evaluation) return;
 
+    // If already approving from submitScoresAndApprove, don't set it again
+    if (!this.approving) {
+      this.approving = true;
+      this.error = null;
+    }
+
     this.evaluationService.approveEvaluation(this.evaluationId, this.comment || undefined).subscribe({
       next: () => {
         this.showToast('success', 'Evaluation approved successfully!');
         this.approving = false;
         this.showCommentBox = false;
+        this.comment = '';
         this.loadEvaluation(); // Reload to show updated state
       },
       error: (err) => {
         this.approving = false;
-        this.error = err.error?.message || 'Failed to approve evaluation. Please try again.';
+        this.error = err.error?.error || err.error?.message || 'Failed to approve evaluation. Please try again.';
         console.error('Error approving evaluation:', err);
+        this.showToast('error', this.error || 'Failed to approve evaluation. Please try again.');
       }
     });
   }
@@ -1105,5 +1097,44 @@ export class EvaluationDetailComponent implements OnInit {
         console.error('Error processing HR action:', err);
       }
     });
+  }
+
+  /**
+   * ✅ UPDATED: Show only current submission's scores in Reviews section
+   * This method checks if a review belongs to the current user and has been submitted in this session
+   */
+  isCurrentSubmission(review: ReviewDto): boolean {
+    if (!review || !review.scores || review.scores.length === 0) return false;
+    
+    // Check if this review was submitted within the last 5 minutes (current session)
+    if (review.submittedAt) {
+      const submittedTime = new Date(review.submittedAt).getTime();
+      const now = new Date().getTime();
+      const fiveMinutesAgo = now - (5 * 60 * 1000);
+      
+      return submittedTime >= fiveMinutesAgo;
+    }
+    
+    return false;
+  }
+
+  /**
+   * ✅ NEW: Helper to show score submission status in UI
+   */
+  getScoreSubmissionStatus(): string {
+    if (!this.hasPendingScoringRequirement) {
+      return 'No scoring required';
+    }
+
+    if (this.currentUserRole === 'RM') {
+      const hasScores = this.hasAllScoresSelected();
+      return hasScores ? 'Scores ready to submit' : 'Please score all goals';
+    }
+
+    if ((this.currentUserRole === 'TL' || this.currentUserRole === 'Peer') && this.overallScore) {
+      return 'Score ready to submit';
+    }
+
+    return 'Score required before approval';
   }
 }
