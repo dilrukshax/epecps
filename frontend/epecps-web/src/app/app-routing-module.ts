@@ -8,11 +8,18 @@ import { MyApprovalsComponent } from './employee/components/my-approvals/my-appr
 import { EvaluationDetailComponent } from './employee/components/evaluation-detail/evaluation-detail.component';
 
 const routes: Routes = [
-  // MSAL processes the hash on this route after login
-  { path: 'auth-callback', component: MsalRedirectComponent },
+  // MSAL redirect callback route - processes the authentication response
+  // This route renders MsalRedirectComponent which handles the OAuth redirect
+  { 
+    path: 'auth-callback', 
+    component: MsalRedirectComponent 
+  },
 
-  // Public (unauthorized) route
-  { path: 'login', component: UnauthorizedComponent },
+  // Public login page
+  { 
+    path: 'login', 
+    component: UnauthorizedComponent 
+  },
 
   // Protected routes - require authentication
   { 
@@ -21,7 +28,7 @@ const routes: Routes = [
     canActivate: [MsalGuard] 
   },
   
-  // Admin routes - authentication only (no role restrictions)
+  // Admin routes
   {
     path: 'admin/dashboard',
     component: AdminDashboardComponent,
@@ -29,17 +36,18 @@ const routes: Routes = [
   },
   {
     path: 'admin/templates',
-    loadChildren: () => import('./admin/admin-templates.module').then(m => m.AdminTemplatesModule)
+    loadChildren: () => import('./admin/admin-templates.module').then(m => m.AdminTemplatesModule),
+    canActivate: [MsalGuard]
   },
 
-  // Employee routes - personal goal management
+  // Employee routes
   {
     path: 'employee',
     loadChildren: () => import('./employee/employee.module').then(m => m.EmployeeModule),
     canActivate: [MsalGuard]
   },
 
-  // Evaluation routes - approval workflow (loaded separately for direct navigation)
+  // Evaluation routes
   {
     path: 'evaluations/my-approvals',
     component: MyApprovalsComponent,
@@ -51,15 +59,18 @@ const routes: Routes = [
     canActivate: [MsalGuard]
   },
 
-  // Redirect root to dashboard if authenticated, otherwise to login
-  { path: '', redirectTo: '/dashboard', pathMatch: 'full' },
+  // Default route - redirect to login (MsalGuard will handle redirect to dashboard if authenticated)
+  { path: '', redirectTo: '/login', pathMatch: 'full' },
 
   // Wildcard route
-  { path: '**', redirectTo: '/dashboard' }
+  { path: '**', redirectTo: '/login' }
 ];
 
 @NgModule({
-  imports: [RouterModule.forRoot(routes)],
+  imports: [RouterModule.forRoot(routes, {
+    // Use hash routing if you have issues with server-side routing
+    // useHash: true
+  })],
   exports: [RouterModule]
 })
 export class AppRoutingModule {}

@@ -9,7 +9,6 @@ import {
   MsalModule,
   MsalGuard,
   MsalInterceptor,
-  MsalRedirectComponent,
   MsalService,
   MsalBroadcastService
 } from '@azure/msal-angular';
@@ -58,6 +57,6 @@ import { FormsModule } from '@angular/forms';
     MsalGuard,
     { provide: HTTP_INTERCEPTORS, useClass: MsalInterceptor, multi: true }
   ],
-  bootstrap: [App, MsalRedirectComponent]
+  bootstrap: [App]
 })
 export class AppModule {}
