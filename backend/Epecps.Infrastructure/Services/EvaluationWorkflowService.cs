@@ -834,11 +834,34 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
     private async Task CheckAndTransitionAfterPeerReviewsAsync(Evaluation evaluation, CancellationToken cancellationToken)
     {
-        // Check if both peer reviews are approved
-        var peerReviews = evaluation.Reviews.Where(r => r.ReviewerRole == ReviewerRole.Peer).ToList();
+        // ? FIX: Reload evaluation to get fresh data from database
+        var freshEvaluation = await _context.Set<Evaluation>()
+            .Include(e => e.Reviews)
+            .Include(e => e.Employee)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.EvaluationId == evaluation.EvaluationId, cancellationToken);
+
+        if (freshEvaluation == null) return;
+
+        // Check if both peer reviews are approved or completed
+        var peerReviews = freshEvaluation.Reviews.Where(r => r.ReviewerRole == ReviewerRole.Peer).ToList();
         
-        if (peerReviews.Count == 2 && peerReviews.All(r => r.Status == REVIEW_STATUS_APPROVED))
+        Console.WriteLine($"CheckAndTransitionAfterPeerReviews: Found {peerReviews.Count} peer reviews");
+        foreach (var pr in peerReviews)
         {
+            Console.WriteLine($"  Peer Review {pr.ReviewId}: Status={pr.Status}, ReviewerUserId={pr.ReviewerUserId}");
+        }
+        
+        // ? FIX: Check for both "Approved" and "Completed" statuses
+        var allPeerReviewsDone = peerReviews.Count == 2 && 
+            peerReviews.All(r => r.Status == REVIEW_STATUS_APPROVED || r.Status == REVIEW_STATUS_COMPLETED);
+        
+        Console.WriteLine($"CheckAndTransitionAfterPeerReviews: allPeerReviewsDone={allPeerReviewsDone}");
+        
+        if (allPeerReviewsDone)
+        {
+            Console.WriteLine("CheckAndTransitionAfterPeerReviews: Both peers done, transitioning to HOD review");
+            
             // Both peers approved, move to HOD review
             var hodReview = new Review
             {
@@ -858,16 +881,16 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             var notification = new Notification
             {
                 UserId = hodReview.ReviewerUserId,
-                Subject = $"Evaluation Pending: {evaluation.Employee?.FullName ?? "Employee"}",
+                Subject = $"Evaluation Pending: {evaluation.Employee?.FullName ?? freshEvaluation.Employee?.FullName ?? "Employee"}",
                 Channel = "Email",
                 SentAt = DateTime.UtcNow
             };
 
             _context.Set<Notification>().Add(notification);
 
-            // ?? SEND EMAIL to HOD
+            // ? SEND EMAIL to HOD
             var hod = await _context.Users.FindAsync(new object[] { hodReview.ReviewerUserId }, cancellationToken);
-            var employee = evaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
+            var employee = evaluation.Employee ?? freshEvaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
             
             if (hod != null && employee != null)
             {
@@ -881,6 +904,13 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     evaluation.EvaluationId,
                     cancellationToken);
             }
+            
+            // ? Save changes immediately to ensure status is persisted
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            Console.WriteLine($"CheckAndTransitionAfterPeerReviews: Not all peers done yet. Waiting for remaining reviews.");
         }
 
         await Task.CompletedTask;

@@ -449,8 +449,18 @@ export class SetNewGoalComponent implements OnInit {
         }
       }
 
-      this.loading = false;
-      alert(`Successfully created ${createdGoals.length} goal(s)!`);
+      // Automatically submit the goal set for RM evaluation
+      try {
+        const submitResult = await this.goalsService.submitGoalSetForEvaluation(goalSetId).toPromise();
+        this.loading = false;
+        alert(`Successfully created ${createdGoals.length} goal(s) and submitted for RM review!\n\n${submitResult?.message || 'Your Reporting Manager will be notified.'}`);
+      } catch (submitErr: any) {
+        // Goals were created but submission failed
+        this.loading = false;
+        const errorMessage = submitErr?.error?.error || submitErr?.error?.message || 'Failed to submit for evaluation.';
+        alert(`Created ${createdGoals.length} goal(s) but failed to submit for RM review: ${errorMessage}\n\nYou can submit manually from the My Goals page.`);
+      }
+
       this.router.navigate(['/employee/goals']);
     } catch (err) {
       this.loading = false;
