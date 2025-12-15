@@ -321,3 +321,51 @@ export interface HodScoreSubmissionResponseDto {
   score: number;
   scorePercentage: number;
 }
+
+// ========== Report Models ==========
+
+export interface EvaluationReportFilterDto {
+  cycleId?: number;
+  departmentId?: number;
+  status?: string;
+  onlyPromoted?: boolean;
+  minScore?: number;
+  maxScore?: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface EvaluationReportDataDto {
+  evaluationId: number;
+  employeeName: string;
+  employeeEmail: string;
+  department: string;
+  cycleName: string;
+  status: string;
+  overallScore?: number;
+  reportingManagerName?: string;
+  teamLeadName?: string;
+  isPromoted: boolean;
+  promotionStatus?: string;
+  submittedDate?: string;
+  completedDate?: string;
+  rmScore?: number;
+  tlScore?: number;
+  peerScore1?: number;
+  peerScore2?: number;
+  hodScore?: number;
+  gmScore?: number;
+}
+
+export interface CycleDto {
+  cycleId: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+}
+
+export interface DepartmentDto {
+  deptId: number;
+  name: string;
+}

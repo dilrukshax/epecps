@@ -21,7 +21,11 @@ import {
   BulkApprovalRequestDto,
   BulkApprovalResponseDto,
   HodScoreSubmissionDto,
-  HodScoreSubmissionResponseDto
+  HodScoreSubmissionResponseDto,
+  EvaluationReportFilterDto,
+  EvaluationReportDataDto,
+  CycleDto,
+  DepartmentDto
 } from '../models/evaluation.models';
 
 @Injectable({
@@ -288,6 +292,56 @@ export class EvaluationService {
     return this.http.post<HodScoreSubmissionResponseDto>(
       `${this.apiUrl}/api/evaluations/${evaluationId}/hod/submit-score`,
       payload
+    );
+  }
+
+  // ========== REPORT METHODS ==========
+
+  /**
+   * Get evaluation report data with filters
+   */
+  getEvaluationReportData(filter: EvaluationReportFilterDto): Observable<EvaluationReportDataDto[]> {
+    return this.http.post<EvaluationReportDataDto[]>(
+      `${this.apiUrl}/api/reports/evaluations/data`,
+      filter
+    );
+  }
+
+  /**
+   * Download evaluation report as Excel
+   */
+  downloadEvaluationReport(filter: EvaluationReportFilterDto): Observable<Blob> {
+    return this.http.post(
+      `${this.apiUrl}/api/reports/evaluations/download`,
+      filter,
+      { responseType: 'blob' }
+    );
+  }
+
+  /**
+   * Get available cycles for filtering
+   */
+  getCycles(): Observable<CycleDto[]> {
+    return this.http.get<CycleDto[]>(
+      `${this.apiUrl}/api/reports/cycles`
+    );
+  }
+
+  /**
+   * Get available departments for filtering
+   */
+  getDepartments(): Observable<DepartmentDto[]> {
+    return this.http.get<DepartmentDto[]>(
+      `${this.apiUrl}/api/reports/departments`
+    );
+  }
+
+  /**
+   * Get database statistics for debugging
+   */
+  getDatabaseStats(): Observable<any> {
+    return this.http.get<any>(
+      `${this.apiUrl}/api/reports/stats`
     );
   }
 }
