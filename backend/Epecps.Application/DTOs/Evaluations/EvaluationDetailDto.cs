@@ -1,4 +1,5 @@
 using Epecps.Domain.Entities;
+using Epecps.Domain.Enums;
 
 namespace Epecps.Application.DTOs.Evaluations;
 
@@ -60,6 +61,38 @@ public class GoalDto
     public string Description { get; set; } = string.Empty;
     public decimal WeightPct { get; set; }
     public string? EvidenceUri { get; set; }
+    
+    // Additional details
+    public decimal TargetScore { get; set; }
+    public decimal CurrentScore { get; set; }
+    public decimal ProgressPercent { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime? StartDate { get; set; }
+    public DateTime? DueDate { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    
+    // Framework metadata
+    public string? CategoryName { get; set; }
+    public string? ItemName { get; set; }
+    public string? GoalItemName { get; set; }
+    
+    // Activities
+    public List<GoalActivityDto> Activities { get; set; } = new List<GoalActivityDto>();
+}
+
+/// <summary>
+/// DTO for goal activities in evaluation view
+/// </summary>
+public class GoalActivityDto
+{
+    public Guid Id { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public bool IsFromTemplate { get; set; }
+    public ActivityStatus Status { get; set; }
+    public DateTime? DueDate { get; set; }
+    public string? EvidenceUrl { get; set; }
+    public string? EvidenceNotes { get; set; }
 }
 
 public class ApprovalHistoryItemDto

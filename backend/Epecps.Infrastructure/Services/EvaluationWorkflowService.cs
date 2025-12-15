@@ -1947,7 +1947,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         var evaluation = await _context.Set<Evaluation>()
             .Include(e => e.Employee).Include(e => e.ReportingManager).Include(e => e.TeamLead).Include(e => e.Cycle)
             .Include(e => e.Reviews).ThenInclude(r => r.Reviewer)
-            .Include(e => e.Reviews).ThenInclude(r => r.ReviewScores)
+            .Include(e => e.Reviews).ThenInclude(r => r.ReviewScores).ThenInclude(rs => rs.PersonalGoal)
             .Include(e => e.Reviews).ThenInclude(r => r.ReviewItems)
             .Include(e => e.EmployeeGoals)
             .Include(e => e.PeerAssignments).ThenInclude(pa => pa.PeerUser)
@@ -1970,6 +1970,64 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .Select(ah => new ApprovalHistoryItemDto { Id = ah.Id, ActorUserId = ah.ActorUserId, ActorName = ah.ActorUser != null ? ah.ActorUser.FullName : "Unknown", ActorRole = ah.ActorRole, Action = ah.Action, Comment = ah.Comment, FromStatus = ah.FromStatus, ToStatus = ah.ToStatus, CreatedAt = ah.CreatedAt })
             .ToListAsync(cancellationToken);
 
+        // Get personal goal IDs from employee goals
+        var personalGoalIds = evaluation.EmployeeGoals
+            .Where(eg => eg.PersonalGoalId.HasValue)
+            .Select(eg => eg.PersonalGoalId!.Value)
+            .ToList();
+
+        // Load personal goals with activities and framework metadata
+        // Navigation: PersonalGoal -> GoalItem (ScoreItem) -> Category (ScoreCategory)
+        var personalGoals = await _context.PersonalGoals
+            .Include(pg => pg.Activities)
+            .Include(pg => pg.GoalItem)
+                .ThenInclude(gi => gi.Category)
+            .Where(pg => personalGoalIds.Contains(pg.Id))
+            .ToListAsync(cancellationToken);
+
+        // Build goals with full details including activities
+        var goalsWithDetails = evaluation.EmployeeGoals.Select(g => {
+            var personalGoal = g.PersonalGoalId.HasValue 
+                ? personalGoals.FirstOrDefault(pg => pg.Id == g.PersonalGoalId.Value) 
+                : null;
+
+            return new GoalDto 
+            { 
+                GoalId = g.GoalId, 
+                Title = g.Title, 
+                Description = g.Description, 
+                WeightPct = g.WeightPct, 
+                EvidenceUri = g.EvidenceUri, 
+                PersonalGoalId = g.PersonalGoalId,
+                // Additional details from PersonalGoal
+                TargetScore = personalGoal?.TargetScore ?? 0,
+                CurrentScore = personalGoal?.CurrentScore ?? 0,
+                ProgressPercent = personalGoal != null && personalGoal.TargetScore > 0 
+                    ? Math.Round((personalGoal.CurrentScore / personalGoal.TargetScore) * 100, 2) 
+                    : 0,
+                Status = personalGoal?.Status.ToString() ?? "Unknown",
+                StartDate = personalGoal?.StartDate,
+                DueDate = personalGoal?.DueDate,
+                StartedAt = personalGoal?.StartedAt,
+                CompletedAt = personalGoal?.CompletedAt,
+                // Framework metadata: GoalItem is a ScoreItem, Category is ScoreCategory
+                CategoryName = personalGoal?.GoalItem?.Category?.Name,
+                ItemName = personalGoal?.GoalItem?.Name,
+                GoalItemName = personalGoal?.GoalItem?.Name,
+                // Activities
+                Activities = personalGoal?.Activities?.Select(a => new GoalActivityDto
+                {
+                    Id = a.Id,
+                    Description = a.Description,
+                    IsFromTemplate = a.IsFromTemplate,
+                    Status = a.Status,
+                    DueDate = a.DueDate,
+                    EvidenceUrl = a.EvidenceUrl,
+                    EvidenceNotes = a.EvidenceNotes
+                }).ToList() ?? new List<GoalActivityDto>()
+            };
+        }).ToList();
+
         return new EvaluationDetailDto
         {
             EvaluationId = evaluation.EvaluationId, CycleId = evaluation.CycleId, CycleName = evaluation.Cycle?.Name ?? "", EmployeeId = evaluation.EmployeeId,
@@ -1984,7 +2042,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 Items = r.ReviewItems.Select(ri => new ReviewItemDto { ItemId = ri.ItemId, GoalId = ri.GoalId, GoalTitle = ri.Goal?.Title, CompetencyId = ri.CompetencyId, CompetencyName = ri.Competency?.Name, RatingValue = ri.RatingValue, Comment = ri.Comment }).ToList(),
                 Scores = r.ReviewScores.Select(rs => new ReviewScoreDto { Id = rs.Id, EvaluationId = rs.EvaluationId, ReviewId = rs.ReviewId, ReviewerId = rs.ReviewerId, PersonalGoalId = rs.PersonalGoalId, GoalTitle = rs.PersonalGoal?.Title ?? "Unknown Goal", ScoreValue = rs.ScoreValue, Comment = rs.Comment, CreatedAt = rs.CreatedAt }).ToList()
             }).ToList(),
-            Goals = evaluation.EmployeeGoals.Select(g => new GoalDto { GoalId = g.GoalId, Title = g.Title, Description = g.Description, WeightPct = g.WeightPct, EvidenceUri = g.EvidenceUri, PersonalGoalId = g.PersonalGoalId }).ToList(),
+            Goals = goalsWithDetails,
             ApprovalHistory = approvalHistory,
             PeerAssignments = evaluation.PeerAssignments.Select(pa => new PeerAssignmentDto { PeerAssignmentId = pa.PeerAssignmentId, PeerUserId = pa.PeerUserId, PeerName = pa.PeerUser?.FullName ?? "" }).ToList(),
             PromotionCase = evaluation.PromotionCases.FirstOrDefault() != null
