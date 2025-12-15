@@ -1,4 +1,5 @@
 using Epecps.Application.DTOs.Evaluations;
+using Epecps.Application.Exceptions;
 using Epecps.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,15 +17,18 @@ namespace Epecps.Api.Controllers;
 public class EvaluationsController : ControllerBase
 {
     private readonly IEvaluationWorkflowService _evaluationWorkflowService;
+    private readonly IReviewScoringService _reviewScoringService;
     private readonly IUserSyncService _userSyncService;
     private readonly IEmailService _emailService;
 
     public EvaluationsController(
         IEvaluationWorkflowService evaluationWorkflowService,
+        IReviewScoringService reviewScoringService,
         IUserSyncService userSyncService,
         IEmailService emailService)
     {
         _evaluationWorkflowService = evaluationWorkflowService;
+        _reviewScoringService = reviewScoringService;
         _userSyncService = userSyncService;
         _emailService = emailService;
     }
@@ -35,9 +39,20 @@ public class EvaluationsController : ControllerBase
     [HttpGet("pending-approvals")]
     public async Task<IActionResult> GetPendingApprovals(CancellationToken cancellationToken)
     {
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        var pendingApprovals = await _evaluationWorkflowService.GetPendingApprovalsForUserAsync(userId, cancellationToken);
-        return Ok(pendingApprovals);
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var pendingApprovals = await _evaluationWorkflowService.GetPendingApprovalsForUserAsync(userId, cancellationToken);
+            return Ok(pendingApprovals);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "An error occurred while fetching pending approvals.", details = ex.Message });
+        }
     }
 
     /// <summary>
@@ -46,9 +61,20 @@ public class EvaluationsController : ControllerBase
     [HttpGet("my-evaluations")]
     public async Task<IActionResult> GetMyEvaluations(CancellationToken cancellationToken)
     {
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        var evaluations = await _evaluationWorkflowService.GetMyEvaluationsAsync(userId, cancellationToken);
-        return Ok(evaluations);
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var evaluations = await _evaluationWorkflowService.GetMyEvaluationsAsync(userId, cancellationToken);
+            return Ok(evaluations);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "An error occurred while fetching evaluations.", details = ex.Message });
+        }
     }
 
     /// <summary>
@@ -62,6 +88,18 @@ public class EvaluationsController : ControllerBase
             var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
             var evaluation = await _evaluationWorkflowService.GetEvaluationDetailsAsync(evaluationId, userId, cancellationToken);
             return Ok(evaluation);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
         }
         catch (Exception ex)
         {
@@ -90,9 +128,33 @@ public class EvaluationsController : ControllerBase
         [FromBody] ApprovalActionDto dto,
         CancellationToken cancellationToken)
     {
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        await _evaluationWorkflowService.ApproveAsync(evaluationId, userId, dto.Comment, cancellationToken);
-        return Ok(new { message = "Evaluation approved successfully." });
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            await _evaluationWorkflowService.ApproveAsync(evaluationId, userId, dto.Comment, cancellationToken);
+            return Ok(new { message = "Evaluation approved successfully." });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Error approving evaluation {evaluationId}: {ex.Message}";
+            if (ex.InnerException != null)
+            {
+                errorMessage += $" | Inner: {ex.InnerException.Message}";
+            }
+            return StatusCode(500, new { error = "Failed to approve evaluation.", details = errorMessage });
+        }
     }
 
     /// <summary>
@@ -104,12 +166,36 @@ public class EvaluationsController : ControllerBase
         [FromBody] ApprovalActionDto dto,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(dto.Comment))
-            return BadRequest(new { error = "A comment is required when rejecting an evaluation." });
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dto.Comment))
+                return BadRequest(new { error = "A comment is required when rejecting an evaluation." });
 
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        await _evaluationWorkflowService.RejectAsync(evaluationId, userId, dto.Comment, cancellationToken);
-        return Ok(new { message = "Evaluation rejected successfully." });
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            await _evaluationWorkflowService.RejectAsync(evaluationId, userId, dto.Comment, cancellationToken);
+            return Ok(new { message = "Evaluation rejected successfully." });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Error rejecting evaluation {evaluationId}: {ex.Message}";
+            if (ex.InnerException != null)
+            {
+                errorMessage += $" | Inner: {ex.InnerException.Message}";
+            }
+            return StatusCode(500, new { error = "Failed to reject evaluation.", details = errorMessage });
+        }
     }
 
     /// <summary>
@@ -118,9 +204,20 @@ public class EvaluationsController : ControllerBase
     [HttpGet("{evaluationId}/available-peers")]
     public async Task<IActionResult> GetAvailablePeers(int evaluationId, CancellationToken cancellationToken)
     {
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        var peers = await _evaluationWorkflowService.GetAvailablePeersAsync(evaluationId, cancellationToken);
-        return Ok(peers);
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var peers = await _evaluationWorkflowService.GetAvailablePeersAsync(evaluationId, cancellationToken);
+            return Ok(peers);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to get available peers.", details = ex.Message });
+        }
     }
 
     /// <summary>
@@ -132,15 +229,34 @@ public class EvaluationsController : ControllerBase
         [FromBody] AssignPeersDto dto,
         CancellationToken cancellationToken)
     {
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        await _evaluationWorkflowService.AssignPeerReviewersAsync(
-            evaluationId,
-            userId,
-            dto.PeerUserId1,
-            dto.PeerUserId2,
-            cancellationToken);
-        
-        return Ok(new { message = "Peer reviewers assigned successfully." });
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            await _evaluationWorkflowService.AssignPeerReviewersAsync(
+                evaluationId,
+                userId,
+                dto.PeerUserId1,
+                dto.PeerUserId2,
+                cancellationToken);
+            
+            return Ok(new { message = "Peer reviewers assigned successfully." });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to assign peer reviewers.", details = ex.Message });
+        }
     }
 
     /// <summary>
@@ -152,26 +268,45 @@ public class EvaluationsController : ControllerBase
         [FromBody] PromotionDecisionDto dto,
         CancellationToken cancellationToken)
     {
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        
-        // Check if user has GM role in database
-        if (!await UserHasRoleAsync(userId, "GM", cancellationToken))
+        try
         {
-            return StatusCode(403, new { error = "You must have the GM role to perform this action." });
-        }
-        
-        await _evaluationWorkflowService.ProcessPromotionDecisionAsync(
-            evaluationId,
-            userId,
-            dto.Approve,
-            dto.Comment,
-            cancellationToken);
-        
-        var message = dto.Approve 
-            ? "Promotion approved successfully. HR has been notified." 
-            : "Promotion declined. Employee has been notified.";
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            // Check if user has GM role in database
+            if (!await UserHasRoleAsync(userId, "GM", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the GM role to perform this action." });
+            }
+            
+            await _evaluationWorkflowService.ProcessPromotionDecisionAsync(
+                evaluationId,
+                userId,
+                dto.Approve,
+                dto.Comment,
+                cancellationToken);
+            
+            var message = dto.Approve 
+                ? "Promotion approved successfully. HR has been notified." 
+                : "Promotion declined. Employee has been notified.";
 
-        return Ok(new { message });
+            return Ok(new { message });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to process promotion decision.", details = ex.Message });
+        }
     }
 
     /// <summary>
@@ -183,21 +318,40 @@ public class EvaluationsController : ControllerBase
         [FromBody] ApprovalActionDto dto,
         CancellationToken cancellationToken)
     {
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        
-        // Check if user has HOD role in database
-        if (!await UserHasRoleAsync(userId, "HOD", cancellationToken))
+        try
         {
-            return StatusCode(403, new { error = "You must have the HOD role to perform this action." });
-        }
-        
-        await _evaluationWorkflowService.RecommendForPromotionAsync(
-            evaluationId,
-            userId,
-            dto.Comment,
-            cancellationToken);
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            // Check if user has HOD role in database
+            if (!await UserHasRoleAsync(userId, "HOD", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the HOD role to perform this action." });
+            }
+            
+            await _evaluationWorkflowService.RecommendForPromotionAsync(
+                evaluationId,
+                userId,
+                dto.Comment,
+                cancellationToken);
 
-        return Ok(new { message = "Employee recommended for promotion successfully. GM has been notified." });
+            return Ok(new { message = "Employee recommended for promotion successfully. GM has been notified." });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to recommend for promotion.", details = ex.Message });
+        }
     }
 
     /// <summary>
@@ -209,24 +363,43 @@ public class EvaluationsController : ControllerBase
         [FromBody] ApprovalActionDto dto,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(dto.Comment))
-            return BadRequest(new { error = "A comment is required when rejecting an evaluation at HOD stage." });
-
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        
-        // Check if user has HOD role in database
-        if (!await UserHasRoleAsync(userId, "HOD", cancellationToken))
+        try
         {
-            return StatusCode(403, new { error = "You must have the HOD role to perform this action." });
+            if (string.IsNullOrWhiteSpace(dto.Comment))
+                return BadRequest(new { error = "A comment is required when rejecting an evaluation at HOD stage." });
+
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            // Check if user has HOD role in database
+            if (!await UserHasRoleAsync(userId, "HOD", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the HOD role to perform this action." });
+            }
+
+            await _evaluationWorkflowService.RejectAtHodAsync(
+                evaluationId,
+                userId,
+                dto.Comment,
+                cancellationToken);
+
+            return Ok(new { message = "Evaluation rejected at HOD stage. Employee has been notified." });
         }
-
-        await _evaluationWorkflowService.RejectAtHodAsync(
-            evaluationId,
-            userId,
-            dto.Comment,
-            cancellationToken);
-
-        return Ok(new { message = "Evaluation rejected at HOD stage. Employee has been notified." });
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to reject evaluation at HOD stage.", details = ex.Message });
+        }
     }
 
     /// <summary>
@@ -238,26 +411,45 @@ public class EvaluationsController : ControllerBase
         [FromBody] HrProcessDto dto,
         CancellationToken cancellationToken)
     {
-        var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
-        
-        // Check if user has HR role in database
-        if (!await UserHasRoleAsync(userId, "HR", cancellationToken))
+        try
         {
-            return StatusCode(403, new { error = "You must have the HR role to perform this action." });
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            // Check if user has HR role in database
+            if (!await UserHasRoleAsync(userId, "HR", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the HR role to perform this action." });
+            }
+            
+            await _evaluationWorkflowService.FinalizePromotionByHrAsync(
+                evaluationId,
+                userId,
+                dto.Proceed,
+                dto.Comment,
+                cancellationToken);
+
+            var message = dto.Proceed
+                ? "Promotion processed successfully. Employee has been notified."
+                : "Promotion processing declined.";
+
+            return Ok(new { message });
         }
-        
-        await _evaluationWorkflowService.FinalizePromotionByHrAsync(
-            evaluationId,
-            userId,
-            dto.Proceed,
-            dto.Comment,
-            cancellationToken);
-
-        var message = dto.Proceed
-            ? "Promotion processed successfully. Employee has been notified."
-            : "Promotion processing declined.";
-
-        return Ok(new { message });
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to process promotion by HR.", details = ex.Message });
+        }
     }
 
     /// <summary>
@@ -271,7 +463,7 @@ public class EvaluationsController : ControllerBase
             var testEmail = "dilrukshadev@gmail.com";
             var testSubject = "EPECPS Email Test - " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             var testBody = @"
-                <h1 style='color: #667eea;'>? Email System Works!</h1>
+                <h1 style='color: #667eea;'>?? Email System Works!</h1>
                 <p>If you receive this email, your EPECPS email configuration is correct.</p>
                 <hr>
                 <p><strong>Configuration Details:</strong></p>
@@ -392,6 +584,287 @@ public class EvaluationsController : ControllerBase
         
         return hasRole;
     }
+
+    /// <summary>
+    /// Submit RM review scores (item-level scoring for each goal)
+    /// RM scores each goal individually on a 1-10 scale
+    /// </summary>
+    [HttpPost("{evaluationId}/reviews/{reviewId}/rm-scores")]
+    public async Task<IActionResult> SubmitRmReviewScoring(
+        int evaluationId,
+        int reviewId,
+        [FromBody] SubmitRmReviewScoringDto dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var result = await _reviewScoringService.SubmitRmReviewScoringAsync(
+                evaluationId,
+                reviewId,
+                userId,
+                dto,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to submit RM scores.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Submit overall review score (TL/Peer/HOD/GM)
+    /// These reviewers provide a single overall score (1-10) for the entire evaluation
+    /// </summary>
+    [HttpPost("{evaluationId}/reviews/{reviewId}/overall-score")]
+    public async Task<IActionResult> SubmitOverallReviewScoring(
+        int evaluationId,
+        int reviewId,
+        [FromBody] SubmitOverallReviewScoringDto dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var result = await _reviewScoringService.SubmitOverallReviewScoringAsync(
+                evaluationId,
+                reviewId,
+                userId,
+                dto,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to submit overall score.", details = ex.Message });
+        }
+    }
+
+    // ========== NEW: Bulk Approval Endpoints ==========
+
+    /// <summary>
+    /// Get bulk approval statistics for GM/HR dashboard
+    /// </summary>
+    [HttpGet("bulk-approval/stats")]
+    public async Task<IActionResult> GetBulkApprovalStats(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var stats = await _evaluationWorkflowService.GetBulkApprovalStatsAsync(userId, cancellationToken);
+            return Ok(stats);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to get bulk approval stats.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get all evaluations pending GM approval (for bulk approval)
+    /// </summary>
+    [HttpGet("bulk-approval/gm-pending")]
+    public async Task<IActionResult> GetPendingGmBulkApprovals(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var evaluations = await _evaluationWorkflowService.GetPendingGmBulkApprovalsAsync(userId, cancellationToken);
+            return Ok(evaluations);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to get pending GM approvals.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get all evaluations pending HR processing (for bulk processing)
+    /// </summary>
+    [HttpGet("bulk-approval/hr-pending")]
+    public async Task<IActionResult> GetPendingHrBulkProcessing(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var evaluations = await _evaluationWorkflowService.GetPendingHrBulkProcessingAsync(userId, cancellationToken);
+            return Ok(evaluations);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to get pending HR processing.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// GM bulk approves multiple evaluations at once
+    /// </summary>
+    [HttpPost("bulk-approval/gm-approve")]
+    public async Task<IActionResult> GmBulkApprove(
+        [FromBody] BulkApprovalRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            if (!await UserHasRoleAsync(userId, "GM", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the GM role to perform this action." });
+            }
+
+            var result = await _evaluationWorkflowService.GmBulkApproveAsync(userId, request, cancellationToken);
+            return Ok(result);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to process bulk approval.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// HR bulk processes multiple promotions at once
+    /// </summary>
+    [HttpPost("bulk-approval/hr-process")]
+    public async Task<IActionResult> HrBulkProcess(
+        [FromBody] BulkApprovalRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            if (!await UserHasRoleAsync(userId, "HR", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the HR role to perform this action." });
+            }
+
+            var result = await _evaluationWorkflowService.HrBulkProcessAsync(userId, request, cancellationToken);
+            return Ok(result);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to process bulk HR processing.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// HOD submits overall score for an evaluation
+    /// If score >= 8 (80%), auto-recommends to GM
+    /// If score < 8 (80%), directly completes without promotion
+    /// </summary>
+    [HttpPost("{evaluationId}/hod/submit-score")]
+    public async Task<IActionResult> HodSubmitScore(
+        int evaluationId,
+        [FromBody] HodScoreSubmissionDto dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            
+            if (!await UserHasRoleAsync(userId, "HOD", cancellationToken))
+            {
+                return StatusCode(403, new { error = "You must have the HOD role to perform this action." });
+            }
+
+            await _evaluationWorkflowService.HodSubmitScoreAsync(
+                evaluationId,
+                userId,
+                dto.Score,
+                dto.Comment,
+                cancellationToken);
+
+            var message = dto.Score >= 8 
+                ? "Score submitted successfully. Employee has been auto-recommended for promotion to GM." 
+                : "Score submitted successfully. Evaluation completed without promotion.";
+
+            return Ok(new { message, score = dto.Score, scorePercentage = dto.Score * 10 });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to submit HOD score.", details = ex.Message });
+        }
+    }
 }
 
 /// <summary>
@@ -409,5 +882,14 @@ public class PromotionDecisionDto
 public class HrProcessDto
 {
     public bool Proceed { get; set; }
+    public string? Comment { get; set; }
+}
+
+/// <summary>
+/// DTO for HOD score submission
+/// </summary>
+public class HodScoreSubmissionDto
+{
+    public decimal Score { get; set; }
     public string? Comment { get; set; }
 }

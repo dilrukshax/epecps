@@ -394,6 +394,9 @@ namespace Epecps.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
@@ -419,6 +422,9 @@ namespace Epecps.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("StartedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("Status")
@@ -447,11 +453,15 @@ namespace Epecps.Infrastructure.Migrations
 
                     b.HasIndex("GoalItemId");
 
+                    b.HasIndex("GoalSetId");
+
                     b.HasIndex("Status");
 
                     b.HasIndex("UserId");
 
                     b.HasIndex("UserId", "DueDate");
+
+                    b.HasIndex("UserId", "GoalSetId");
 
                     b.HasIndex("UserId", "Status");
 

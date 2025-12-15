@@ -7,7 +7,11 @@ export enum PersonalGoalStatus {
   Draft = 0,
   InProgress = 1,
   Completed = 2,
-  Cancelled = 3
+  Cancelled = 3,
+  UnderEvaluation = 4,
+  PendingRMReview = 5,
+  ApprovedByRM = 6,
+  ReturnedToEmployee = 7
 }
 
 export enum ActivityStatus {
@@ -90,6 +94,13 @@ export interface PersonalGoalListDto {
   status: PersonalGoalStatus;
   dueDate: Date | string;
   createdAt: Date | string;
+  // NEW: Start/Complete flow fields
+  startedAt?: Date | string;
+  completedAt?: Date | string;
+  completionComment?: string;
+  completionEvidenceUrl?: string;
+  canStart?: boolean;
+  canComplete?: boolean;
 }
 
 export interface PersonalGoalActivityDto {

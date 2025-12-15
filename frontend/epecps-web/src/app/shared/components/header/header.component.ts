@@ -19,6 +19,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
   userPhotoUrl: string | null = null;
   mobileMenuOpen = false;
   photoLoadError = false;
+  userRoles: string[] = [];
 
   constructor(
     private authService: MsalService,
@@ -46,8 +47,10 @@ export class HeaderComponent implements OnInit, OnDestroy {
       const account = this.authService.instance.getActiveAccount();
       this.userName = account?.name || '';
       this.userEmail = account?.username || '';
+      this.userRoles = account?.idTokenClaims?.['roles'] as string[] || [];
       
       console.log('User logged in:', this.userName, this.userEmail);
+      console.log('User roles:', this.userRoles);
       
       // Fetch user's profile photo
       this.loadUserPhoto();
@@ -102,6 +105,14 @@ export class HeaderComponent implements OnInit, OnDestroy {
   navigateTo(path: string) {
     this.router.navigate([path]);
     this.mobileMenuOpen = false;
+  }
+
+  hasHrRole(): boolean {
+    return this.userRoles.includes('HR');
+  }
+
+  hasAdminRole(): boolean {
+    return this.userRoles.includes('Admin') || this.userRoles.includes('HOD') || this.userRoles.includes('GM');
   }
 
   ngOnDestroy(): void {

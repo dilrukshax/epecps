@@ -33,6 +33,19 @@ public class EmailService : IEmailService
     {
         try
         {
+            // Validate inputs
+            if (string.IsNullOrWhiteSpace(toEmail))
+            {
+                _logger.LogWarning("Attempted to send email with empty recipient address");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_settings.SenderEmail))
+            {
+                _logger.LogWarning("EmailSettings.SenderEmail is not configured. Email sending is disabled.");
+                return;
+            }
+
             using var client = CreateSmtpClient();
             using var mailMessage = CreateMailMessage(toEmail, toName, subject, htmlBody);
 
@@ -43,7 +56,8 @@ public class EmailService : IEmailService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send email to {Email}: {Error}", toEmail, ex.Message);
-            throw;
+            // Don't rethrow - allow the workflow to continue even if email fails
+            // In production, you might want to queue for retry or alert admins
         }
     }
 
@@ -207,9 +221,21 @@ public class EmailService : IEmailService
     /// </summary>
     private MailMessage CreateMailMessage(string toEmail, string toName, string subject, string htmlBody)
     {
+        // Validate email settings
+        if (string.IsNullOrWhiteSpace(_settings.SenderEmail))
+        {
+            throw new InvalidOperationException(
+                "EmailSettings.SenderEmail is not configured. Please set the SenderEmail in appsettings.json under EmailSettings section.");
+        }
+
+        if (string.IsNullOrWhiteSpace(toEmail))
+        {
+            throw new ArgumentException("Recipient email address cannot be empty.", nameof(toEmail));
+        }
+
         var message = new MailMessage
         {
-            From = new MailAddress(_settings.SenderEmail, _settings.SenderName),
+            From = new MailAddress(_settings.SenderEmail, _settings.SenderName ?? "EPECPS"),
             Subject = subject,
             Body = htmlBody,
             IsBodyHtml = true,
@@ -217,7 +243,7 @@ public class EmailService : IEmailService
             SubjectEncoding = Encoding.UTF8
         };
 
-        message.To.Add(new MailAddress(toEmail, toName));
+        message.To.Add(new MailAddress(toEmail, toName ?? "Recipient"));
 
         return message;
     }

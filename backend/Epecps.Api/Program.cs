@@ -8,8 +8,6 @@ using Epecps.Infrastructure.Persistence;
 using Epecps.Application.Interfaces;
 using Epecps.Application.Models;
 using Epecps.Infrastructure.Services;
-using FluentValidation;
-using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
@@ -29,6 +27,9 @@ services.AddScoped<Epecps.Infrastructure.Data.DatabaseSeeder>();
 services.AddScoped<IEmailService, EmailService>();
 services.AddHostedService<EmailBackgroundService>();
 
+// Report Services
+services.AddScoped<IReportService, ReportService>();
+
 // Admin Framework Services
 services.AddScoped<IScoreTemplateService, ScoreTemplateService>();
 services.AddScoped<IScoreCategoryService, ScoreCategoryService>();
@@ -41,10 +42,10 @@ services.AddScoped<IUserSyncService, UserSyncService>(); // Auto-sync users from
 
 // Evaluation Workflow Services
 services.AddScoped<IEvaluationWorkflowService, EvaluationWorkflowService>();
+services.AddScoped<IReviewScoringService, ReviewScoringService>();
 
-// FluentValidation
-services.AddFluentValidationAutoValidation();
-services.AddValidatorsFromAssemblyContaining<Epecps.Application.Validators.CreatePersonalGoalDtoValidator>();
+// Dashboard Services
+services.AddScoped<IDashboardService, DashboardService>();
 
 // CORS for Angular dev on 64291
 services.AddCors(opt =>
@@ -142,6 +143,7 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
+    app.UseDeveloperExceptionPage();
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {

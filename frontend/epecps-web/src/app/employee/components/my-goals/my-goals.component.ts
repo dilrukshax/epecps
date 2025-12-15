@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { EmployeeGoalsService } from '../../../services/employee-goals.service';
 import { EvaluationService } from '../../../services/evaluation.service';
 import { PersonalGoalSetDto, PersonalGoalStatus, PersonalGoalListDto } from '../../../models/employee-goals.models';
+import { CompleteGoalRequestDto } from '../../../models/evaluation.models';
 
 /**
  * Component for displaying all personal goals grouped by goal sets
@@ -29,6 +30,18 @@ export class MyGoalsComponent implements OnInit {
 
   // Reference to enum for template
   PersonalGoalStatus = PersonalGoalStatus;
+
+  // ====== NEW: Start/Complete flow state ======
+  startingGoalId: string | null = null;
+  completingGoalId: string | null = null;
+  
+  // Complete goal modal state
+  showCompleteModal = false;
+  completeModalGoal: PersonalGoalListDto | null = null;
+  completeModalGoalSetId: string | null = null;
+  completeFormEvidenceUrl = '';
+  completeFormComment = '';
+  completeFormCurrentScore: number | null = null;
 
   constructor(
     private goalsService: EmployeeGoalsService,
@@ -114,6 +127,14 @@ export class MyGoalsComponent implements OnInit {
         return 'Completed';
       case PersonalGoalStatus.Cancelled:
         return 'Cancelled';
+      case PersonalGoalStatus.UnderEvaluation:
+        return 'Under Evaluation';
+      case PersonalGoalStatus.PendingRMReview:
+        return 'Pending RM Review';
+      case PersonalGoalStatus.ApprovedByRM:
+        return 'Approved by RM';
+      case PersonalGoalStatus.ReturnedToEmployee:
+        return 'Returned to Employee';
       default:
         return 'Unknown';
     }
@@ -129,6 +150,14 @@ export class MyGoalsComponent implements OnInit {
         return 'bg-green-100 text-green-800';
       case PersonalGoalStatus.Cancelled:
         return 'bg-red-100 text-red-800';
+      case PersonalGoalStatus.UnderEvaluation:
+        return 'bg-purple-100 text-purple-800';
+      case PersonalGoalStatus.PendingRMReview:
+        return 'bg-yellow-100 text-yellow-800';
+      case PersonalGoalStatus.ApprovedByRM:
+        return 'bg-teal-100 text-teal-800';
+      case PersonalGoalStatus.ReturnedToEmployee:
+        return 'bg-orange-100 text-orange-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -283,6 +312,171 @@ export class MyGoalsComponent implements OnInit {
 
   canDeleteGoalSet(goalSet: PersonalGoalSetDto): boolean {
     return !goalSet.evaluationInfo; // Can only delete if not submitted for evaluation
+  }
+
+  /**
+   * Check if a goal can be started (approved by RM)
+   */
+  canStartGoal(goal: PersonalGoalListDto): boolean {
+    return goal.status === PersonalGoalStatus.ApprovedByRM;
+  }
+
+  /**
+   * Check if a goal can be completed (currently in progress)
+   */
+  canCompleteGoal(goal: PersonalGoalListDto): boolean {
+    return goal.status === PersonalGoalStatus.InProgress;
+  }
+
+  /**
+   * Check if evaluation is in "Returned to Employee" state
+   */
+  isReturnedToEmployee(goalSet: PersonalGoalSetDto): boolean {
+    if (!goalSet.evaluationInfo) return false;
+    const status = goalSet.evaluationInfo.status.toLowerCase();
+    return status.includes('returned') || status.includes('rejected');
+  }
+
+  /**
+   * Get the RM rejection comment if available
+   */
+  getReturnedComment(goalSet: PersonalGoalSetDto): string | null {
+    if (!goalSet.evaluationInfo?.approvalSteps) return null;
+    const rejectedStep = goalSet.evaluationInfo.approvalSteps.find(
+      step => step.isRejected && step.comment
+    );
+    return rejectedStep?.comment || null;
+  }
+
+  /**
+   * Handle start goal button click
+   */
+  startGoal(goal: PersonalGoalListDto, event: Event): void {
+    event.stopPropagation();
+    
+    if (!this.canStartGoal(goal)) {
+      this.showToast('error', 'This goal cannot be started. It must be approved by RM first.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to start working on this goal?\n\nTitle: ${goal.title}\n\nOnce started, you can begin tracking your progress.`)) {
+      return;
+    }
+
+    this.startingGoalId = goal.id;
+
+    this.evaluationService.startGoal(goal.id).subscribe({
+      next: (response) => {
+        this.showToast('success', response.message || 'Goal started successfully! You can now work on this goal.');
+        this.startingGoalId = null;
+        this.loadGoals(); // Refresh to show updated status
+      },
+      error: (err) => {
+        this.startingGoalId = null;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to start goal. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error starting goal:', err);
+      }
+    });
+  }
+
+  /**
+   * Check if goal is currently being started
+   */
+  isStarting(goalId: string): boolean {
+    return this.startingGoalId === goalId;
+  }
+
+  /**
+   * Open complete goal modal
+   */
+  openCompleteModal(goal: PersonalGoalListDto, goalSetId: string, event: Event): void {
+    event.stopPropagation();
+    
+    if (!this.canCompleteGoal(goal)) {
+      this.showToast('error', 'This goal cannot be completed. It must be in progress first.');
+      return;
+    }
+
+    this.completeModalGoal = goal;
+    this.completeModalGoalSetId = goalSetId;
+    this.completeFormEvidenceUrl = '';
+    this.completeFormComment = '';
+    this.completeFormCurrentScore = goal.targetScore; // Default to target score
+    this.showCompleteModal = true;
+  }
+
+  /**
+   * Close complete goal modal
+   */
+  closeCompleteModal(): void {
+    this.showCompleteModal = false;
+    this.completeModalGoal = null;
+    this.completeModalGoalSetId = null;
+    this.completeFormEvidenceUrl = '';
+    this.completeFormComment = '';
+    this.completeFormCurrentScore = null;
+  }
+
+  /**
+   * Submit complete goal action
+   */
+  confirmCompleteGoal(): void {
+    if (!this.completeModalGoal) return;
+
+    const payload: CompleteGoalRequestDto = {};
+    
+    if (this.completeFormEvidenceUrl.trim()) {
+      payload.evidenceUrl = this.completeFormEvidenceUrl.trim();
+    }
+    if (this.completeFormComment.trim()) {
+      payload.comment = this.completeFormComment.trim();
+    }
+    if (this.completeFormCurrentScore !== null && this.completeFormCurrentScore !== this.completeModalGoal.targetScore) {
+      payload.currentScore = this.completeFormCurrentScore;
+    }
+
+    this.completingGoalId = this.completeModalGoal.id;
+
+    this.evaluationService.completeGoal(this.completeModalGoal.id, payload).subscribe({
+      next: (response) => {
+        let message = response.message || 'Goal completed successfully!';
+        
+        // If workflow continued, show special message
+        if (response.workflowContinued) {
+          message = 'Goal completed! All goals are now complete. The evaluation has been forwarded for further review.';
+        }
+        
+        this.showToast('success', message);
+        this.completingGoalId = null;
+        this.closeCompleteModal();
+        this.loadGoals(); // Refresh to show updated status and evaluation progress
+      },
+      error: (err) => {
+        this.completingGoalId = null;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to complete goal. Please try again.';
+        this.showToast('error', errorMessage);
+        console.error('Error completing goal:', err);
+      }
+    });
+  }
+
+  /**
+   * Check if goal is currently being completed
+   */
+  isCompleting(goalId: string): boolean {
+    return this.completingGoalId === goalId;
+  }
+
+  /**
+   * Navigate to edit goals after RM returned evaluation
+   */
+  editAndResubmit(goalSet: PersonalGoalSetDto, event: Event): void {
+    event.stopPropagation();
+    // Navigate to the first goal in the set for editing
+    if (goalSet.goals.length > 0) {
+      this.router.navigate(['/employee/goals', goalSet.goals[0].id]);
+    }
   }
 
   private showToast(type: 'success' | 'error', message: string): void {

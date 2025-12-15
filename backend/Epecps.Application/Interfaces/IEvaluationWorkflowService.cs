@@ -11,6 +11,7 @@ public interface IEvaluationWorkflowService
     /// <summary>
     /// Start a new evaluation for a submitted goal set
     /// Creates evaluation record, self-review, initial RM review, and approval history
+    /// Status will be set to PENDING_RM_REVIEW
     /// </summary>
     /// <param name="employeeId">The employee submitting the goals</param>
     /// <param name="goalSetId">The goal set ID to evaluate</param>
@@ -21,6 +22,7 @@ public interface IEvaluationWorkflowService
 
     /// <summary>
     /// Approve the current stage of the evaluation and move to the next stage
+    /// For RM: transitions to APPROVED_BY_RM and notifies employee to start goals
     /// </summary>
     /// <param name="evaluationId">The evaluation ID</param>
     /// <param name="actorUserId">The user performing the approval</param>
@@ -30,12 +32,22 @@ public interface IEvaluationWorkflowService
 
     /// <summary>
     /// Reject the evaluation and return it to the employee
+    /// For RM: transitions to RETURNED_TO_EMPLOYEE
     /// </summary>
     /// <param name="evaluationId">The evaluation ID</param>
     /// <param name="actorUserId">The user performing the rejection</param>
     /// <param name="comment">Required comment explaining the rejection</param>
     /// <param name="cancellationToken">Cancellation token</param>
     Task RejectAsync(int evaluationId, int actorUserId, string comment, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Continue the workflow after employee has completed all goals
+    /// Creates TL review and/or Peer assignments, moves to next stage
+    /// </summary>
+    /// <param name="evaluationId">The evaluation ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The updated evaluation</returns>
+    Task<Evaluation> ContinueWorkflowAfterEmployeeCompletionAsync(int evaluationId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Assign peer reviewers (Team Lead only, during TL review stage)
@@ -118,4 +130,60 @@ public interface IEvaluationWorkflowService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of evaluations where user is involved</returns>
     Task<IEnumerable<MyEvaluationDto>> GetMyEvaluationsAsync(int userId, CancellationToken cancellationToken = default);
+
+    // ========== NEW: Bulk Approval Methods ==========
+
+    /// <summary>
+    /// Get bulk approval statistics for GM/HR dashboard
+    /// </summary>
+    /// <param name="userId">The user ID (must have GM or HR role)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Statistics for bulk approval dashboard</returns>
+    Task<BulkApprovalStatsDto> GetBulkApprovalStatsAsync(int userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all evaluations pending GM approval (score >= 80%, recommended by HOD)
+    /// </summary>
+    /// <param name="userId">The GM user ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of evaluations eligible for GM bulk approval</returns>
+    Task<IEnumerable<BulkApprovalCandidateDto>> GetPendingGmBulkApprovalsAsync(int userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all evaluations pending HR processing (after GM approval)
+    /// </summary>
+    /// <param name="userId">The HR user ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of evaluations eligible for HR bulk processing</returns>
+    Task<IEnumerable<BulkApprovalCandidateDto>> GetPendingHrBulkProcessingAsync(int userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// GM bulk approves multiple evaluations at once
+    /// </summary>
+    /// <param name="gmUserId">The GM user ID</param>
+    /// <param name="request">Bulk approval request with evaluation IDs</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Result of bulk approval operation</returns>
+    Task<BulkApprovalResponseDto> GmBulkApproveAsync(int gmUserId, BulkApprovalRequestDto request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// HR bulk processes multiple promotions at once
+    /// </summary>
+    /// <param name="hrUserId">The HR user ID</param>
+    /// <param name="request">Bulk approval request with evaluation IDs</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Result of bulk processing operation</returns>
+    Task<BulkApprovalResponseDto> HrBulkProcessAsync(int hrUserId, BulkApprovalRequestDto request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// HOD submits overall score for an evaluation
+    /// If score >= 80%, auto-recommends to GM
+    /// If score < 80%, directly completes without promotion
+    /// </summary>
+    /// <param name="evaluationId">The evaluation ID</param>
+    /// <param name="hodUserId">The HOD user ID</param>
+    /// <param name="score">The overall score (1-10, converted to percentage)</param>
+    /// <param name="comment">Optional comment</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task HodSubmitScoreAsync(int evaluationId, int hodUserId, decimal score, string? comment, CancellationToken cancellationToken = default);
 }

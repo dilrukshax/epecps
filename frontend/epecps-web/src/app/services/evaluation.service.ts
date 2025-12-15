@@ -10,7 +10,22 @@ import {
   AssignPeersDto,
   PromotionDecisionDto,
   AvailablePeerDto,
-  MyEvaluationDto
+  MyEvaluationDto,
+  GoalActionResponseDto,
+  CompleteGoalRequestDto,
+  SubmitRmScoringDto,
+  SubmitOverallScoringDto,
+  ReviewScoringResponseDto,
+  BulkApprovalStatsDto,
+  BulkApprovalCandidateDto,
+  BulkApprovalRequestDto,
+  BulkApprovalResponseDto,
+  HodScoreSubmissionDto,
+  HodScoreSubmissionResponseDto,
+  EvaluationReportFilterDto,
+  EvaluationReportDataDto,
+  CycleDto,
+  DepartmentDto
 } from '../models/evaluation.models';
 
 @Injectable({
@@ -152,6 +167,181 @@ export class EvaluationService {
     return this.http.post(
       `${this.apiUrl}/api/evaluations/${evaluationId}/hr/process`,
       body
+    );
+  }
+
+  // ====== NEW: Goal Start/Complete Methods for RM-first flow ======
+
+  /**
+   * Start working on a goal after RM approval
+   * Goal must be in ApprovedByRM status
+   * @param goalId The GUID of the goal to start
+   */
+  startGoal(goalId: string): Observable<GoalActionResponseDto> {
+    return this.http.post<GoalActionResponseDto>(
+      `${this.apiUrl}/api/employee-goals/${goalId}/start`,
+      {}
+    );
+  }
+
+  /**
+   * Mark a goal as completed
+   * Goal must be in InProgress status
+   * If all goals in the evaluation are completed, triggers workflow continuation
+   * @param goalId The GUID of the goal to complete
+   * @param payload Optional evidence URL and comment
+   */
+  completeGoal(goalId: string, payload?: CompleteGoalRequestDto): Observable<GoalActionResponseDto> {
+    return this.http.post<GoalActionResponseDto>(
+      `${this.apiUrl}/api/employee-goals/${goalId}/complete`,
+      payload || {}
+    );
+  }
+
+  /**
+   * Refresh evaluation detail after goal actions
+   * Useful for updating UI state after start/complete
+   */
+  refreshEvaluationDetail(evaluationId: number): Observable<EvaluationDetailDto> {
+    return this.getEvaluationDetail(evaluationId);
+  }
+
+  // ====== NEW: Review Scoring Methods ======
+
+  /**
+   * Submit RM review scores (item-level scores for each goal)
+   * @param evaluationId The evaluation ID
+   * @param reviewId The review ID for the RM review
+   * @param payload Item-level scores for each goal
+   */
+  submitRmScoring(evaluationId: number, reviewId: number, payload: SubmitRmScoringDto): Observable<ReviewScoringResponseDto> {
+    return this.http.post<ReviewScoringResponseDto>(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/reviews/${reviewId}/rm-scores`,
+      payload
+    );
+  }
+
+  /**
+   * Submit overall review score (TL/Peer/HOD/GM)
+   * @param evaluationId The evaluation ID
+   * @param reviewId The review ID
+   * @param payload Overall score and comment
+   */
+  submitOverallScoring(evaluationId: number, reviewId: number, payload: SubmitOverallScoringDto): Observable<ReviewScoringResponseDto> {
+    return this.http.post<ReviewScoringResponseDto>(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/reviews/${reviewId}/overall-score`,
+      payload
+    );
+  }
+
+  // ========== NEW: Bulk Approval Methods ==========
+
+  /**
+   * Get bulk approval statistics for GM/HR dashboard
+   */
+  getBulkApprovalStats(): Observable<BulkApprovalStatsDto> {
+    return this.http.get<BulkApprovalStatsDto>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/stats`
+    );
+  }
+
+  /**
+   * Get all evaluations pending GM approval (for bulk approval)
+   */
+  getPendingGmBulkApprovals(): Observable<BulkApprovalCandidateDto[]> {
+    return this.http.get<BulkApprovalCandidateDto[]>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/gm-pending`
+    );
+  }
+
+  /**
+   * Get all evaluations pending HR processing (for bulk processing)
+   */
+  getPendingHrBulkProcessing(): Observable<BulkApprovalCandidateDto[]> {
+    return this.http.get<BulkApprovalCandidateDto[]>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/hr-pending`
+    );
+  }
+
+  /**
+   * GM bulk approves multiple evaluations at once
+   */
+  gmBulkApprove(request: BulkApprovalRequestDto): Observable<BulkApprovalResponseDto> {
+    return this.http.post<BulkApprovalResponseDto>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/gm-approve`,
+      request
+    );
+  }
+
+  /**
+   * HR bulk processes multiple promotions at once
+   */
+  hrBulkProcess(request: BulkApprovalRequestDto): Observable<BulkApprovalResponseDto> {
+    return this.http.post<BulkApprovalResponseDto>(
+      `${this.apiUrl}/api/evaluations/bulk-approval/hr-process`,
+      request
+    );
+  }
+
+  /**
+   * HOD submits overall score for an evaluation
+   * If score >= 8 (80%), auto-recommends to GM
+   * If score < 8 (80%), directly completes without promotion
+   */
+  hodSubmitScore(evaluationId: number, payload: HodScoreSubmissionDto): Observable<HodScoreSubmissionResponseDto> {
+    return this.http.post<HodScoreSubmissionResponseDto>(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/hod/submit-score`,
+      payload
+    );
+  }
+
+  // ========== REPORT METHODS ==========
+
+  /**
+   * Get evaluation report data with filters
+   */
+  getEvaluationReportData(filter: EvaluationReportFilterDto): Observable<EvaluationReportDataDto[]> {
+    return this.http.post<EvaluationReportDataDto[]>(
+      `${this.apiUrl}/api/reports/evaluations/data`,
+      filter
+    );
+  }
+
+  /**
+   * Download evaluation report as Excel
+   */
+  downloadEvaluationReport(filter: EvaluationReportFilterDto): Observable<Blob> {
+    return this.http.post(
+      `${this.apiUrl}/api/reports/evaluations/download`,
+      filter,
+      { responseType: 'blob' }
+    );
+  }
+
+  /**
+   * Get available cycles for filtering
+   */
+  getCycles(): Observable<CycleDto[]> {
+    return this.http.get<CycleDto[]>(
+      `${this.apiUrl}/api/reports/cycles`
+    );
+  }
+
+  /**
+   * Get available departments for filtering
+   */
+  getDepartments(): Observable<DepartmentDto[]> {
+    return this.http.get<DepartmentDto[]>(
+      `${this.apiUrl}/api/reports/departments`
+    );
+  }
+
+  /**
+   * Get database statistics for debugging
+   */
+  getDatabaseStats(): Observable<any> {
+    return this.http.get<any>(
+      `${this.apiUrl}/api/reports/stats`
     );
   }
 }

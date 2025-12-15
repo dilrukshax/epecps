@@ -26,6 +26,9 @@ public class ReviewConfiguration : IEntityTypeConfiguration<Review>
         builder.Property(r => r.OverallComment)
             .HasMaxLength(2000);
 
+        builder.Property(r => r.OverallScore)
+            .HasPrecision(5, 2);
+
         // Relationships
         builder.HasOne(r => r.Evaluation)
             .WithMany(e => e.Reviews)

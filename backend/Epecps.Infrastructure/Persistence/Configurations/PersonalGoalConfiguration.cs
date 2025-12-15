@@ -44,6 +44,10 @@ public class PersonalGoalConfiguration : IEntityTypeConfiguration<PersonalGoal>
             .HasConversion<int>()
             .HasDefaultValue(PersonalGoalStatus.Draft);
 
+        builder.Property(pg => pg.StartedAt);
+
+        builder.Property(pg => pg.CompletedAt);
+
         builder.Property(pg => pg.CreatedAt)
             .IsRequired()
             .HasDefaultValueSql("GETUTCDATE()");
@@ -64,8 +68,10 @@ public class PersonalGoalConfiguration : IEntityTypeConfiguration<PersonalGoal>
         // Indexes
         builder.HasIndex(pg => pg.UserId);
         builder.HasIndex(pg => pg.GoalItemId);
+        builder.HasIndex(pg => pg.GoalSetId);
         builder.HasIndex(pg => pg.Status);
         builder.HasIndex(pg => new { pg.UserId, pg.Status });
         builder.HasIndex(pg => new { pg.UserId, pg.DueDate });
+        builder.HasIndex(pg => new { pg.UserId, pg.GoalSetId });
     }
 }

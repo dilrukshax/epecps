@@ -3,6 +3,7 @@ import { RouterModule, Routes } from '@angular/router';
 import { MyGoalsComponent } from './components/my-goals/my-goals.component';
 import { SetNewGoalComponent } from './components/set-new-goal/set-new-goal.component';
 import { GoalDetailsComponent } from './components/goal-details/goal-details.component';
+import { HrReportsComponent } from './components/hr-reports/hr-reports.component';
 import { MsalGuard } from '@azure/msal-angular';
 
 const routes: Routes = [
@@ -28,6 +29,11 @@ const routes: Routes = [
         component: GoalDetailsComponent
       }
     ]
+  },
+  {
+    path: 'hr-reports',
+    component: HrReportsComponent,
+    canActivate: [MsalGuard]
   }
 ];
 
