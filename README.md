@@ -1,5 +1,13 @@
 # EPECPS - Employee Performance Evaluation and Career Progression System
 
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![Angular](https://img.shields.io/badge/Angular-20.3-DD0031?style=for-the-badge&logo=angular&logoColor=white)](https://angular.io/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![SQL Server](https://img.shields.io/badge/SQL%20Server-2019+-CC2927?style=for-the-badge&logo=microsoft-sql-server&logoColor=white)](https://www.microsoft.com/sql-server)
+[![Azure AD](https://img.shields.io/badge/Azure%20AD-Authentication-0078D4?style=for-the-badge&logo=microsoft-azure&logoColor=white)](https://azure.microsoft.com/services/active-directory/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3.4-06B6D4?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+
 A comprehensive employee performance evaluation system built with .NET 8 and Angular 20, featuring Azure AD authentication, goal tracking, multi-level reviews, and reporting capabilities.
 
 ![EPECPS System Dashboard](docs/img/Epecpsimg1.jpeg)
@@ -33,13 +41,13 @@ EPECPS is an enterprise-grade performance evaluation system that streamlines the
 ## Features
 
 ### Core Functionality
-- ?? **Goal Management**: Set, track, and evaluate employee goals with weighted scoring
-- ?? **Multi-Level Reviews**: Support for Self, Peer, Team Lead, and Reporting Manager reviews
-- ? **Approval Workflows**: Structured approval process with HOD and GM levels
-- ?? **Dashboard & Analytics**: Real-time statistics and performance insights
-- ?? **Email Notifications**: Automated notifications for workflow events
-- ?? **Comprehensive Reporting**: Excel export with advanced filtering capabilities
-- ?? **Azure AD Integration**: Enterprise-grade authentication and role-based access control
+- **Goal Management**: Set, track, and evaluate employee goals with weighted scoring
+- **Multi-Level Reviews**: Support for Self, Peer, Team Lead, and Reporting Manager reviews
+- **Approval Workflows**: Structured approval process with HOD and GM levels
+- **Dashboard & Analytics**: Real-time statistics and performance insights
+- **Email Notifications**: Automated notifications for workflow events
+- **Comprehensive Reporting**: Excel export with advanced filtering capabilities
+- **Azure AD Integration**: Enterprise-grade authentication and role-based access control
 
 ### Advanced Features
 - Score templates with customizable categories and items
