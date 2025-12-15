@@ -266,19 +266,23 @@
                 <!-- Score Selection -->
                 <div class="mt-3">
                   <label class="block text-xs font-medium text-gray-700 mb-2">Select Score (1-10):</label>
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2 flex-wrap">
                     <button
                       *ngFor="let score of [1,2,3,4,5,6,7,8,9,10]"
                       (click)="selectGoalScore(goal, score)"
-                      [class.bg-indigo-600]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
-                      [class.text-white]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
-                      [class.bg-gray-100]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
-                      [class.text-gray-700]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
-                      [class.hover:bg-indigo-500]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score === score"
-                      [class.hover:bg-gray-200]="rmGoalScores[goal.personalGoalId || goal.goalId]?.score !== score"
-                      class="w-9 h-9 rounded-lg font-medium text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                      [class.bg-indigo-600]="getGoalScore(goal) === score"
+                      [class.text-white]="getGoalScore(goal) === score"
+                      [class.bg-gray-100]="getGoalScore(goal) !== score"
+                      [class.text-gray-700]="getGoalScore(goal) !== score"
+                      [class.ring-2]="getGoalScore(goal) === score"
+                      [class.ring-indigo-400]="getGoalScore(goal) === score"
+                      class="w-9 h-9 rounded-lg font-medium text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 hover:opacity-80">
                       {{ score }}
                     </button>
+                  </div>
+                  <!-- Show selected score -->
+                  <div *ngIf="getGoalScore(goal) > 0" class="mt-2 text-xs text-indigo-600">
+                    Selected: <span class="font-bold">{{ getGoalScore(goal) }}/10</span>
                   </div>
                 </div>
 
@@ -286,8 +290,8 @@
                 <div class="mt-3">
                   <input
                     type="text"
-                    [(ngModel)]="rmGoalScores[goal.personalGoalId || goal.goalId].comment"
-                    *ngIf="rmGoalScores[goal.personalGoalId || goal.goalId]"
+                    [ngModel]="getGoalComment(goal)"
+                    (ngModelChange)="setGoalComment(goal, $event)"
                     placeholder="Add a comment (optional)"
                     class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
@@ -337,7 +341,7 @@
               </div>
             </div>
           </div>
-
+          
           <!-- Action Buttons -->
           <div class="flex gap-4">
             <button (click)="initiateAction('approve')" class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">
@@ -362,6 +366,113 @@
           </p>
         </div>
         <div class="px-6 py-5">
+          
+          <!-- ✅ SCORING SECTION - Show when approving and scoring is required -->
+          <div *ngIf="actionType === 'approve' && hasPendingScoringRequirement" class="mb-6 p-6 bg-indigo-50 border-2 border-indigo-200 rounded-lg">
+            <div class="flex items-start mb-4">
+              <svg class="h-6 w-6 text-indigo-600 mt-0.5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              <div class="flex-1">
+                <h3 class="text-lg font-semibold text-indigo-900 mb-1">Submit Your Scores</h3>
+                <p class="text-sm text-indigo-700">{{ getScoreSubmissionStatus() }}</p>
+              </div>
+            </div>
+
+            <!-- RM Item-Level Scoring -->
+            <div *ngIf="isPendingReviewItemLevel()" class="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+              <div *ngFor="let goal of evaluation?.goals; let i = index" class="bg-white border border-indigo-200 rounded-lg p-4">
+                <div class="flex items-start gap-3 mb-3">
+                  <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <span class="text-sm font-bold text-indigo-600">{{ i + 1 }}</span>
+                  </div>
+                  <div class="flex-1">
+                    <h4 class="text-base font-semibold text-gray-900">{{ goal.title }}</h4>
+                    <p class="text-xs text-gray-600 mt-1">{{ goal.description }}</p>
+                  </div>
+                </div>
+
+                <!-- Score Selection -->
+                <div class="mt-3">
+                  <label class="block text-xs font-medium text-gray-700 mb-2">Select Score (1-10):</label>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <button
+                      *ngFor="let score of [1,2,3,4,5,6,7,8,9,10]"
+                      type="button"
+                      (click)="selectGoalScore(goal, score)"
+                      [class.bg-indigo-600]="getGoalScore(goal) === score"
+                      [class.text-white]="getGoalScore(goal) === score"
+                      [class.bg-gray-100]="getGoalScore(goal) !== score"
+                      [class.text-gray-700]="getGoalScore(goal) !== score"
+                      [class.ring-2]="getGoalScore(goal) === score"
+                      [class.ring-indigo-400]="getGoalScore(goal) === score"
+                      class="w-9 h-9 rounded-lg font-medium text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 hover:opacity-80">
+                      {{ score }}
+                    </button>
+                  </div>
+                  <!-- Show selected score -->
+                  <div *ngIf="getGoalScore(goal) > 0" class="mt-2 text-xs text-indigo-600">
+                    Selected: <span class="font-bold">{{ getGoalScore(goal) }}/10</span>
+                  </div>
+                </div>
+
+                <!-- Optional Comment -->
+                <div class="mt-3">
+                  <input
+                    type="text"
+                    [ngModel]="getGoalComment(goal)"
+                    (ngModelChange)="setGoalComment(goal, $event)"
+                    placeholder="Add a comment (optional)"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+              </div>
+
+              <!-- Overall Comment for RM -->
+              <div class="bg-white border border-indigo-200 rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Overall Comment (Optional)</label>
+                <textarea
+                  [(ngModel)]="rmOverallComment"
+                  rows="2"
+                  placeholder="Add any overall feedback..."
+                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+              </div>
+            </div>
+
+            <!-- Overall Scoring (TL/Peer/HOD/GM) -->
+            <div *ngIf="!isPendingReviewItemLevel()" class="space-y-4">
+              <div class="bg-white border border-indigo-200 rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-3">Overall Evaluation Score (1-10):</label>
+                <div class="flex items-center justify-center gap-2 mb-4">
+                  <button
+                    *ngFor="let score of [1,2,3,4,5,6,7,8,9,10]"
+                    type="button"
+                    (click)="overallScore = score"
+                    [class.bg-indigo-600]="overallScore === score"
+                    [class.text-white]="overallScore === score"
+                    [class.bg-gray-100]="overallScore !== score"
+                    [class.text-gray-700]="overallScore !== score"
+                    [class.hover:bg-indigo-500]="overallScore === score"
+                    [class.hover:bg-gray-200]="overallScore !== score"
+                    class="w-11 h-11 rounded-lg font-bold text-base transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    {{ score }}
+                  </button>
+                </div>
+                <div *ngIf="overallScore" class="text-center">
+                  <span class="text-sm text-gray-600">Selected: <span class="font-bold text-indigo-600 text-lg">{{ overallScore }}/10</span></span>
+                </div>
+              </div>
+
+              <div class="bg-white border border-indigo-200 rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Comment (Optional)</label>
+                <textarea
+                  [(ngModel)]="overallComment"
+                  rows="3"
+                  placeholder="Add your overall feedback..."
+                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+              </div>
+            </div>
+          </div>
+          
           <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 mb-2">Comment {{ actionType === 'reject' ? '(Required)' : '(Optional)' }}</label>
             <textarea [(ngModel)]="comment" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2" [placeholder]="actionType === 'reject' ? 'Please explain why you are rejecting...' : 'Add a comment (optional)'"></textarea>
@@ -486,7 +597,7 @@
               <button 
                 (click)="confirmPeerAssignment()" 
                 [disabled]="assigningPeers || !peerUserId1 || !peerUserId2" 
-                class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent textBase font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
                 <svg *ngIf="!assigningPeers" class="-ml-0.5 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                 </svg>

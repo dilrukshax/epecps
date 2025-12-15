@@ -24,7 +24,7 @@ export class EvaluationDetailComponent implements OnInit {
   evaluationId!: number;
   evaluation: EvaluationDetailDto | null = null;
   loading = false;
-  error: string | null = null;
+  error: string | null = null; // ✅ FIX: Changed from 'String' to 'string'
   
   // Action state
   approving = false;
@@ -138,46 +138,129 @@ export class EvaluationDetailComponent implements OnInit {
 
     const account = this.authService.instance.getActiveAccount();
     const currentUserEmail = account?.username?.toLowerCase() || '';
+    const evaluationStatus = this.evaluation.status.toLowerCase();
 
-    // ✅ FIX: Find only the FIRST pending review for current user (for sequential peer reviews)
-    const pendingReview = this.evaluation.reviews.find((r, index) => {
-      if (r.status.toLowerCase() !== 'pending') return false;
+    console.log('=== checkForPendingReview ===');
+    console.log('Current user email:', currentUserEmail);
+    console.log('Evaluation status:', this.evaluation.status);
+    console.log('Evaluation status (lowercase):', evaluationStatus);
+    console.log('Available reviews:', this.evaluation.reviews.map(r => ({
+      reviewId: r.reviewId,
+      reviewerUserId: r.reviewerUserId,
+      reviewerName: r.reviewerName,
+      reviewerRole: r.reviewerRole,
+      status: r.status
+    })));
+
+
+    // ✅ FIX: Get current user ID by matching email with known user IDs in evaluation
+    // The reportingManagerId is the RM's user ID, so if current user is RM, we can match
+    let currentUserId: number | null = null;
+    
+    // Check if current user is the employee
+    if (this.evaluation.employeeEmail?.toLowerCase() === currentUserEmail) {
+      currentUserId = this.evaluation.employeeId;
+      console.log('Current user is Employee, userId:', currentUserId);
+    }
+    // Check if current user is the RM by matching RM review
+    else if (this.currentUserRole === 'RM') {
+      currentUserId = this.evaluation.reportingManagerId;
+      console.log('Current user is RM, userId:', currentUserId);
+    }
+    // Check if current user is TL
+    else if (this.currentUserRole === 'TL') {
+      currentUserId = this.evaluation.teamLeadId;
+      console.log('Current user is TL, userId:', currentUserId);
+    }
+    // For HOD/GM/Peer, try to find by review where name contains email prefix
+    else {
+      const currentUserPrefix = currentUserEmail.split('@')[0].toLowerCase();
+      const matchingReview = this.evaluation.reviews.find(r => 
+        r.reviewerName.toLowerCase().includes(currentUserPrefix)
+      );
+      if (matchingReview) {
+        currentUserId = matchingReview.reviewerUserId;
+        console.log('Found matching review, userId:', currentUserId);
+      }
+    }
+
+    console.log('Resolved currentUserId:', currentUserId);
+
+    // ✅ FIX: Find pending review for current user using userId comparison
+    const pendingReview = this.evaluation.reviews.find((r) => {
+      const reviewStatus = r.status.toLowerCase();
+      if (reviewStatus !== 'pending') {
+        console.log(`Review ${r.reviewId}: Skipping - status is "${r.status}" (not pending)`);
+        return false;
+      }
       
-      const reviewerEmail = r.reviewerName.toLowerCase();
-      const isCurrentUserReview = reviewerEmail.includes(currentUserEmail.split('@')[0].toLowerCase());
+      // ✅ FIX: Match by reviewerUserId if we have currentUserId
+      let isCurrentUserReview = false;
+      
+      if (currentUserId !== null) {
+        isCurrentUserReview = r.reviewerUserId === currentUserId;
+      } else {
+        // Fallback to name matching if we couldn't resolve userId
+        const reviewerName = r.reviewerName.toLowerCase();
+        const currentUserPrefix = currentUserEmail.split('@')[0].toLowerCase();
+        isCurrentUserReview = 
+          reviewerName.includes(currentUserPrefix) || 
+          reviewerName === currentUserEmail ||
+          r.reviewerName.toLowerCase().includes(currentUserEmail);
+      }
+      
+      console.log(`Review ${r.reviewId}: reviewerUserId=${r.reviewerUserId}, isCurrentUserReview=${isCurrentUserReview}`);
       
       if (!isCurrentUserReview) return false;
       
-      // ✅ NEW: Skip scoring for RM's FIRST approval (Pending_RM_Review)
+      // ✅ FIX: Case-insensitive status check for RM first approval
       // RM only needs to score after employee completes goals (Pending_RM_Review_PostCompletion)
-      if (r.reviewerRole === ReviewerRole.RM && 
-          this.evaluation!.status === 'Pending_RM_Review') {
-        return false; // No scoring needed for first RM approval
+      if (r.reviewerRole === ReviewerRole.RM) {
+        const isFirstRmReview = evaluationStatus === 'pending_rm_review';
+        console.log(`Review ${r.reviewId}: RM review, isFirstRmReview=${isFirstRmReview}, evaluationStatus=${evaluationStatus}`);
+        
+        if (isFirstRmReview) {
+          console.log(`Review ${r.reviewId}: Skipping RM scoring for first approval stage`);
+          return false; // No scoring needed for first RM approval
+        }
+        
+        // Second RM approval (post-completion) - scoring IS required
+        console.log(`Review ${r.reviewId}: RM post-completion scoring REQUIRED`);
+        return true;
       }
       
       // For peer reviews, only show the first pending one
-      if (r.reviewerRole === ReviewerRole.Peer) {
+      if (r.reviewerRole === ReviewerRole.Peer && currentUserId !== null) {
         const allPeerReviewsByCurrentUser = this.evaluation!.reviews
-          .filter(rev => rev.reviewerRole === ReviewerRole.Peer && 
-                        rev.reviewerName.toLowerCase().includes(currentUserEmail.split('@')[0].toLowerCase()));
+          .filter(rev => rev.reviewerRole === ReviewerRole.Peer && rev.reviewerUserId === currentUserId);
         
         const pendingPeerReviews = allPeerReviewsByCurrentUser.filter(rev => rev.status.toLowerCase() === 'pending');
         
+        console.log(`Review ${r.reviewId}: Peer review, pending count=${pendingPeerReviews.length}`);
+        
         // Only process if this is the first pending peer review
         if (pendingPeerReviews.length > 0) {
-          return r.reviewId === pendingPeerReviews[0].reviewId;
+          const isFirstPending = r.reviewId === pendingPeerReviews[0].reviewId;
+          console.log(`Review ${r.reviewId}: isFirstPending=${isFirstPending}`);
+          return isFirstPending;
         }
       }
       
+      console.log(`Review ${r.reviewId}: Scoring REQUIRED for role ${r.reviewerRole}`);
       return true;
     });
+
+    console.log('Found pending review:', pendingReview);
 
     if (pendingReview) {
       this.pendingReviewId = pendingReview.reviewId;
       this.hasPendingScoringRequirement = true;
+      console.log(`✅ Scoring requirement: pendingReviewId=${this.pendingReviewId}, role=${pendingReview.reviewerRole}`);
       this.initializeScoringForReview(pendingReview);
     } else {
       this.hasPendingScoringRequirement = false;
+      this.pendingReviewId = null;
+      console.log('❌ No pending scoring requirement found');
     }
   }
 
@@ -214,14 +297,15 @@ export class EvaluationDetailComponent implements OnInit {
     this.rmGoalScores = {};
     
     // Find the RM review for this evaluation
-    const rmReview = this.evaluation.reviews.find(r => r.reviewerRole === 3); // RM = 3
+    const rmReview = this.evaluation.reviews.find(r => r.reviewerRole === ReviewerRole.RM);
     
     console.log('Initializing RM scoring. RM Review:', rmReview);
     console.log('Available scores in RM review:', rmReview?.scores);
+    console.log('Evaluation goals:', this.evaluation.goals);
     
     this.evaluation.goals.forEach(goal => {
-      // Use personalGoalId if available, otherwise fall back to goalId (for backward compatibility)
-      const goalKey = goal.personalGoalId || goal.goalId.toString();
+      // ✅ FIX: Always use string key for consistency
+      const goalKey = goal.personalGoalId ? goal.personalGoalId.toString() : goal.goalId.toString();
       
       // Check if there's an existing score for this goal
       let existingScore: number = 5; // default
@@ -229,7 +313,13 @@ export class EvaluationDetailComponent implements OnInit {
       
       if (rmReview && rmReview.scores && rmReview.scores.length > 0) {
         // Look for a score that matches this goal's personalGoalId
-        const scoreForThisGoal = rmReview.scores.find(s => s.personalGoalId === goal.personalGoalId);
+        const scoreForThisGoal = rmReview.scores.find(s => {
+          // ✅ FIX: Compare as strings to handle GUID comparison
+          const scoreGoalId = s.personalGoalId?.toString().toLowerCase();
+          const targetGoalId = goal.personalGoalId?.toString().toLowerCase();
+          return scoreGoalId === targetGoalId;
+        });
+        
         if (scoreForThisGoal) {
           existingScore = scoreForThisGoal.scoreValue;
           existingComment = scoreForThisGoal.comment || '';
@@ -239,14 +329,16 @@ export class EvaluationDetailComponent implements OnInit {
         }
       }
       
-      // Initialize with existing score or default
+      // ✅ FIX: Always initialize the score object
       this.rmGoalScores[goalKey] = {
         score: existingScore,
         comment: existingComment
       };
+      
+      console.log(`Initialized rmGoalScores["${goalKey}"] = `, this.rmGoalScores[goalKey]);
     });
     
-    console.log('Initialized rmGoalScores:', this.rmGoalScores);
+    console.log('Final rmGoalScores:', this.rmGoalScores);
     
     // Load existing overall comment if available
     this.rmOverallComment = rmReview?.overallComment || '';
@@ -364,6 +456,10 @@ export class EvaluationDetailComponent implements OnInit {
 
     const status = this.evaluation.status.toLowerCase();
     
+    console.log('=== determineUserRole ===');
+    console.log('Evaluation status:', this.evaluation.status);
+    console.log('Evaluation status (lowercase):', status);
+    
     // TODO: Get actual user roles from AuthService
     // For now, simulate roles based on status
     this.userRoles = this.getUserRolesFromStatus(status);
@@ -376,56 +472,68 @@ export class EvaluationDetailComponent implements OnInit {
     this.showHrActions = false;
     
     // ✅ FIX: Check if peer assignment is needed - TL has already approved at this stage
-    // So we should NOT show the approval section, only the peer assignment section
     if (status.includes('pending_peer_assignment')) {
       this.needsPeerAssignment = true;
-      this.isActiveApprover = false; // ✅ FIXED: Set to false since TL already approved
+      this.isActiveApprover = false;
       this.currentUserRole = 'TL';
+      console.log('User role: TL (peer assignment stage)');
       this.loadAvailablePeers();
       return;
     }
 
     // Determine active approver role
     if (status.includes('pending_hod')) {
-      // ✅ FIXED: HOD should have approval buttons like other approvers
-      // HOD has two options: approve without promotion, or recommend for promotion
       this.isActiveApprover = true;
-      this.showHodActions = false; // We'll use the standard approval panel instead
+      this.showHodActions = false;
       this.currentUserRole = 'HOD';
+      console.log('User role: HOD');
     } else if (status.includes('pending_gm')) {
-      // GM stage - only show GM decision panel
       this.isActiveApprover = false;
       this.showGmActions = true;
       this.currentUserRole = 'GM';
+      console.log('User role: GM');
     } else if (status.includes('pending_hr')) {
-      // HR stage - only show HR processing panel
       this.isActiveApprover = false;
       this.showHrActions = true;
       this.currentUserRole = 'HR';
+      console.log('User role: HR');
+    } else if (status.includes('pending_rm_review_postcompletion') || 
+               status === 'pending_rm_review_postcompletion') {
+      // ✅ FIX: Explicitly handle post-completion RM review
+      this.isActiveApprover = true;
+      this.currentUserRole = 'RM';
+      console.log('User role: RM (post-completion - scoring required)');
+      this.initializeRmScoring();
     } else if (status.includes('pending_rm')) {
       this.isActiveApprover = true;
       this.currentUserRole = 'RM';
-      // Initialize RM scoring when RM is the active approver
-      this.initializeRmScoring();
+      console.log('User role: RM (first approval - no scoring)');
+      // First RM approval - don't initialize scoring
     } else if (status.includes('pending_tl')) {
       this.isActiveApprover = true;
       this.currentUserRole = 'TL';
+      console.log('User role: TL');
     } else if (status.includes('pending_peer')) {
-      // ✅ FIX: For peer reviews, check if current user has a pending review
+      // For peer reviews, check if current user has a pending review
       const account = this.authService.instance.getActiveAccount();
       const currentUserEmail = account?.username?.toLowerCase() || '';
+      const currentUserPrefix = currentUserEmail.split('@')[0].toLowerCase();
       
       const currentUserPendingPeerReview = this.evaluation.reviews.find(r => 
         r.reviewerRole === ReviewerRole.Peer && 
         r.status.toLowerCase() === 'pending' &&
-        r.reviewerName.toLowerCase().includes(currentUserEmail.split('@')[0].toLowerCase())
+        (r.reviewerName.toLowerCase().includes(currentUserPrefix) ||
+         r.reviewerName.toLowerCase() === currentUserEmail)
       );
       
       if (currentUserPendingPeerReview) {
         this.isActiveApprover = true;
         this.currentUserRole = 'Peer';
+        console.log('User role: Peer');
       }
     }
+
+    console.log('Final: isActiveApprover=', this.isActiveApprover, ', currentUserRole=', this.currentUserRole);
   }
 
   getUserRolesFromStatus(status: string): string[] {
@@ -588,22 +696,31 @@ export class EvaluationDetailComponent implements OnInit {
       const itemScores: RmItemScoreDto[] = [];
       
       for (const goal of this.evaluation.goals) {
-        const goalKey = goal.personalGoalId || goal.goalId.toString();
+        // ✅ FIX: Use consistent string key
+        const goalKey = goal.personalGoalId ? goal.personalGoalId.toString() : goal.goalId.toString();
         const scoreData = this.rmGoalScores[goalKey];
+        
+        console.log(`Processing goal "${goal.title}" (key: ${goalKey}):`, scoreData);
         
         if (scoreData && scoreData.score > 0) {
           if (goal.personalGoalId) {
             itemScores.push({
-              personalGoalId: goal.personalGoalId,
+              personalGoalId: goal.personalGoalId.toString(), // ✅ Ensure it's a string
               scoreValue: scoreData.score,
               comment: scoreData.comment || undefined
             });
           } else {
-            this.approving = false;
-            this.showToast('error', `Goal "${goal.title}" is missing personalGoalId. Cannot submit scores.`);
-            return;
+            console.warn(`Goal "${goal.title}" is missing personalGoalId. Skipping.`);
           }
+        } else {
+          console.warn(`Goal "${goal.title}" has no valid score data:`, scoreData);
         }
+      }
+
+      if (itemScores.length === 0) {
+        this.approving = false;
+        this.showToast('error', 'No valid goal scores to submit. Please score all goals.');
+        return;
       }
 
       const scoreDto: SubmitRmScoringDto = {
@@ -611,17 +728,17 @@ export class EvaluationDetailComponent implements OnInit {
         overallComment: this.rmOverallComment || this.comment || undefined
       };
 
-      console.log('Submitting RM scores:', scoreDto);
+      console.log('Submitting RM scores:', JSON.stringify(scoreDto, null, 2));
 
       this.evaluationService.submitRmScoring(this.evaluationId, this.pendingReviewId, scoreDto).subscribe({
         next: (scoreResponse) => {
-          console.log('RM Scores submitted:', scoreResponse);
+          console.log('RM Scores submitted successfully:', scoreResponse);
           // Now proceed with approval
           this.proceedWithApproval();
         },
         error: (err) => {
           this.approving = false;
-          const errorMessage = err.error?.error || 'Failed to submit scores. Please try again.';
+          const errorMessage = err.error?.error || err.error?.message || 'Failed to submit scores. Please try again.';
           this.showToast('error', errorMessage);
           console.error('Error submitting RM scores:', err);
         }
@@ -634,11 +751,11 @@ export class EvaluationDetailComponent implements OnInit {
         comment: this.overallComment || this.comment || undefined
       };
 
-      console.log('Submitting overall score:', dto);
+      console.log('Submitting overall score:', JSON.stringify(dto, null, 2));
 
       this.evaluationService.submitOverallScoring(this.evaluationId, this.pendingReviewId, dto).subscribe({
         next: (scoreResponse) => {
-          console.log('Overall Score submitted:', scoreResponse);
+          console.log('Overall Score submitted successfully:', scoreResponse);
           
           // ✅ NEW: For HOD, check if they should recommend for promotion
           if (this.currentUserRole === 'HOD' && this.overallScore >= 8) {
@@ -655,7 +772,7 @@ export class EvaluationDetailComponent implements OnInit {
         },
         error: (err) => {
           this.approving = false;
-          const errorMessage = err.error?.error || 'Failed to submit score. Please try again.';
+          const errorMessage = err.error?.error || err.error?.message || 'Failed to submit score. Please try again.';
           this.showToast('error', errorMessage);
           console.error('Error submitting overall score:', err);
         }
@@ -894,16 +1011,54 @@ export class EvaluationDetailComponent implements OnInit {
   }
 
   /**
+   * ✅ NEW: Helper to get consistent goal key for rmGoalScores lookup
+   */
+  getGoalKey(goal: GoalDto): string {
+    return goal.personalGoalId ? goal.personalGoalId.toString() : goal.goalId.toString();
+  }
+
+  /**
+   * ✅ NEW: Helper to get score for a goal (for template use)
+   */
+  getGoalScore(goal: GoalDto): number {
+    const key = this.getGoalKey(goal);
+    return this.rmGoalScores[key]?.score || 0;
+  }
+
+  /**
+   * ✅ NEW: Helper to get comment for a goal (for template use)
+   */
+  getGoalComment(goal: GoalDto): string {
+    const key = this.getGoalKey(goal);
+    return this.rmGoalScores[key]?.comment || '';
+  }
+
+  /**
+   * ✅ NEW: Helper to set comment for a goal (for template use)
+   */
+  setGoalComment(goal: GoalDto, comment: string): void {
+    const key = this.getGoalKey(goal);
+    if (this.rmGoalScores[key]) {
+      this.rmGoalScores[key].comment = comment;
+    } else {
+      this.rmGoalScores[key] = { score: 5, comment: comment };
+    }
+  }
+
+  /**
    * Select a score for a specific goal (clickable number button)
    */
   selectGoalScore(goal: GoalDto, score: number): void {
-    const goalKey = goal.personalGoalId || goal.goalId.toString();
+    const goalKey = this.getGoalKey(goal);
+    
     // Ensure the object exists before setting the score
     if (!this.rmGoalScores[goalKey]) {
       this.rmGoalScores[goalKey] = { score: score, comment: '' };
     } else {
       this.rmGoalScores[goalKey].score = score;
     }
+    
+    console.log(`Selected score ${score} for goal "${goal.title}" (key: ${goalKey})`);
   }
 
   /**
@@ -912,10 +1067,15 @@ export class EvaluationDetailComponent implements OnInit {
   hasAllScoresSelected(): boolean {
     if (!this.evaluation || !this.evaluation.goals) return false;
     
-    return this.evaluation.goals.every(goal => {
-      const goalKey = goal.personalGoalId || goal.goalId.toString();
-      return this.rmGoalScores[goalKey] && this.rmGoalScores[goalKey].score > 0;
+    const result = this.evaluation.goals.every(goal => {
+      const goalKey = this.getGoalKey(goal);
+      const hasScore = this.rmGoalScores[goalKey] && this.rmGoalScores[goalKey].score > 0;
+      console.log(`Goal "${goal.title}" (key: ${goalKey}) hasScore: ${hasScore}, value: ${this.rmGoalScores[goalKey]?.score}`);
+      return hasScore;
     });
+    
+    console.log('hasAllScoresSelected:', result);
+    return result;
   }
 
   getReviewsByRole(role: ReviewerRole): ReviewDto[] {
@@ -1011,10 +1171,12 @@ export class EvaluationDetailComponent implements OnInit {
     if (!pendingReview) return 'Submit Your Scores';
     
     const roleName = this.getRoleName(pendingReview.reviewerRole);
+    const evaluationStatus = this.evaluation.status.toLowerCase();
     
-    // ✅ NEW: Special label for RM post-completion scoring
+    // ✅ FIX: Case-insensitive check for RM post-completion scoring
     if (pendingReview.reviewerRole === ReviewerRole.RM && 
-        this.evaluation.status === 'Pending_RM_Review_PostCompletion') {
+        (evaluationStatus.includes('postcompletion') || 
+         evaluationStatus === 'pending_rm_review_postcompletion')) {
       return `${roleName} Scoring - Rate Each Completed Goal`;
     }
     
@@ -1205,12 +1367,15 @@ export class EvaluationDetailComponent implements OnInit {
     const pendingReview = this.evaluation.reviews.find(r => r.reviewId === this.pendingReviewId);
     if (!pendingReview) return '';
     
-    // ✅ NEW: Different messages for RM based on evaluation stage
+    const evaluationStatus = this.evaluation.status.toLowerCase();
+    
+    // ✅ FIX: Case-insensitive status checks for RM based on evaluation stage
     if (pendingReview.reviewerRole === ReviewerRole.RM) {
-      if (this.evaluation.status === 'Pending_RM_Review') {
+      if (evaluationStatus === 'pending_rm_review') {
         // First RM approval - no scoring needed
         return 'Review and approve/reject the goal set. No scoring required at this stage.';
-      } else if (this.evaluation.status === 'Pending_RM_Review_PostCompletion') {
+      } else if (evaluationStatus.includes('postcompletion') || 
+                 evaluationStatus === 'pending_rm_review_postcompletion') {
         // Second RM approval - scoring required
         return 'Please score each completed goal (1-10). You must submit scores before approving.';
       }
