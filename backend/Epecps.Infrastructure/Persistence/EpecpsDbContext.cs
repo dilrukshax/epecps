@@ -32,6 +32,7 @@ public class EpecpsDbContext : DbContext
     #region Employee Goals Module DbSets
     public DbSet<PersonalGoal> PersonalGoals => Set<PersonalGoal>();
     public DbSet<PersonalGoalActivity> PersonalGoalActivities => Set<PersonalGoalActivity>();
+    public DbSet<GoalAssignment> GoalAssignments => Set<GoalAssignment>();
     #endregion
 
     #region Evaluation Module DbSets

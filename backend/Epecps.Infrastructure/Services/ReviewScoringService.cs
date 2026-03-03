@@ -1,4 +1,5 @@
 using Epecps.Application.DTOs.Evaluations;
+using Epecps.Application.DTOs.Evaluations;
 using Epecps.Application.Exceptions;
 using Epecps.Application.Interfaces;
 using Epecps.Domain.Entities;
@@ -403,19 +404,203 @@ public class ReviewScoringService : IReviewScoringService
         int evaluationId,
         CancellationToken cancellationToken = default)
     {
+        // First try per-goal scores: average each goal across reviewers, then average across goals
+        var perGoalScores = await _context.Set<ReviewScore>()
+            .Include(rs => rs.Review)
+            .Where(rs => rs.EvaluationId == evaluationId
+                && rs.PersonalGoalId != null
+                && (rs.Review.Status == "Completed" || rs.Review.Status == "Approved"))
+            .GroupBy(rs => rs.PersonalGoalId)
+            .Select(g => g.Average(rs => rs.ScoreValue))
+            .ToListAsync(cancellationToken);
+
+        if (perGoalScores.Count > 0)
+        {
+            return Math.Round(perGoalScores.Average(), 2);
+        }
+
+        // Fallback to overall scores (null PersonalGoalId)
         var overallScores = await _context.Set<ReviewScore>()
             .Include(rs => rs.Review)
-            .Where(rs => rs.EvaluationId == evaluationId 
-                && rs.PersonalGoalId == null 
-                && rs.Review.Status == "Completed")
+            .Where(rs => rs.EvaluationId == evaluationId
+                && rs.PersonalGoalId == null
+                && (rs.Review.Status == "Completed" || rs.Review.Status == "Approved"))
             .Select(rs => rs.ScoreValue)
             .ToListAsync(cancellationToken);
 
         if (!overallScores.Any())
             return 0;
 
-        var averageScore = Math.Round(overallScores.Average(), 2);
+        return Math.Round(overallScores.Average(), 2);
+    }
 
-        return averageScore;
+    public async Task<ReviewScoringResponseDto> SubmitReviewWithGoalScoresAsync(
+        int evaluationId,
+        int reviewId,
+        int reviewerUserId,
+        SubmitReviewWithGoalScoresDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var evaluation = await _context.Set<Evaluation>()
+            .Include(e => e.Reviews)
+            .Include(e => e.Employee)
+            .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+        if (evaluation == null)
+            throw new NotFoundException(nameof(Evaluation), evaluationId);
+
+        var review = await _context.Set<Review>()
+            .FirstOrDefaultAsync(r => r.ReviewId == reviewId && r.EvaluationId == evaluationId, cancellationToken);
+
+        if (review == null)
+            throw new NotFoundException(nameof(Review), reviewId);
+
+        // RM should use the existing SubmitRmReviewScoringAsync method
+        if (review.ReviewerRole == ReviewerRole.RM)
+            throw new BusinessRuleException("RM reviewers should use the RM scoring endpoint for item-level scores.");
+
+        if (review.ReviewerUserId != reviewerUserId)
+            throw new BusinessRuleException("You are not the assigned reviewer for this evaluation.");
+
+        if (!dto.GoalScores.Any())
+            throw new BusinessRuleException("At least one goal score must be provided.");
+
+        // Get all personal goals in this evaluation's goal set
+        var personalGoals = await _context.PersonalGoals
+            .Where(pg => pg.GoalSetId == evaluation.GoalSetId && pg.UserId == evaluation.EmployeeId)
+            .ToListAsync(cancellationToken);
+
+        if (!personalGoals.Any())
+            throw new NotFoundException("No personal goals found for this evaluation.");
+
+        // Validate submitted goal IDs
+        var submittedGoalIds = dto.GoalScores.Select(s => s.PersonalGoalId).ToHashSet();
+        var invalidGoals = submittedGoalIds.Where(id => !personalGoals.Any(pg => pg.Id == id)).ToList();
+
+        if (invalidGoals.Any())
+            throw new BusinessRuleException("One or more goal IDs are not part of this evaluation's goal set.");
+
+        // Get existing scores for history tracking
+        var existingScores = await _context.Set<ReviewScore>()
+            .Where(rs => rs.ReviewId == reviewId)
+            .ToListAsync(cancellationToken);
+
+        // Create history for existing scores being replaced
+        foreach (var existing in existingScores)
+        {
+            var goal = personalGoals.FirstOrDefault(pg => pg.Id == existing.PersonalGoalId);
+            _context.Set<ReviewScoreHistory>().Add(new ReviewScoreHistory
+            {
+                ReviewId = reviewId,
+                EvaluationId = evaluationId,
+                ReviewerUserId = reviewerUserId,
+                ReviewerRole = review.ReviewerRole,
+                PersonalGoalId = existing.PersonalGoalId,
+                GoalTitle = goal?.Title,
+                PreviousScore = existing.ScoreValue,
+                NewScore = 0,
+                PreviousComment = existing.Comment,
+                NewComment = "Score replaced",
+                Action = "Deleted",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        _context.Set<ReviewScore>().RemoveRange(existingScores);
+
+        // Create new per-goal ReviewScore records
+        decimal totalScore = 0;
+        foreach (var goalScore in dto.GoalScores)
+        {
+            var goal = personalGoals.First(pg => pg.Id == goalScore.PersonalGoalId);
+            var existingScore = existingScores.FirstOrDefault(es => es.PersonalGoalId == goalScore.PersonalGoalId);
+
+            _context.Set<ReviewScore>().Add(new ReviewScore
+            {
+                EvaluationId = evaluationId,
+                ReviewId = reviewId,
+                ReviewerId = reviewerUserId,
+                PersonalGoalId = goalScore.PersonalGoalId,
+                ScoreValue = goalScore.ScoreValue,
+                Comment = goalScore.Comment,
+                CreatedAt = DateTime.UtcNow
+            });
+            totalScore += goalScore.ScoreValue;
+
+            _context.Set<ReviewScoreHistory>().Add(new ReviewScoreHistory
+            {
+                ReviewId = reviewId,
+                EvaluationId = evaluationId,
+                ReviewerUserId = reviewerUserId,
+                ReviewerRole = review.ReviewerRole,
+                PersonalGoalId = goalScore.PersonalGoalId,
+                GoalTitle = goal.Title,
+                PreviousScore = existingScore?.ScoreValue,
+                NewScore = goalScore.ScoreValue,
+                PreviousComment = existingScore?.Comment,
+                NewComment = goalScore.Comment,
+                Action = existingScore == null ? "Created" : "Updated",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        // Calculate average; use provided overall if given, otherwise compute
+        decimal averageScore = Math.Round(totalScore / dto.GoalScores.Count, 2);
+        decimal effectiveOverall = dto.OverallScore ?? averageScore;
+
+        // Also create an overall score record (PersonalGoalId = null) so the existing
+        // CalculateOverallEvaluationScoreAsync fallback path can pick it up
+        _context.Set<ReviewScore>().Add(new ReviewScore
+        {
+            EvaluationId = evaluationId,
+            ReviewId = reviewId,
+            ReviewerId = reviewerUserId,
+            PersonalGoalId = null,
+            ScoreValue = effectiveOverall,
+            Comment = dto.OverallComment,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // Update review status
+        review.OverallScore = effectiveOverall;
+        review.OverallComment = dto.OverallComment ?? review.OverallComment;
+        review.Status = "Completed";
+        review.SubmittedAt = DateTime.UtcNow;
+
+        // Approval history
+        _context.Set<ApprovalHistory>().Add(new ApprovalHistory
+        {
+            EvaluationId = evaluationId,
+            ReviewId = reviewId,
+            ActorUserId = reviewerUserId,
+            ActorRole = review.ReviewerRole.ToString(),
+            Action = $"{review.ReviewerRole}SubmittedGoalScores",
+            Comment = $"Submitted per-goal scores for {dto.GoalScores.Count} goal(s). Average: {averageScore:F2}",
+            FromStatus = evaluation.Status,
+            ToStatus = evaluation.Status,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // Audit log
+        _context.Set<AuditLog>().Add(new AuditLog
+        {
+            ActorUserId = reviewerUserId,
+            EntityType = "Review",
+            EntityId = reviewId,
+            Action = $"{review.ReviewerRole.ToString().ToUpper()}_GOAL_SCORES_SUBMITTED",
+            BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { ItemCount = existingScores.Count }),
+            AfterJson = System.Text.Json.JsonSerializer.Serialize(new { ItemCount = dto.GoalScores.Count, AverageScore = averageScore, OverallScore = effectiveOverall }),
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return new ReviewScoringResponseDto
+        {
+            ReviewId = reviewId,
+            EvaluationId = evaluationId,
+            Message = $"Successfully submitted per-goal scores for {dto.GoalScores.Count} goal(s).",
+            CalculatedScore = averageScore,
+            EvaluationStatus = evaluation.Status
+        };
     }
 }

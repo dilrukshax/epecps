@@ -99,6 +99,21 @@ export interface GoalDto {
   weightPct: number;
   evidenceUri?: string;
   personalGoalId?: string;  // Added: PersonalGoal GUID for linking
+  // Per-goal reviewer scores and average
+  reviewerScores?: GoalReviewerScoreDto[];
+  averageReviewScore?: number;
+}
+
+/**
+ * A single reviewer's score for a specific goal
+ */
+export interface GoalReviewerScoreDto {
+  reviewerId: number;
+  reviewerName: string;
+  reviewerRole: string;
+  scoreValue: number;
+  comment?: string;
+  scoredAt?: Date;
 }
 
 export interface ApprovalHistoryItemDto {
@@ -217,6 +232,16 @@ export interface RmItemScoreDto {
 export interface SubmitOverallScoringDto {
   overallScore: number;  // 1-10
   comment?: string;
+}
+
+/**
+ * DTO for any reviewer (TL/Peer/HOD) to submit per-goal scores.
+ * Enables individual goal scoring for all reviewer roles.
+ */
+export interface SubmitReviewWithGoalScoresDto {
+  goalScores: RmItemScoreDto[];  // reuses same per-goal score shape
+  overallScore?: number;         // computed as average if not provided
+  overallComment?: string;
 }
 
 /**

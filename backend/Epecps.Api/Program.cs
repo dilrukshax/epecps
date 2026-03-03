@@ -39,6 +39,7 @@ services.AddScoped<IScoreItemService, ScoreItemService>();
 services.AddScoped<IGoalFrameworkService, GoalFrameworkService>();
 services.AddScoped<IPersonalGoalService, PersonalGoalService>();
 services.AddScoped<IUserSyncService, UserSyncService>(); // Auto-sync users from Azure AD
+services.AddScoped<IRmGoalAssignmentService, RmGoalAssignmentService>(); // RM goal assignment
 
 // Evaluation Workflow Services
 services.AddScoped<IEvaluationWorkflowService, EvaluationWorkflowService>();
@@ -140,6 +141,44 @@ services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+// Ensure GoalAssignments table exists (may be missing if DB was created from older migrations)
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<EpecpsDbContext>();
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'GoalAssignments')
+        BEGIN
+            CREATE TABLE [GoalAssignments] (
+                [Id] uniqueidentifier NOT NULL,
+                [AssignedByUserId] int NOT NULL,
+                [AssignedToUserId] int NOT NULL,
+                [GoalItemId] uniqueidentifier NOT NULL,
+                [GoalSetId] uniqueidentifier NOT NULL,
+                [Title] nvarchar(500) NOT NULL,
+                [Description] nvarchar(2000) NULL,
+                [TargetScore] decimal(18,2) NOT NULL,
+                [StartDate] datetime2 NOT NULL,
+                [DueDate] datetime2 NOT NULL,
+                [Status] int NOT NULL,
+                [PersonalGoalId] uniqueidentifier NULL,
+                [CreatedAt] datetime2 NOT NULL,
+                [UpdatedAt] datetime2 NULL,
+                CONSTRAINT [PK_GoalAssignments] PRIMARY KEY ([Id]),
+                CONSTRAINT [FK_GoalAssignments_PersonalGoals_PersonalGoalId] FOREIGN KEY ([PersonalGoalId]) REFERENCES [PersonalGoals] ([Id]) ON DELETE SET NULL,
+                CONSTRAINT [FK_GoalAssignments_ScoreItems_GoalItemId] FOREIGN KEY ([GoalItemId]) REFERENCES [ScoreItems] ([Id]),
+                CONSTRAINT [FK_GoalAssignments_Users_AssignedByUserId] FOREIGN KEY ([AssignedByUserId]) REFERENCES [Users] ([UserId]),
+                CONSTRAINT [FK_GoalAssignments_Users_AssignedToUserId] FOREIGN KEY ([AssignedToUserId]) REFERENCES [Users] ([UserId])
+            );
+
+            CREATE INDEX [IX_GoalAssignments_AssignedByUserId] ON [GoalAssignments] ([AssignedByUserId]);
+            CREATE INDEX [IX_GoalAssignments_AssignedToUserId] ON [GoalAssignments] ([AssignedToUserId]);
+            CREATE INDEX [IX_GoalAssignments_GoalItemId] ON [GoalAssignments] ([GoalItemId]);
+            CREATE INDEX [IX_GoalAssignments_GoalSetId] ON [GoalAssignments] ([GoalSetId]);
+            CREATE INDEX [IX_GoalAssignments_PersonalGoalId] ON [GoalAssignments] ([PersonalGoalId]);
+        END
+    ");
+}
 
 if (app.Environment.IsDevelopment())
 {

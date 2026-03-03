@@ -113,10 +113,6 @@ export class MyGoalsComponent implements OnInit {
     this.router.navigate(['/employee/goals', goalId]);
   }
 
-  createNewGoal(): void {
-    this.router.navigate(['/employee/goals/new']);
-  }
-
   getStatusLabel(status: PersonalGoalStatus): string {
     switch (status) {
       case PersonalGoalStatus.Draft:

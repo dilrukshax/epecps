@@ -1,4 +1,5 @@
 using Epecps.Application.DTOs.Evaluations;
+using Epecps.Application.DTOs.Evaluations;
 using Epecps.Application.Exceptions;
 using Epecps.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -664,6 +665,48 @@ public class EvaluationsController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { error = "Failed to submit overall score.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Submit per-goal scores for any reviewer role (TL/Peer/HOD).
+    /// Enables individual goal scoring for all reviewer roles, not just RM.
+    /// Each goal is scored on a 1-10 scale. An overall score is computed as the average.
+    /// </summary>
+    [HttpPost("{evaluationId}/reviews/{reviewId}/goal-scores")]
+    public async Task<IActionResult> SubmitReviewWithGoalScores(
+        int evaluationId,
+        int reviewId,
+        [FromBody] SubmitReviewWithGoalScoresDto dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+            var result = await _reviewScoringService.SubmitReviewWithGoalScoresAsync(
+                evaluationId,
+                reviewId,
+                userId,
+                dto,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to submit goal scores.", details = ex.Message });
         }
     }
 

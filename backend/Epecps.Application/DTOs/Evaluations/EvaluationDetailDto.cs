@@ -79,6 +79,14 @@ public class GoalDto
     
     // Activities
     public List<GoalActivityDto> Activities { get; set; } = new List<GoalActivityDto>();
+
+    // Per-goal reviewer scores (all reviewers who scored this specific goal)
+    public List<GoalReviewerScoreDto> ReviewerScores { get; set; } = new List<GoalReviewerScoreDto>();
+
+    /// <summary>
+    /// Average review score across all reviewers for this goal (null if no scores)
+    /// </summary>
+    public decimal? AverageReviewScore { get; set; }
 }
 
 /// <summary>
