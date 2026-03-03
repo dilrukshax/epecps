@@ -1,4 +1,5 @@
 using Epecps.Application.DTOs.Evaluations;
+using Epecps.Application.DTOs.Evaluations;
 using Epecps.Application.Exceptions;
 using Epecps.Application.Interfaces;
 using Epecps.Domain.Entities;
@@ -918,26 +919,51 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
     private async Task TransitionAfterHodReviewAsync(Evaluation evaluation, int hodUserId, CancellationToken cancellationToken)
     {
-        // Calculate overall score from all review items or review scores
-        var allReviewItems = await _context.Set<ReviewItem>()
-            .Where(ri => evaluation.Reviews.Select(r => r.ReviewId).Contains(ri.ReviewId))
+        // Calculate overall score: prefer per-goal scores averaged across reviewers and goals,
+        // then fallback to overall-only scores, then ReviewItems
+        var reviewIds = evaluation.Reviews.Select(r => r.ReviewId).ToList();
+
+        // First try per-goal scores: average each goal across reviewers, then average across goals
+        var perGoalScores = await _context.Set<ReviewScore>()
+            .Include(rs => rs.Review)
+            .Where(rs => reviewIds.Contains(rs.ReviewId)
+                && rs.PersonalGoalId != null
+                && (rs.Review.Status == "Completed" || rs.Review.Status == "Approved"))
+            .GroupBy(rs => rs.PersonalGoalId)
+            .Select(g => g.Average(rs => rs.ScoreValue))
             .ToListAsync(cancellationToken);
 
-        if (allReviewItems.Any())
+        if (perGoalScores.Count > 0)
         {
-            evaluation.OverallScore = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+            // Per-goal scores are 1-10, convert average to percentage
+            evaluation.OverallScore = Math.Round(perGoalScores.Average() * 10m, 2);
         }
         else
         {
-            // Try ReviewScores if ReviewItems are empty
-            var allReviewScores = await _context.Set<ReviewScore>()
-                .Where(rs => evaluation.Reviews.Select(r => r.ReviewId).Contains(rs.ReviewId))
+            // Fallback to overall-only scores (PersonalGoalId == null)
+            var overallScores = await _context.Set<ReviewScore>()
+                .Include(rs => rs.Review)
+                .Where(rs => reviewIds.Contains(rs.ReviewId)
+                    && rs.PersonalGoalId == null
+                    && (rs.Review.Status == "Completed" || rs.Review.Status == "Approved"))
+                .Select(rs => rs.ScoreValue)
                 .ToListAsync(cancellationToken);
-            
-            if (allReviewScores.Any())
+
+            if (overallScores.Any())
             {
-                // Convert 1-10 scores to percentage (multiply by 10)
-                evaluation.OverallScore = Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
+                evaluation.OverallScore = Math.Round(overallScores.Average() * 10m, 2);
+            }
+            else
+            {
+                // Final fallback to ReviewItems
+                var allReviewItems = await _context.Set<ReviewItem>()
+                    .Where(ri => reviewIds.Contains(ri.ReviewId))
+                    .ToListAsync(cancellationToken);
+
+                if (allReviewItems.Any())
+                {
+                    evaluation.OverallScore = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                }
             }
         }
 
@@ -1985,10 +2011,37 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .Where(pg => personalGoalIds.Contains(pg.Id))
             .ToListAsync(cancellationToken);
 
-        // Build goals with full details including activities
+        // Load all per-goal ReviewScores for this evaluation (with reviewer info)
+        var allGoalReviewScores = await _context.Set<ReviewScore>()
+            .Include(rs => rs.Review)
+            .Include(rs => rs.Reviewer)
+            .Where(rs => rs.EvaluationId == evaluationId && rs.PersonalGoalId != null)
+            .ToListAsync(cancellationToken);
+
+        // Build goals with full details including activities and per-goal reviewer scores
         var goalsWithDetails = evaluation.EmployeeGoals.Select(g => {
             var personalGoal = g.PersonalGoalId.HasValue 
                 ? personalGoals.FirstOrDefault(pg => pg.Id == g.PersonalGoalId.Value) 
+                : null;
+
+            // Get all reviewer scores for this specific goal
+            var goalScores = g.PersonalGoalId.HasValue
+                ? allGoalReviewScores
+                    .Where(rs => rs.PersonalGoalId == g.PersonalGoalId.Value)
+                    .Select(rs => new GoalReviewerScoreDto
+                    {
+                        ReviewerId = rs.ReviewerId,
+                        ReviewerName = rs.Reviewer?.FullName ?? "Unknown",
+                        ReviewerRole = rs.Review?.ReviewerRole.ToString() ?? "Unknown",
+                        ScoreValue = rs.ScoreValue,
+                        Comment = rs.Comment,
+                        ScoredAt = rs.CreatedAt
+                    })
+                    .ToList()
+                : new List<GoalReviewerScoreDto>();
+
+            decimal? averageReviewScore = goalScores.Count > 0
+                ? Math.Round(goalScores.Average(s => s.ScoreValue), 2)
                 : null;
 
             return new GoalDto 
@@ -2024,7 +2077,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     DueDate = a.DueDate,
                     EvidenceUrl = a.EvidenceUrl,
                     EvidenceNotes = a.EvidenceNotes
-                }).ToList() ?? new List<GoalActivityDto>()
+                }).ToList() ?? new List<GoalActivityDto>(),
+                // Per-goal reviewer scores
+                ReviewerScores = goalScores,
+                AverageReviewScore = averageReviewScore
             };
         }).ToList();
 

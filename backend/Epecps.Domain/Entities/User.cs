@@ -21,4 +21,6 @@ public class User
     public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
     public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
     public ICollection<PersonalGoal> PersonalGoals { get; set; } = new List<PersonalGoal>();
+    public ICollection<GoalAssignment> GoalAssignmentsReceived { get; set; } = new List<GoalAssignment>();
+    public ICollection<GoalAssignment> GoalAssignmentsMade { get; set; } = new List<GoalAssignment>();
 }

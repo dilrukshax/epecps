@@ -29,6 +29,17 @@ public interface IReviewScoringService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Any reviewer (TL, Peer, HOD) submits per-goal scores alongside an overall score.
+    /// This enables individual goal scoring for all reviewer roles, not just RM.
+    /// </summary>
+    Task<ReviewScoringResponseDto> SubmitReviewWithGoalScoresAsync(
+        int evaluationId,
+        int reviewId,
+        int reviewerUserId,
+        SubmitReviewWithGoalScoresDto dto,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get all scores submitted for an evaluation
     /// </summary>
     Task<List<ReviewScoreDto>> GetEvaluationScoresAsync(

@@ -12,11 +12,17 @@ import { TemplateFormDialogComponent } from './components/template-form-dialog/t
 import { CategoryFormDialogComponent } from './components/category-form-dialog/category-form-dialog.component';
 import { ItemFormDialogComponent } from './components/item-form-dialog/item-form-dialog.component';
 import { UserManagementComponent } from './components/user-management/user-management.component';
+import { GoalLibraryComponent } from './components/goal-library/goal-library.component';
 import { SharedModule } from '../shared/shared.module';
 
 const routes: Routes = [
   {
     path: '',
+    component: GoalLibraryComponent,
+    canActivate: [MsalGuard]
+  },
+  {
+    path: 'templates',
     component: TemplateListComponent,
     canActivate: [MsalGuard]
   },
@@ -41,7 +47,8 @@ const routes: Routes = [
     TemplateFormDialogComponent,
     CategoryFormDialogComponent,
     ItemFormDialogComponent,
-    UserManagementComponent
+    UserManagementComponent,
+    GoalLibraryComponent
   ],
   imports: [
     CommonModule,

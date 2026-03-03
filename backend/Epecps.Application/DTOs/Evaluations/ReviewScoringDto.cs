@@ -101,3 +101,42 @@ public class ReviewScoreDto
     public string? Comment { get; set; }
     public DateTime CreatedAt { get; set; }
 }
+
+/// <summary>
+/// Request DTO for any reviewer (TL, Peer, HOD) to submit per-goal scores
+/// alongside an overall score. This enables individual goal scoring for all reviewer roles.
+/// </summary>
+public class SubmitReviewWithGoalScoresDto
+{
+    /// <summary>
+    /// Per-goal scores (one per goal)
+    /// </summary>
+    [Required]
+    [MinLength(1)]
+    public List<ReviewItemScoreDto> GoalScores { get; set; } = new();
+
+    /// <summary>
+    /// Overall evaluation score (1-10), computed as average if not provided
+    /// </summary>
+    [Range(1, 10)]
+    public decimal? OverallScore { get; set; }
+
+    /// <summary>
+    /// Overall comment on the review
+    /// </summary>
+    [MaxLength(2000)]
+    public string? OverallComment { get; set; }
+}
+
+/// <summary>
+/// DTO representing a single reviewer's score for a specific goal (used in GoalDto response)
+/// </summary>
+public class GoalReviewerScoreDto
+{
+    public int ReviewerId { get; set; }
+    public string ReviewerName { get; set; } = string.Empty;
+    public string ReviewerRole { get; set; } = string.Empty;
+    public decimal ScoreValue { get; set; }
+    public string? Comment { get; set; }
+    public DateTime? ScoredAt { get; set; }
+}

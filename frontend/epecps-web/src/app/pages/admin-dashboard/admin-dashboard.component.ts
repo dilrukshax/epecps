@@ -21,9 +21,9 @@ export class AdminDashboardComponent implements OnInit {
 
   adminActions = [
     {
-      title: 'Manage Templates',
-      description: 'Create, edit, and publish score templates',
-      icon: 'template',
+      title: 'Goal Library',
+      description: 'Add, edit, and manage goals available for RM assignment',
+      icon: 'goals',
       route: '/admin/templates',
       color: 'blue'
     },
@@ -35,10 +35,10 @@ export class AdminDashboardComponent implements OnInit {
       color: 'green'
     },
     {
-      title: 'View All Templates',
-      description: 'Browse all templates including archived ones',
+      title: 'Score Templates',
+      description: 'Manage underlying score templates and categories',
       icon: 'list',
-      route: '/admin/templates',
+      route: '/admin/templates/templates',
       color: 'purple'
     },
     {

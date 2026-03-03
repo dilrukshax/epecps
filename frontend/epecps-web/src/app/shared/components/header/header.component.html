@@ -26,6 +26,14 @@
              class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
             Evaluations
           </a>
+          <!-- RM Assign Goals Link -->
+          <a routerLink="/employee/rm-assign-goals" routerLinkActive="border-primary-500 text-gray-900"
+             class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Assign Goals
+          </a>
           <!-- HR Reports Link - Always visible -->
           <a routerLink="/employee/hr-reports" routerLinkActive="border-primary-500 text-gray-900"
              class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
@@ -105,6 +113,10 @@
         <a (click)="navigateTo('/evaluations/my-approvals')" 
            class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800 cursor-pointer">
           Evaluations
+        </a>
+        <a (click)="navigateTo('/employee/rm-assign-goals')" 
+           class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800 cursor-pointer">
+          Assign Goals
         </a>
         <!-- HR Reports - Mobile - Always visible -->
         <a (click)="navigateTo('/employee/hr-reports')" 

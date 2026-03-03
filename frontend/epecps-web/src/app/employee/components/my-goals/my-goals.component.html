@@ -7,16 +7,8 @@
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-3xl font-bold text-gray-900">My Goals</h1>
-          <p class="mt-2 text-gray-600">Track and manage your personal development goals</p>
+          <p class="mt-2 text-gray-600">Track and manage your assigned goals. Goals are assigned by your Reporting Manager.</p>
         </div>
-        <button 
-          (click)="createNewGoal()"
-          class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700">
-          <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          Set New Goal
-        </button>
       </div>
     </div>
 
@@ -533,17 +525,8 @@
       </svg>
       <h3 class="text-lg font-medium text-gray-900 mb-2">No goals found</h3>
       <p class="text-gray-600 mb-6">
-        {{ searchQuery || selectedStatus !== 'all' ? 'Try adjusting your filters' : 'Get started by creating your first goal' }}
+        {{ searchQuery || selectedStatus !== 'all' ? 'Try adjusting your filters' : 'No goals have been assigned yet. Your Reporting Manager will assign goals to you.' }}
       </p>
-      <button 
-        *ngIf="!searchQuery && selectedStatus === 'all'"
-        (click)="createNewGoal()"
-        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700">
-        <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        Set New Goal
-      </button>
     </div>
   </main>
 

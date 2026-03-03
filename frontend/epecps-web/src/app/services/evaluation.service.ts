@@ -15,6 +15,7 @@ import {
   CompleteGoalRequestDto,
   SubmitRmScoringDto,
   SubmitOverallScoringDto,
+  SubmitReviewWithGoalScoresDto,
   ReviewScoringResponseDto,
   BulkApprovalStatsDto,
   BulkApprovalCandidateDto,
@@ -230,6 +231,20 @@ export class EvaluationService {
   submitOverallScoring(evaluationId: number, reviewId: number, payload: SubmitOverallScoringDto): Observable<ReviewScoringResponseDto> {
     return this.http.post<ReviewScoringResponseDto>(
       `${this.apiUrl}/api/evaluations/${evaluationId}/reviews/${reviewId}/overall-score`,
+      payload
+    );
+  }
+
+  /**
+   * Submit per-goal scores for any reviewer role (TL/Peer/HOD).
+   * Enables individual goal scoring for all reviewer roles.
+   * @param evaluationId The evaluation ID
+   * @param reviewId The review ID
+   * @param payload Per-goal scores and optional overall score/comment
+   */
+  submitGoalScores(evaluationId: number, reviewId: number, payload: SubmitReviewWithGoalScoresDto): Observable<ReviewScoringResponseDto> {
+    return this.http.post<ReviewScoringResponseDto>(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/reviews/${reviewId}/goal-scores`,
       payload
     );
   }
