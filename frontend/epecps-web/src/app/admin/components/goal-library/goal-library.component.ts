@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ScoreTemplateService } from '../../../services/score-template.service';
+import { forkJoin } from 'rxjs';
 import {
   ScoreTemplateListDto,
   ScoreTemplateDetailDto,
@@ -81,6 +82,21 @@ export class GoalLibraryComponent implements OnInit {
   addCategoryLoading = false;
   addCategoryError: string | null = null;
 
+  // Hardcoded defaults to simplify first-time admin setup
+  seedingDefaults = false;
+  private defaultSeedAttempted = false;
+  private readonly defaultTemplateSeed = {
+    name: 'EmpoVate Default Template',
+    description: 'Auto-created default template for quick goal/category setup.'
+  };
+  private readonly defaultCategorySeeds: Array<{ name: string; description: string; weightPercent: number }> = [
+    { name: 'Technical Skills', description: 'Core technical delivery and engineering quality.', weightPercent: 25 },
+    { name: 'Quality & Testing', description: 'Code quality, stability, and defect prevention.', weightPercent: 20 },
+    { name: 'Collaboration', description: 'Team contribution, support, and cross-functional work.', weightPercent: 20 },
+    { name: 'Communication', description: 'Clear updates, documentation, and stakeholder communication.', weightPercent: 15 },
+    { name: 'Ownership & Growth', description: 'Initiative, accountability, and continuous improvement.', weightPercent: 20 }
+  ];
+
   constructor(private templateService: ScoreTemplateService) {}
 
   ngOnInit(): void {
@@ -102,7 +118,7 @@ export class GoalLibraryComponent implements OnInit {
         this.templateDetails.clear();
 
         if (templates.length === 0) {
-          this.loading = false;
+          this.seedDefaultTemplateData();
           return;
         }
 
@@ -146,6 +162,55 @@ export class GoalLibraryComponent implements OnInit {
         this.error = 'Failed to load goals. Please try again.';
         this.loading = false;
         console.error('Error loading goals:', err);
+      }
+    });
+  }
+
+  private seedDefaultTemplateData(): void {
+    if (this.seedingDefaults) {
+      return;
+    }
+    if (this.defaultSeedAttempted) {
+      this.loading = false;
+      this.error = 'No templates available. Please create a template first.';
+      return;
+    }
+
+    this.defaultSeedAttempted = true;
+    this.seedingDefaults = true;
+    this.error = null;
+
+    this.templateService.createTemplate(this.defaultTemplateSeed).subscribe({
+      next: (templateId) => {
+        const categoryRequests = this.defaultCategorySeeds.map((category, index) =>
+          this.templateService.createCategory(templateId, {
+            name: category.name,
+            description: category.description,
+            weightPercent: category.weightPercent,
+            maxScore: 100,
+            displayOrder: index
+          })
+        );
+
+        forkJoin(categoryRequests).subscribe({
+          next: () => {
+            this.seedingDefaults = false;
+            this.successMessage = 'Default template and categories created. You can now add goals.';
+            setTimeout(() => (this.successMessage = null), 4000);
+            this.loadGoals();
+          },
+          error: (err) => {
+            this.seedingDefaults = false;
+            console.error('Error creating default categories:', err);
+            this.loadGoals();
+          }
+        });
+      },
+      error: (err) => {
+        this.seedingDefaults = false;
+        console.error('Error creating default template:', err);
+        // Reload in case another user/process created it concurrently.
+        this.loadGoals();
       }
     });
   }

@@ -20,10 +20,17 @@ public class ActivationPlanDecisionDto
 
 public class SubmitSelfEvaluationV2Dto
 {
-    public decimal SelfScore { get; set; }
+    public string? OverallComment { get; set; }
+    public List<SelfEvaluationGoalInputDto> Goals { get; set; } = new();
+}
+
+public class SelfEvaluationGoalInputDto
+{
+    public Guid PersonalGoalId { get; set; }
+    public decimal Score { get; set; }
+    public string Summary { get; set; } = string.Empty;
+    public string EvidenceUrl { get; set; } = string.Empty;
     public string? Comment { get; set; }
-    public int PeerUserId1 { get; set; }
-    public int PeerUserId2 { get; set; }
 }
 
 public class GmV2DecisionDto

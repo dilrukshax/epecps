@@ -28,6 +28,7 @@ A comprehensive employee performance evaluation system built with .NET 8 and Ang
   - [6. Email Configuration](#6-email-configuration)
 - [Running the Application](#running-the-application)
 - [Run with Docker](#run-with-docker)
+- [Run with Cached Dev Script](#run-with-cached-dev-script)
 - [Database Migrations](#database-migrations)
 - [Configuration Guide](#configuration-guide)
 - [API Documentation](#api-documentation)
@@ -585,6 +586,24 @@ To stop/remove manual containers:
 docker rm -f epecps-frontend epecps-backend epecps-db
 docker network rm epecps-net
 ```
+
+## Run with Cached Dev Script
+
+If you want cached dependency/image flow (avoid downloading everything every run):
+
+```bash
+# Warm local npm + NuGet caches
+./scripts/dev-cache.sh prepare
+
+# Start with cached build (pull only missing images)
+./scripts/dev-cache.sh up
+
+# Start without pulling from internet
+./scripts/dev-cache.sh up-offline
+```
+
+Full guide:
+- [RUN_PROJECT_WITH_CACHE.md](/Users/dilandilaruksha/Project/epecps/docs/RUN_PROJECT_WITH_CACHE.md)
 
 ### Open the app
 

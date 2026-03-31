@@ -22,13 +22,13 @@ const routes: Routes = [
     path: 'admin/dashboard',
     component: AdminDashboardComponent,
     canActivate: [AuthGuard, RoleGuard],
-    data: { roles: ['Admin', 'SuperAdmin', 'HOD', 'GM'] }
+    data: { roles: ['Admin', 'SuperAdmin'] }
   },
   {
     path: 'admin/templates',
     loadChildren: () => import('./admin/admin-templates.module').then(m => m.AdminTemplatesModule),
     canActivate: [AuthGuard, RoleGuard],
-    data: { roles: ['Admin', 'SuperAdmin', 'HOD', 'GM'] }
+    data: { roles: ['Admin', 'SuperAdmin'] }
   },
   {
     path: 'employee',

@@ -6,7 +6,7 @@ namespace Epecps.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/admin/import")]
-[Authorize(Roles = "SuperAdmin")]
+[Authorize(Roles = "Admin,SuperAdmin")]
 public class AdminImportController : ControllerBase
 {
     private readonly IUserProjectImportService _importService;

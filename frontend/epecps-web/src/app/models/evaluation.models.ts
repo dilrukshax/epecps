@@ -422,10 +422,16 @@ export interface ActivationPlanDecisionDto {
 }
 
 export interface SubmitSelfEvaluationV2Dto {
-  selfScore: number;
+  overallComment?: string;
+  goals: SelfEvaluationGoalInputDto[];
+}
+
+export interface SelfEvaluationGoalInputDto {
+  personalGoalId: string;
+  score: number;
+  summary: string;
+  evidenceUrl: string;
   comment?: string;
-  peerUserId1: number;
-  peerUserId2: number;
 }
 
 export interface GmV2DecisionDto {

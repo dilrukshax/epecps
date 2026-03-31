@@ -103,6 +103,21 @@ Complete technical documentation for the Employee Performance Evaluation and Car
 - Third-party integration
 - API client development
 
+### 6. Cached Run Guide
+**File**: `RUN_PROJECT_WITH_CACHE.md`
+
+**Contents:**
+- Cached development script usage (`scripts/dev-cache.sh`)
+- Docker cached startup (`pull=missing`)
+- Offline-style startup (`pull=never`)
+- Cache warm-up for npm/NuGet
+- Rebuild and logs commands
+
+**When to use:**
+- Faster repeated local runs
+- Minimize repeated internet downloads
+- Standardized team run commands
+
 ## Quick Reference
 
 ### Common Tasks

@@ -21,6 +21,74 @@ All endpoints require valid Azure AD authentication token with appropriate scope
 
 **Required Scope**: `api://{client-id}/Epecps.ReadWrite`
 
+## Workflow V2 (EmpoVate360-Aligned)
+
+The endpoints below are the preferred integration path for the RM-first + activation + parallel review flow.
+
+### RM Assignment
+```
+POST /api/rm/goals/assign
+```
+Assigns 5+ goals and creates a workflow-v2 evaluation.
+
+### Employee Activation Submission
+```
+POST /api/v2/workflow/goal-sets/{goalSetId}/activation
+```
+
+### TL Activation Decision
+```
+POST /api/v2/workflow/evaluations/{evaluationId}/activation/decision
+```
+
+### TL Peer Assignment (2 peers)
+```
+POST /api/evaluations/{evaluationId}/assign-peers
+```
+
+### Employee Self-Evaluation (Per Goal)
+```
+POST /api/v2/workflow/evaluations/{evaluationId}/self-evaluation
+```
+
+Request body:
+```json
+{
+  "overallComment": "Overall self-evaluation summary",
+  "goals": [
+    {
+      "personalGoalId": "guid",
+      "score": 82,
+      "summary": "Delivered target features and reduced defects.",
+      "evidenceUrl": "https://example.com/evidence",
+      "comment": "Optional per-goal comment"
+    }
+  ]
+}
+```
+
+Rules:
+- All assigned goals must be included.
+- Score range is 0-100.
+- `summary` and `evidenceUrl` are required per goal.
+- TL must have assigned exactly 2 peers before submission.
+- Submission is allowed on/after the evaluation cycle end date.
+
+### HOD Finalization (Threshold Routing)
+```
+POST /api/v2/workflow/evaluations/{evaluationId}/hod/finalize
+```
+
+### GM Decision (Vacancy Aware)
+```
+POST /api/v2/workflow/evaluations/{evaluationId}/gm/decision
+```
+
+### HR PIP Queue
+```
+GET /api/v2/workflow/pip-cases
+```
+
 ### Evaluations API
 
 #### Get All Evaluations

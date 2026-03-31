@@ -2164,8 +2164,37 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         if (evaluation.TeamLeadId != teamLeadUserId)
             throw new BusinessRuleException("Only the assigned Team Lead can assign peer reviewers.");
 
-        if (evaluation.Status != STATUS_PENDING_PEER_ASSIGNMENT)
-            throw new BusinessRuleException("Peer reviewers can only be assigned after Team Lead approval.");
+        if (peerUserId1 == peerUserId2)
+            throw new BusinessRuleException("Two different peer reviewers are required.");
+
+        if (peerUserId1 == evaluation.EmployeeId || peerUserId2 == evaluation.EmployeeId)
+            throw new BusinessRuleException("Employee cannot be assigned as a peer reviewer.");
+
+        if (peerUserId1 == evaluation.ReportingManagerId || peerUserId2 == evaluation.ReportingManagerId)
+            throw new BusinessRuleException("Reporting Manager cannot be assigned as a peer reviewer.");
+
+        if (peerUserId1 == evaluation.TeamLeadId || peerUserId2 == evaluation.TeamLeadId)
+            throw new BusinessRuleException("Team Lead cannot be assigned as a peer reviewer.");
+
+        var isWorkflowV2 = string.Equals(evaluation.WorkflowVersion, "v2", StringComparison.OrdinalIgnoreCase)
+            || evaluation.Status.StartsWith("V2_", StringComparison.OrdinalIgnoreCase);
+
+        if (isWorkflowV2)
+        {
+            var allowedV2Statuses = new[]
+            {
+                STATUS_V2_ACTIVE_GOALS,
+                STATUS_V2_PENDING_PARALLEL_REVIEWS
+            };
+
+            if (!allowedV2Statuses.Contains(evaluation.Status))
+                throw new BusinessRuleException("In workflow v2, peer reviewers can only be assigned while goals are active or parallel reviews are pending.");
+        }
+        else
+        {
+            if (evaluation.Status != STATUS_PENDING_PEER_ASSIGNMENT)
+                throw new BusinessRuleException("Peer reviewers can only be assigned after Team Lead approval.");
+        }
 
         // Verify peer users exist
         var peer1 = await _context.Users.FindAsync(new object[] { peerUserId1 }, cancellationToken);
@@ -2174,45 +2203,99 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         if (peer1 == null || peer2 == null)
             throw new NotFoundException("One or both peer reviewers not found.");
 
+        if (isWorkflowV2)
+        {
+            var completedPeerReviewsExist = evaluation.Reviews.Any(r =>
+                r.ReviewerRole == ReviewerRole.Peer &&
+                (r.Status == REVIEW_STATUS_COMPLETED || r.Status == REVIEW_STATUS_APPROVED));
+
+            if (completedPeerReviewsExist)
+                throw new BusinessRuleException("Peer reviewers cannot be reassigned after peer reviews are submitted.");
+        }
+
         var oldStatus = evaluation.Status;
+
+        if (evaluation.PeerAssignments.Count > 0)
+        {
+            _context.Set<PeerAssignment>().RemoveRange(evaluation.PeerAssignments);
+        }
+
+        var existingPeerReviews = evaluation.Reviews
+            .Where(r => r.ReviewerRole == ReviewerRole.Peer)
+            .ToList();
+
+        if (existingPeerReviews.Count > 0)
+        {
+            _context.Set<Review>().RemoveRange(existingPeerReviews);
+        }
 
         // Create peer assignments
         var peerAssignment1 = new PeerAssignment { EvaluationId = evaluationId, PeerUserId = peerUserId1 };
         var peerAssignment2 = new PeerAssignment { EvaluationId = evaluationId, PeerUserId = peerUserId2 };
-
         _context.Set<PeerAssignment>().Add(peerAssignment1);
         _context.Set<PeerAssignment>().Add(peerAssignment2);
 
         // Create peer review records
-        var peerReview1 = new Review { EvaluationId = evaluationId, ReviewerUserId = peerUserId1, ReviewerRole = ReviewerRole.Peer, Status = REVIEW_STATUS_PENDING };
-        var peerReview2 = new Review { EvaluationId = evaluationId, ReviewerUserId = peerUserId2, ReviewerRole = ReviewerRole.Peer, Status = REVIEW_STATUS_PENDING };
+        _context.Set<Review>().Add(new Review
+        {
+            EvaluationId = evaluationId,
+            ReviewerUserId = peerUserId1,
+            ReviewerRole = ReviewerRole.Peer,
+            Status = REVIEW_STATUS_PENDING
+        });
+        _context.Set<Review>().Add(new Review
+        {
+            EvaluationId = evaluationId,
+            ReviewerUserId = peerUserId2,
+            ReviewerRole = ReviewerRole.Peer,
+            Status = REVIEW_STATUS_PENDING
+        });
 
-        _context.Set<Review>().Add(peerReview1);
-        _context.Set<Review>().Add(peerReview2);
-
-        evaluation.Status = STATUS_PENDING_PEER_REVIEWS;
+        if (!isWorkflowV2)
+        {
+            evaluation.Status = STATUS_PENDING_PEER_REVIEWS;
+        }
 
         // Create approval history
         var approvalHistory = new ApprovalHistory
         {
             EvaluationId = evaluationId, ActorUserId = teamLeadUserId, ActorRole = "TL",
-            Action = "AssignedPeers", Comment = $"Assigned peer reviewers: {peer1.FullName}, {peer2.FullName}",
-            FromStatus = oldStatus, ToStatus = evaluation.Status, CreatedAt = DateTime.UtcNow
+            Action = isWorkflowV2 ? "AssignedPeersV2" : "AssignedPeers",
+            Comment = $"Assigned peer reviewers: {peer1.FullName}, {peer2.FullName}",
+            FromStatus = oldStatus,
+            ToStatus = evaluation.Status,
+            CreatedAt = DateTime.UtcNow
         };
         _context.Set<ApprovalHistory>().Add(approvalHistory);
 
-        // Notify peers
-        _context.Set<Notification>().Add(new Notification { UserId = peerUserId1, Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}", Channel = "Email", SentAt = DateTime.UtcNow });
-        _context.Set<Notification>().Add(new Notification { UserId = peerUserId2, Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}", Channel = "Email", SentAt = DateTime.UtcNow });
+        if (!isWorkflowV2 || evaluation.Status == STATUS_V2_PENDING_PARALLEL_REVIEWS)
+        {
+            _context.Set<Notification>().Add(new Notification
+            {
+                UserId = peerUserId1,
+                Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}",
+                Channel = "Email",
+                SentAt = DateTime.UtcNow
+            });
+            _context.Set<Notification>().Add(new Notification
+            {
+                UserId = peerUserId2,
+                Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}",
+                Channel = "Email",
+                SentAt = DateTime.UtcNow
+            });
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Send emails to peer reviewers
-        var employee = evaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
-        if (employee != null)
+        if (!isWorkflowV2 || evaluation.Status == STATUS_V2_PENDING_PARALLEL_REVIEWS)
         {
-            await _emailService.SendEvaluationNotificationAsync(peer1.Email, peer1.FullName, employee.FullName, "Assigned", "Peer Reviewer", "You have been assigned as a peer reviewer.", evaluationId, cancellationToken);
-            await _emailService.SendEvaluationNotificationAsync(peer2.Email, peer2.FullName, employee.FullName, "Assigned", "Peer Reviewer", "You have been assigned as a peer reviewer.", evaluationId, cancellationToken);
+            var employee = evaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
+            if (employee != null)
+            {
+                await _emailService.SendEvaluationNotificationAsync(peer1.Email, peer1.FullName, employee.FullName, "Assigned", "Peer Reviewer", "You have been assigned as a peer reviewer.", evaluationId, cancellationToken);
+                await _emailService.SendEvaluationNotificationAsync(peer2.Email, peer2.FullName, employee.FullName, "Assigned", "Peer Reviewer", "You have been assigned as a peer reviewer.", evaluationId, cancellationToken);
+            }
         }
     }
 

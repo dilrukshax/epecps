@@ -79,6 +79,15 @@ public class ReviewScoringService : IReviewScoringService
         if (invalidGoals.Any())
             throw new BusinessRuleException($"One or more goal IDs are not part of this evaluation's goal set.");
 
+        if (submittedGoalIds.Count != dto.ItemScores.Count)
+            throw new BusinessRuleException("Duplicate goal scores are not allowed.");
+
+        if (submittedGoalIds.Count != personalGoals.Count)
+            throw new BusinessRuleException("RM must submit scores for all assigned goals.");
+
+        if (dto.ItemScores.Any(s => s.ScoreValue < 1 || s.ScoreValue > 10))
+            throw new BusinessRuleException("Each goal score must be between 1 and 10.");
+
         // ? Get existing scores for history tracking
         var existingScores = await _context.Set<ReviewScore>()
             .Where(rs => rs.ReviewId == reviewId)
@@ -246,6 +255,13 @@ public class ReviewScoringService : IReviewScoringService
         // Validate this is NOT an RM review (RM submits item scores, not overall)
         if (review.ReviewerRole == ReviewerRole.RM)
             throw new BusinessRuleException("RM reviewers submit item-level scores, not overall scores.");
+
+        if (string.Equals(evaluation.WorkflowVersion, "v2", StringComparison.OrdinalIgnoreCase)
+            && evaluation.Status == "V2_PENDING_PARALLEL_REVIEWS"
+            && (review.ReviewerRole == ReviewerRole.TL || review.ReviewerRole == ReviewerRole.Peer))
+        {
+            throw new BusinessRuleException("In workflow v2 parallel review stage, TL and Peer reviewers must submit per-goal scores.");
+        }
 
         // Validate this is the correct reviewer
         if (review.ReviewerUserId != reviewerUserId)
@@ -494,6 +510,15 @@ public class ReviewScoringService : IReviewScoringService
 
         if (invalidGoals.Any())
             throw new BusinessRuleException("One or more goal IDs are not part of this evaluation's goal set.");
+
+        if (submittedGoalIds.Count != dto.GoalScores.Count)
+            throw new BusinessRuleException("Duplicate goal scores are not allowed.");
+
+        if (submittedGoalIds.Count != personalGoals.Count)
+            throw new BusinessRuleException("Reviewer must submit scores for all assigned goals.");
+
+        if (dto.GoalScores.Any(s => s.ScoreValue < 1 || s.ScoreValue > 10))
+            throw new BusinessRuleException("Each goal score must be between 1 and 10.");
 
         // Get existing scores for history tracking
         var existingScores = await _context.Set<ReviewScore>()
