@@ -42,6 +42,7 @@ export interface EvaluationDetailDto {
   cycleId: number;
   cycleName: string;
   employeeId: number;
+  goalSetId?: string;
   employeeName: string;
   employeeEmail: string;
   reportingManagerId: number;
@@ -49,6 +50,7 @@ export interface EvaluationDetailDto {
   teamLeadId: number;
   teamLeadName: string;
   status: string;
+  workflowVersion?: string;
   overallScore?: number;
   reviews: ReviewDto[];
   goals: GoalDto[];
@@ -98,6 +100,12 @@ export interface GoalDto {
   description: string;
   weightPct: number;
   evidenceUri?: string;
+  goalAssignmentId?: string;
+  activationMethod?: string;
+  activationSubmittedAt?: Date;
+  activationStatus?: string;
+  activationTlComment?: string;
+  activationReviewedAt?: Date;
   personalGoalId?: string;  // Added: PersonalGoal GUID for linking
   // Per-goal reviewer scores and average
   reviewerScores?: GoalReviewerScoreDto[];
@@ -174,6 +182,7 @@ export interface AssignPeersDto {
 
 export interface PromotionDecisionDto {
   approve: boolean;
+  vacancyAvailable?: boolean;
   comment?: string;
 }
 
@@ -393,4 +402,89 @@ export interface CycleDto {
 export interface DepartmentDto {
   deptId: number;
   name: string;
+}
+
+// ========== Workflow v2 ==========
+
+export interface GoalActivationMethodDto {
+  goalAssignmentId: string;
+  method: string;
+}
+
+export interface SubmitActivationPlanRequestDto {
+  goals: GoalActivationMethodDto[];
+}
+
+export interface ActivationPlanDecisionDto {
+  approved: boolean;
+  comment?: string;
+  rejectedGoalAssignmentIds: string[];
+}
+
+export interface SubmitSelfEvaluationV2Dto {
+  selfScore: number;
+  comment?: string;
+  peerUserId1: number;
+  peerUserId2: number;
+}
+
+export interface GmV2DecisionDto {
+  approve: boolean;
+  vacancyAvailable: boolean;
+  comment?: string;
+}
+
+export interface WorkflowReviewWeightDto {
+  reviewerKey: string;
+  weightPercent: number;
+}
+
+export interface UpdateWorkflowReviewWeightsDto {
+  weights: WorkflowReviewWeightDto[];
+}
+
+export interface PipActionItemDto {
+  pipActionItemId: number;
+  title: string;
+  description?: string;
+  trainingMaterialId?: number;
+  externalTrainingLink?: string;
+  dueDate?: Date;
+  status: string;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+export interface PipCaseDto {
+  pipCaseId: number;
+  evaluationId: number;
+  employeeUserId: number;
+  employeeName: string;
+  assignedHrUserId: number;
+  assignedHrName: string;
+  status: string;
+  reason?: string;
+  createdAt: Date;
+  dueDate?: Date;
+  closedAt?: Date;
+  actionItems: PipActionItemDto[];
+}
+
+export interface PipCaseUpdateDto {
+  status?: string;
+  dueDate?: string;
+  reason?: string;
+}
+
+export interface PipActionItemCreateDto {
+  title: string;
+  description?: string;
+  trainingMaterialId?: number;
+  externalTrainingLink?: string;
+  dueDate?: string;
+}
+
+export interface PipActionItemUpdateDto {
+  status?: string;
+  dueDate?: string;
 }

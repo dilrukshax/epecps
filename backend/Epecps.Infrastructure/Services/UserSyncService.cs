@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Epecps.Infrastructure.Services;
 
 /// <summary>
-/// Service for synchronizing users from Azure AD to local database
+/// Service for synchronizing users by email claim to local database
 /// </summary>
 public class UserSyncService : IUserSyncService
 {
@@ -18,47 +18,45 @@ public class UserSyncService : IUserSyncService
     }
 
     /// <summary>
-    /// Sync user from Azure AD claims to local database
+    /// Sync user by claims to local database
     /// Creates user if doesn't exist, updates if exists
-    /// For new users, assigns all roles to allow testing the full workflow
     /// </summary>
     public async Task<int> SyncUserFromClaimsAsync(string email, string fullName, CancellationToken cancellationToken = default)
     {
+        email = email.Trim().ToLowerInvariant();
         var user = await _context.Users
             .Include(u => u.UserRoles)
             .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
 
         if (user == null)
         {
-            // Create new user with default department (DeptId = 1) and active status
+            var departmentId = await ResolveDepartmentIdAsync(cancellationToken);
+
             user = new User
             {
                 Email = email,
                 FullName = fullName,
                 Status = "Active",
-                DeptId = 1 // Default department - you may want to make this configurable
+                DeptId = departmentId,
+                IsActive = true
             };
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync(cancellationToken);
-
-            // Assign all roles to the new user for testing purposes
-            // This allows a single user to test the complete approval workflow
-            await AssignAllRolesToUserAsync(user.UserId, cancellationToken);
+            await EnsureRoleAsync(user.UserId, "Employee", cancellationToken);
         }
         else
         {
             // Update full name if it has changed
-            if (user.FullName != fullName)
+            if (!string.IsNullOrWhiteSpace(fullName) && user.FullName != fullName)
             {
                 user.FullName = fullName;
             }
 
-            // Ensure user has all required roles (for testing purposes)
-            // Check if user already has roles assigned
-            if (user.UserRoles == null || !user.UserRoles.Any())
+            if (!user.IsActive)
             {
-                await AssignAllRolesToUserAsync(user.UserId, cancellationToken);
+                user.IsActive = true;
+                user.Status = "Active";
             }
 
             await _context.SaveChangesAsync(cancellationToken);
@@ -67,43 +65,43 @@ public class UserSyncService : IUserSyncService
         return user.UserId;
     }
 
-    /// <summary>
-    /// Assigns all workflow roles to a user for testing purposes
-    /// In production, this should be replaced with proper role management
-    /// </summary>
-    private async Task AssignAllRolesToUserAsync(int userId, CancellationToken cancellationToken)
+    private async Task EnsureRoleAsync(int userId, string roleName, CancellationToken cancellationToken)
     {
-        // Get or create all required roles
-        var roleNames = new[] { "Employee", "RM", "TL", "Peer", "HOD", "GM", "HR", "Admin" };
-        
-        foreach (var roleName in roleNames)
+        var role = await _context.Set<Role>()
+            .FirstOrDefaultAsync(r => r.Name == roleName, cancellationToken);
+
+        if (role == null)
         {
-            // Find or create the role
-            var role = await _context.Set<Role>()
-                .FirstOrDefaultAsync(r => r.Name == roleName, cancellationToken);
-
-            if (role == null)
-            {
-                role = new Role { Name = roleName };
-                _context.Set<Role>().Add(role);
-                await _context.SaveChangesAsync(cancellationToken);
-            }
-
-            // Check if user already has this role
-            var existingUserRole = await _context.Set<UserRole>()
-                .FirstOrDefaultAsync(ur => ur.UserId == userId && ur.RoleId == role.RoleId, cancellationToken);
-
-            if (existingUserRole == null)
-            {
-                var userRole = new UserRole
-                {
-                    UserId = userId,
-                    RoleId = role.RoleId
-                };
-                _context.Set<UserRole>().Add(userRole);
-            }
+            role = new Role { Name = roleName };
+            _context.Set<Role>().Add(role);
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
+        var existingUserRole = await _context.Set<UserRole>()
+            .AnyAsync(ur => ur.UserId == userId && ur.RoleId == role.RoleId, cancellationToken);
+
+        if (!existingUserRole)
+        {
+            _context.Set<UserRole>().Add(new UserRole
+            {
+                UserId = userId,
+                RoleId = role.RoleId
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task<int> ResolveDepartmentIdAsync(CancellationToken cancellationToken)
+    {
+        var department = await _context.Departments.OrderBy(d => d.DeptId).FirstOrDefaultAsync(cancellationToken);
+        if (department != null)
+        {
+            return department.DeptId;
+        }
+
+        department = new Department { Name = "General" };
+        _context.Departments.Add(department);
         await _context.SaveChangesAsync(cancellationToken);
+        return department.DeptId;
     }
 }

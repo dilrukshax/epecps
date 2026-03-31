@@ -10,23 +10,20 @@ namespace Epecps.Infrastructure.Services;
 
 /// <summary>
 /// Service for RM to assign goals to employees from the system goal library.
-/// Flow: RM selects goals ? assigns to employee ? PersonalGoals are created ? auto-submitted for evaluation.
+/// Workflow v2:
+/// RM assigns >= 5 goals -> employee submits activation plan -> TL reviews activation.
 /// </summary>
 public class RmGoalAssignmentService : IRmGoalAssignmentService
 {
     private readonly EpecpsDbContext _context;
-    private readonly IEvaluationWorkflowService _evaluationWorkflowService;
 
-    public RmGoalAssignmentService(EpecpsDbContext context, IEvaluationWorkflowService evaluationWorkflowService)
+    public RmGoalAssignmentService(EpecpsDbContext context)
     {
         _context = context;
-        _evaluationWorkflowService = evaluationWorkflowService;
     }
 
     public async Task<List<GoalLibraryItemDto>> GetGoalLibraryAsync(CancellationToken cancellationToken = default)
     {
-        // Return all active goals from non-archived templates (both published and draft)
-        // Admin adds goals via the Goal Library which may use draft templates
         var items = await _context.ScoreItems
             .Where(i => i.IsActive && i.Category.IsActive && !i.Category.Template.IsArchived)
             .Include(i => i.Category)
@@ -52,10 +49,20 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
 
     public async Task<List<RmEmployeeDto>> GetMyEmployeesAsync(int rmUserId, CancellationToken cancellationToken = default)
     {
-        // Return ALL users in the system (including the RM themselves)
-        // so the RM can assign goals to anyone, even themselves for testing
-        var allEmployees = await _context.Users
+        var managedEmployeeIds = await _context.UserManagerMappings
+            .Where(m => m.ManagerUserId == rmUserId)
+            .Select(m => m.EmployeeUserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (managedEmployeeIds.Count == 0)
+        {
+            return new List<RmEmployeeDto>();
+        }
+
+        return await _context.Users
             .Include(u => u.Department)
+            .Where(u => managedEmployeeIds.Contains(u.UserId))
             .OrderBy(u => u.FullName)
             .Select(u => new RmEmployeeDto
             {
@@ -65,30 +72,33 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
                 Department = u.Department != null ? u.Department.Name : "Unassigned"
             })
             .ToListAsync(cancellationToken);
-
-        return allEmployees;
     }
 
     public async Task<RmAssignGoalsResponseDto> AssignGoalsToEmployeeAsync(int rmUserId, RmAssignGoalsDto dto, CancellationToken cancellationToken = default)
     {
-        if (dto.Goals == null || dto.Goals.Count == 0)
-            throw new BusinessRuleException("At least one goal must be assigned.");
+        if (dto.Goals == null || dto.Goals.Count < 5)
+        {
+            throw new BusinessRuleException("At least 5 goals must be assigned.");
+        }
 
-        // Validate employee exists
         var employee = await _context.Users
             .FirstOrDefaultAsync(u => u.UserId == dto.EmployeeUserId, cancellationToken);
 
         if (employee == null)
+        {
             throw new NotFoundException(nameof(User), dto.EmployeeUserId);
+        }
 
-        // Validate RM exists
         var rmUser = await _context.Users
             .FirstOrDefaultAsync(u => u.UserId == rmUserId, cancellationToken);
 
         if (rmUser == null)
+        {
             throw new NotFoundException(nameof(User), rmUserId);
+        }
 
-        // Use a transaction to ensure all-or-nothing
+        await EnsureCanManageEmployeeAsync(rmUserId, dto.EmployeeUserId, cancellationToken);
+
         using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
         try
@@ -98,18 +108,17 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
 
             foreach (var goalDto in dto.Goals)
             {
-                // Validate goal item exists
                 var goalItem = await _context.ScoreItems
-                    .Include(i => i.Category)
                     .FirstOrDefaultAsync(i => i.Id == goalDto.GoalItemId && i.IsActive, cancellationToken);
 
                 if (goalItem == null)
+                {
                     throw new NotFoundException(nameof(ScoreItem), goalDto.GoalItemId);
+                }
 
                 var title = !string.IsNullOrWhiteSpace(goalDto.Title) ? goalDto.Title : goalItem.Name;
                 var description = !string.IsNullOrWhiteSpace(goalDto.Description) ? goalDto.Description : goalItem.Description;
 
-                // Create the corresponding PersonalGoal for the employee
                 var personalGoal = new PersonalGoal
                 {
                     Id = Guid.NewGuid(),
@@ -121,14 +130,14 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
                     TargetScore = goalItem.TargetScore,
                     StartDate = dto.StartDate,
                     DueDate = dto.DueDate,
-                    Status = PersonalGoalStatus.ApprovedByRM, // Already approved since RM created it
+                    Status = PersonalGoalStatus.ApprovedByRM,
                     CurrentScore = 0,
                     CreatedAt = DateTime.UtcNow
                 };
+
                 _context.PersonalGoals.Add(personalGoal);
                 createdGoals.Add(personalGoal);
 
-                // Create the GoalAssignment record
                 var assignment = new GoalAssignment
                 {
                     Id = Guid.NewGuid(),
@@ -141,40 +150,42 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
                     TargetScore = goalItem.TargetScore,
                     StartDate = dto.StartDate,
                     DueDate = dto.DueDate,
-                    Status = AssignedGoalStatus.Accepted, // Auto-accepted since RM is assigning
+                    Status = AssignedGoalStatus.Accepted,
                     PersonalGoalId = personalGoal.Id,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    ActivationStatus = "PendingEmployee"
                 };
+
                 _context.GoalAssignments.Add(assignment);
 
-                // Add custom activities if provided
-                if (goalDto.CustomActivities != null)
+                if (goalDto.CustomActivities == null)
                 {
-                    foreach (var activityDesc in goalDto.CustomActivities)
+                    continue;
+                }
+
+                foreach (var activityDesc in goalDto.CustomActivities)
+                {
+                    if (string.IsNullOrWhiteSpace(activityDesc))
                     {
-                        if (!string.IsNullOrWhiteSpace(activityDesc))
-                        {
-                            var activity = new PersonalGoalActivity
-                            {
-                                Id = Guid.NewGuid(),
-                                PersonalGoalId = personalGoal.Id,
-                                SuggestedActivityId = null,
-                                Description = activityDesc.Trim(),
-                                IsFromTemplate = false,
-                                Status = ActivityStatus.NotStarted,
-                                CreatedAt = DateTime.UtcNow
-                            };
-                            _context.PersonalGoalActivities.Add(activity);
-                        }
+                        continue;
                     }
+
+                    _context.PersonalGoalActivities.Add(new PersonalGoalActivity
+                    {
+                        Id = Guid.NewGuid(),
+                        PersonalGoalId = personalGoal.Id,
+                        SuggestedActivityId = null,
+                        Description = activityDesc.Trim(),
+                        IsFromTemplate = false,
+                        Status = ActivityStatus.NotStarted,
+                        CreatedAt = DateTime.UtcNow
+                    });
                 }
             }
 
-            // Save goals and assignments first
             await _context.SaveChangesAsync(cancellationToken);
 
-            // Create an evaluation in Approved_By_RM status so the employee can start working
-            var activeCycle = await _context.Set<Cycle>()
+            var activeCycle = await _context.Cycles
                 .Where(c => c.StartDate <= DateTime.UtcNow && c.EndDate >= DateTime.UtcNow)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -187,14 +198,12 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
                     EndDate = new DateTime(DateTime.UtcNow.Year, 12, 31),
                     Status = "Active"
                 };
-                _context.Set<Cycle>().Add(activeCycle);
+                _context.Cycles.Add(activeCycle);
                 await _context.SaveChangesAsync(cancellationToken);
             }
 
-            // Determine TL
             var teamLeadId = await GetTeamLeadIdAsync(dto.EmployeeUserId, cancellationToken);
 
-            // Create evaluation in Approved_By_RM status (RM already approved since they assigned)
             var evaluation = new Evaluation
             {
                 CycleId = activeCycle.CycleId,
@@ -202,85 +211,62 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
                 ReportingManagerId = rmUserId,
                 TeamLeadId = teamLeadId,
                 GoalSetId = goalSetId,
-                Status = "Approved_By_RM",
-                OverallScore = null
+                WorkflowVersion = "v2",
+                Status = "V2_PENDING_EMPLOYEE_ACTIVATION"
             };
 
-            _context.Set<Evaluation>().Add(evaluation);
+            _context.Evaluations.Add(evaluation);
             await _context.SaveChangesAsync(cancellationToken);
 
-            // Create employee goals linked to the evaluation
             foreach (var pg in createdGoals)
             {
-                var employeeGoal = new EmployeeGoal
+                _context.EmployeeGoals.Add(new EmployeeGoal
                 {
                     EvaluationId = evaluation.EvaluationId,
                     PersonalGoalId = pg.Id,
                     Title = pg.Title,
                     Description = pg.Description ?? string.Empty,
                     WeightPct = 100m / createdGoals.Count
-                };
-                _context.EmployeeGoals.Add(employeeGoal);
+                });
             }
 
-            // Create self-review record (completed, since RM is acting on behalf of employee)
-            var selfReview = new Review
+            _context.ApprovalHistories.Add(new ApprovalHistory
             {
                 EvaluationId = evaluation.EvaluationId,
-                ReviewerUserId = dto.EmployeeUserId,
-                ReviewerRole = ReviewerRole.Self,
-                Status = "Completed",
-                OverallComment = "Goals assigned by Reporting Manager.",
-                OverallScore = null,
-                SubmittedAt = DateTime.UtcNow
-            };
-            _context.Set<Review>().Add(selfReview);
-
-            // Create RM review record
-            var rmReview = new Review
-            {
-                EvaluationId = evaluation.EvaluationId,
-                ReviewerUserId = rmUserId,
-                ReviewerRole = ReviewerRole.RM,
-                Status = "Approved",
-                OverallScore = null,
-                SubmittedAt = DateTime.UtcNow
-            };
-            _context.Set<Review>().Add(rmReview);
-
-            // Create approval history entries
-            var submitHistory = new ApprovalHistory
-            {
-                EvaluationId = evaluation.EvaluationId,
-                ReviewId = null,
                 ActorUserId = rmUserId,
                 ActorRole = "RM",
-                Action = "RMAssignedGoals",
-                Comment = $"RM assigned {createdGoals.Count} goal(s) to {employee.FullName}",
+                Action = "RMAssignedGoalsV2",
+                Comment = $"RM assigned {createdGoals.Count} goal(s) and initiated activation workflow.",
                 FromStatus = "New",
-                ToStatus = "Approved_By_RM",
+                ToStatus = evaluation.Status,
                 CreatedAt = DateTime.UtcNow
-            };
-            _context.Set<ApprovalHistory>().Add(submitHistory);
+            });
 
-            // Create audit log
-            var auditLog = new AuditLog
+            _context.Notifications.Add(new Notification
+            {
+                UserId = dto.EmployeeUserId,
+                Subject = "Goals assigned - activation plan submission required",
+                Channel = "Email",
+                SentAt = DateTime.UtcNow
+            });
+
+            _context.AuditLogs.Add(new AuditLog
             {
                 ActorUserId = rmUserId,
                 EntityType = "GoalAssignment",
                 EntityId = 0,
-                Action = "RM_ASSIGNED_GOALS",
-                BeforeJson = null,
+                Action = "RM_ASSIGNED_GOALS_V2",
                 AfterJson = System.Text.Json.JsonSerializer.Serialize(new
                 {
                     GoalSetId = goalSetId,
                     EmployeeId = dto.EmployeeUserId,
                     GoalCount = createdGoals.Count,
-                    EvaluationId = evaluation.EvaluationId
+                    EvaluationId = evaluation.EvaluationId,
+                    WorkflowVersion = "v2",
+                    Status = evaluation.Status
                 }),
                 CreatedAt = DateTime.UtcNow
-            };
-            _context.Set<AuditLog>().Add(auditLog);
+            });
 
             await _context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -290,7 +276,7 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
                 GoalSetId = goalSetId,
                 GoalCount = createdGoals.Count,
                 EmployeeName = employee.FullName,
-                Message = $"Successfully assigned {createdGoals.Count} goal(s) to {employee.FullName}. The employee can now start working on them."
+                Message = $"Successfully assigned {createdGoals.Count} goals to {employee.FullName}. Employee activation plan is now pending."
             };
         }
         catch
@@ -302,8 +288,14 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
 
     public async Task<List<GoalAssignmentListDto>> GetMyAssignmentsAsync(int rmUserId, CancellationToken cancellationToken = default)
     {
+        var managedEmployeeIds = await _context.UserManagerMappings
+            .Where(m => m.ManagerUserId == rmUserId)
+            .Select(m => m.EmployeeUserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
         var assignments = await _context.GoalAssignments
-            .Where(ga => ga.AssignedByUserId == rmUserId)
+            .Where(ga => ga.AssignedByUserId == rmUserId || managedEmployeeIds.Contains(ga.AssignedToUserId))
             .Include(ga => ga.AssignedToUser)
             .Include(ga => ga.GoalItem)
                 .ThenInclude(gi => gi.Category)
@@ -332,8 +324,10 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
 
     public async Task<List<GoalAssignmentListDto>> GetAssignmentsForEmployeeAsync(int rmUserId, int employeeUserId, CancellationToken cancellationToken = default)
     {
+        await EnsureCanManageEmployeeAsync(rmUserId, employeeUserId, cancellationToken);
+
         var assignments = await _context.GoalAssignments
-            .Where(ga => ga.AssignedByUserId == rmUserId && ga.AssignedToUserId == employeeUserId)
+            .Where(ga => ga.AssignedToUserId == employeeUserId)
             .Include(ga => ga.AssignedToUser)
             .Include(ga => ga.GoalItem)
                 .ThenInclude(gi => gi.Category)
@@ -360,11 +354,40 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
         return assignments;
     }
 
+    private async Task EnsureCanManageEmployeeAsync(int managerUserId, int employeeUserId, CancellationToken cancellationToken)
+    {
+        var isSuperAdmin = await _context.UserRoles
+            .Include(ur => ur.Role)
+            .AnyAsync(
+                ur => ur.UserId == managerUserId &&
+                      (ur.Role.Name == "SuperAdmin" || ur.Role.Name == "Admin"),
+                cancellationToken);
+
+        if (isSuperAdmin)
+        {
+            return;
+        }
+
+        var isMapped = await _context.UserManagerMappings
+            .AnyAsync(
+                m => m.ManagerUserId == managerUserId && m.EmployeeUserId == employeeUserId,
+                cancellationToken);
+
+        if (!isMapped)
+        {
+            throw new BusinessRuleException("You are not mapped as a reporting manager for this employee.");
+        }
+    }
+
     private async Task<int> GetTeamLeadIdAsync(int employeeId, CancellationToken cancellationToken)
     {
-        // Look for a TL in the same department
-        var employee = await _context.Users.FirstOrDefaultAsync(u => u.UserId == employeeId, cancellationToken);
-        if (employee == null) return employeeId;
+        var employee = await _context.Users
+            .FirstOrDefaultAsync(u => u.UserId == employeeId, cancellationToken);
+
+        if (employee == null)
+        {
+            return employeeId;
+        }
 
         var teamLead = await _context.Users
             .Include(u => u.UserRoles)
@@ -374,14 +397,5 @@ public class RmGoalAssignmentService : IRmGoalAssignmentService
             .FirstOrDefaultAsync(cancellationToken);
 
         return teamLead?.UserId ?? employeeId;
-    }
-
-    /// <summary>
-    /// Comparer for deduplicating employee DTOs
-    /// </summary>
-    private class RmEmployeeDtoComparer : IEqualityComparer<RmEmployeeDto>
-    {
-        public bool Equals(RmEmployeeDto? x, RmEmployeeDto? y) => x?.UserId == y?.UserId;
-        public int GetHashCode(RmEmployeeDto obj) => obj.UserId.GetHashCode();
     }
 }

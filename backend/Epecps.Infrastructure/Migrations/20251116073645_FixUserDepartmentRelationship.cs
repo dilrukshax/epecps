@@ -72,7 +72,7 @@ namespace Epecps.Infrastructure.Migrations
                 column: "ActorUserId",
                 principalTable: "Users",
                 principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Evaluations_Users_EmployeeId",
@@ -80,7 +80,7 @@ namespace Epecps.Infrastructure.Migrations
                 column: "EmployeeId",
                 principalTable: "Users",
                 principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Evaluations_Users_ReportingManagerId",
@@ -88,7 +88,7 @@ namespace Epecps.Infrastructure.Migrations
                 column: "ReportingManagerId",
                 principalTable: "Users",
                 principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Evaluations_Users_TeamLeadId",
@@ -96,7 +96,7 @@ namespace Epecps.Infrastructure.Migrations
                 column: "TeamLeadId",
                 principalTable: "Users",
                 principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_PeerAssignments_Users_PeerUserId",
@@ -104,7 +104,7 @@ namespace Epecps.Infrastructure.Migrations
                 column: "PeerUserId",
                 principalTable: "Users",
                 principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_PromotionCases_Users_GmDecidedById",
@@ -126,7 +126,7 @@ namespace Epecps.Infrastructure.Migrations
                 column: "ReviewerUserId",
                 principalTable: "Users",
                 principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
         }
 
         /// <inheritdoc />

@@ -34,3 +34,8 @@ epecps-web/yarn-error.log*
 epecps-web/.env
 epecps-web/.env.* 
 !epecps-web/.env.example
+
+# Root env files (docker/local overrides)
+.env
+.env.*
+!.env.docker.example

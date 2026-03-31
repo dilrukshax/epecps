@@ -1,0 +1,12 @@
+.git
+.gitignore
+.vscode
+.vs
+.idea
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/.angular
+**/TestResults
+docs

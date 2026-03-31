@@ -42,3 +42,16 @@ public class ValidationException : Exception
 
     public Dictionary<string, string[]>? Errors { get; }
 }
+
+/// <summary>
+/// Exception thrown for conflicts with current resource state
+/// </summary>
+public class ConflictException : Exception
+{
+    public ConflictException(string code, string message) : base(message)
+    {
+        Code = code;
+    }
+
+    public string Code { get; }
+}

@@ -17,11 +17,16 @@ public class ReviewScoringService : IReviewScoringService
 {
     private readonly EpecpsDbContext _context;
     private readonly IEmailService _emailService;
+    private readonly IWorkflowV2Service _workflowV2Service;
 
-    public ReviewScoringService(EpecpsDbContext context, IEmailService emailService)
+    public ReviewScoringService(
+        EpecpsDbContext context,
+        IEmailService emailService,
+        IWorkflowV2Service workflowV2Service)
     {
         _context = context;
         _emailService = emailService;
+        _workflowV2Service = workflowV2Service;
     }
 
     public async Task<ReviewScoringResponseDto> SubmitRmReviewScoringAsync(
@@ -188,6 +193,11 @@ public class ReviewScoringService : IReviewScoringService
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        if (string.Equals(evaluation.WorkflowVersion, "v2", StringComparison.OrdinalIgnoreCase))
+        {
+            await _workflowV2Service.TryAdvanceAfterParallelReviewAsync(evaluationId, cancellationToken);
+        }
+
         // Send confirmation notification
         var notification = new Notification
         {
@@ -341,6 +351,11 @@ public class ReviewScoringService : IReviewScoringService
         _context.Set<AuditLog>().Add(auditLog);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        if (string.Equals(evaluation.WorkflowVersion, "v2", StringComparison.OrdinalIgnoreCase))
+        {
+            await _workflowV2Service.TryAdvanceAfterParallelReviewAsync(evaluationId, cancellationToken);
+        }
 
         return new ReviewScoringResponseDto
         {
@@ -593,6 +608,11 @@ public class ReviewScoringService : IReviewScoringService
         });
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        if (string.Equals(evaluation.WorkflowVersion, "v2", StringComparison.OrdinalIgnoreCase))
+        {
+            await _workflowV2Service.TryAdvanceAfterParallelReviewAsync(evaluationId, cancellationToken);
+        }
 
         return new ReviewScoringResponseDto
         {

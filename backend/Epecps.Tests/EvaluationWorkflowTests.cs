@@ -16,10 +16,12 @@ namespace Epecps.Tests;
 public class EvaluationWorkflowTests
 {
     private readonly Mock<IEmailService> _emailServiceMock;
+    private readonly Mock<IWorkflowV2Service> _workflowV2ServiceMock;
     
     public EvaluationWorkflowTests()
     {
         _emailServiceMock = new Mock<IEmailService>();
+        _workflowV2ServiceMock = new Mock<IWorkflowV2Service>();
         // Setup email service to do nothing (async completion)
         _emailServiceMock
             .Setup(x => x.SendEvaluationNotificationAsync(
@@ -163,7 +165,7 @@ public class EvaluationWorkflowTests
     {
         // Arrange
         var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
-        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object);
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
 
         // Act
         var evaluation = await workflowService.StartEvaluationForGoalSetAsync(employeeId, goalSetId, cycleId);
@@ -194,7 +196,7 @@ public class EvaluationWorkflowTests
     {
         // Arrange
         var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
-        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object);
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
         
         // Submit goal set first
         var evaluation = await workflowService.StartEvaluationForGoalSetAsync(employeeId, goalSetId, cycleId);
@@ -230,7 +232,7 @@ public class EvaluationWorkflowTests
     {
         // Arrange
         var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
-        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object);
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
         var personalGoalService = new PersonalGoalService(context, workflowService);
 
         // Submit goal set and get RM approval
@@ -284,7 +286,7 @@ public class EvaluationWorkflowTests
     {
         // Arrange
         var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
-        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object);
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
         
         // Submit goal set first
         var evaluation = await workflowService.StartEvaluationForGoalSetAsync(employeeId, goalSetId, cycleId);
@@ -313,7 +315,7 @@ public class EvaluationWorkflowTests
     {
         // Arrange
         var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
-        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object);
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
         var personalGoalService = new PersonalGoalService(context, workflowService);
 
         // Submit goal set but DON'T get RM approval
@@ -332,7 +334,7 @@ public class EvaluationWorkflowTests
     {
         // Arrange
         var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
-        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object);
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
         var personalGoalService = new PersonalGoalService(context, workflowService);
 
         // Submit and approve

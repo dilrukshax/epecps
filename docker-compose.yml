@@ -1,0 +1,102 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    container_name: epecps-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  backend-migrator:
+    profiles:
+      - migrate
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: epecps-backend-migrator
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      DisableHttpsRedirection: "true"
+      ConnectionStrings__DefaultConnection: Server=db,1433;Database=EpecpsDb;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true
+      Database__AutoMigrate: "false"
+      Database__AutoSeed: "true"
+      Database__MigrateOnly: "true"
+      Database__IgnorePendingModelChangesWarning: "true"
+      Database__RecreateIfCoreTablesMissing: "true"
+      Database__StartupRetryCount: "15"
+      Database__StartupRetryDelaySeconds: "5"
+      Jwt__Issuer: Epecps
+      Jwt__Audience: EpecpsWeb
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY}
+      Jwt__AccessTokenMinutes: "60"
+      Jwt__RefreshTokenDays: "14"
+      SuperAdmin__Email: ${SUPER_ADMIN_EMAIL:-superadmin@company.com}
+      SuperAdmin__Password: ${SUPER_ADMIN_PASSWORD:-CHANGE_THIS_SUPERADMIN_PASSWORD}
+      SuperAdmin__FullName: Super Admin
+      EmailSettings__EnableBackgroundProcessing: "false"
+      EmailSettings__BaseUrl: http://localhost:4200
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: epecps-backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      DisableHttpsRedirection: "true"
+      ConnectionStrings__DefaultConnection: Server=db,1433;Database=EpecpsDb;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true
+      Database__AutoMigrate: "false"
+      Database__AutoSeed: "true"
+      Database__MigrateOnly: "false"
+      Database__IgnorePendingModelChangesWarning: "true"
+      Database__RecreateIfCoreTablesMissing: "true"
+      Database__StartupRetryCount: "15"
+      Database__StartupRetryDelaySeconds: "5"
+      Cors__AllowedOrigins__0: http://localhost:4200
+      Cors__AllowedOrigins__1: http://127.0.0.1:4200
+      Cors__AllowedOrigins__2: http://localhost:64291
+      Cors__AllowedOrigins__3: http://127.0.0.1:64291
+      Jwt__Issuer: Epecps
+      Jwt__Audience: EpecpsWeb
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY}
+      Jwt__AccessTokenMinutes: "60"
+      Jwt__RefreshTokenDays: "14"
+      SuperAdmin__Email: ${SUPER_ADMIN_EMAIL:-superadmin@company.com}
+      SuperAdmin__Password: ${SUPER_ADMIN_PASSWORD:-CHANGE_THIS_SUPERADMIN_PASSWORD}
+      SuperAdmin__FullName: Super Admin
+      EmailSettings__EnableBackgroundProcessing: "false"
+      EmailSettings__BaseUrl: http://localhost:4200
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/epecps-web/Dockerfile
+    container_name: epecps-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+
+volumes:
+  sqlserver_data:

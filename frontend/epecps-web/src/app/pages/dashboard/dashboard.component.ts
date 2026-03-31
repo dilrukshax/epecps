@@ -1,8 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { MsalService } from '@azure/msal-angular';
 import { DashboardService } from '../../services/dashboard.service';
 import { DashboardDataDto } from '../../models/dashboard.models';
+import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -21,17 +21,25 @@ export class DashboardComponent implements OnInit {
   dashboardError: string | null = null;
 
   constructor(
-    private authService: MsalService,
+    private authService: AuthService,
     private router: Router,
     private dashboardService: DashboardService
   ) {}
 
   ngOnInit(): void {
-    const account = this.authService.instance.getActiveAccount();
-    if (account) {
-      this.userName = account.name || '';
-      this.userEmail = account.username || '';
-      this.userRoles = account.idTokenClaims?.['roles'] as string[] || [];
+    const user = this.authService.getCurrentUser();
+    if (user) {
+      this.userName = user.fullName || '';
+      this.userEmail = user.email || '';
+      this.userRoles = user.roles || [];
+    } else if (this.authService.isAuthenticated()) {
+      this.authService.getMe().subscribe({
+        next: (me) => {
+          this.userName = me.fullName || '';
+          this.userEmail = me.email || '';
+          this.userRoles = me.roles || [];
+        }
+      });
     }
 
     // Load dashboard data for all users
@@ -56,10 +64,12 @@ export class DashboardComponent implements OnInit {
   }
 
   getStatusColor(status: string): string {
-    if (status.includes('Completed')) return 'text-green-600';
-    if (status.includes('Rejected')) return 'text-red-600';
-    if (status.includes('Pending')) return 'text-yellow-600';
-    if (status.includes('Approved')) return 'text-blue-600';
+    const normalized = status.toLowerCase();
+    if (normalized.includes('completed')) return 'text-green-600';
+    if (normalized.includes('rejected')) return 'text-red-600';
+    if (normalized.includes('pending')) return 'text-yellow-600';
+    if (normalized.includes('approved')) return 'text-blue-600';
+    if (normalized.includes('deferred')) return 'text-indigo-600';
     return 'text-gray-600';
   }
 
@@ -122,16 +132,21 @@ export class DashboardComponent implements OnInit {
     this.router.navigate(['/employee/hr-reports']);
   }
 
+  navigateToHrPipCases(): void {
+    this.router.navigate(['/employee/hr-pip-cases']);
+  }
+
   navigateToAdminDashboard(): void {
     this.router.navigate(['/admin/dashboard']);
   }
 
   hasHrRole(): boolean {
-    return this.userRoles.includes('HR');
+    return this.userRoles.includes('HR') || this.userRoles.includes('SuperAdmin');
   }
 
   hasAdminRole(): boolean {
     return this.userRoles.includes('Admin') || 
+           this.userRoles.includes('SuperAdmin') ||
            this.userRoles.includes('HOD') || 
            this.userRoles.includes('GM');
   }

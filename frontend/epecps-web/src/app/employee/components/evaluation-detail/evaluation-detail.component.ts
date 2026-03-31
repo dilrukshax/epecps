@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { MsalService } from '@azure/msal-angular';
 import { EvaluationService } from '../../../services/evaluation.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import {
   EvaluationDetailDto,
   ReviewDto,
@@ -13,7 +13,10 @@ import {
   SubmitRmScoringDto,
   RmItemScoreDto,
   SubmitOverallScoringDto,
-  SubmitReviewWithGoalScoresDto
+  SubmitReviewWithGoalScoresDto,
+  SubmitActivationPlanRequestDto,
+  ActivationPlanDecisionDto,
+  SubmitSelfEvaluationV2Dto
 } from '../../../models/evaluation.models';
 
 @Component({
@@ -34,6 +37,20 @@ export class EvaluationDetailComponent implements OnInit {
   comment = '';
   showCommentBox = false;
   actionType: 'approve' | 'reject' | 'assign-peers' | null = null;
+
+  // Workflow v2 activation state
+  activationMethods: { [goalAssignmentId: string]: string } = {};
+  submittingActivationPlan = false;
+  processingActivationDecision = false;
+  activationDecisionComment = '';
+
+  // Workflow v2 self-evaluation state
+  submittingSelfEvaluation = false;
+  loadingSelfEvaluationPeers = false;
+  selfEvaluationScore = 70;
+  selfEvaluationComment = '';
+  selfEvaluationPeerUserId1: number | null = null;
+  selfEvaluationPeerUserId2: number | null = null;
 
   // Peer assignment state
   showPeerAssignment = false;
@@ -58,6 +75,8 @@ export class EvaluationDetailComponent implements OnInit {
   processingGmDecision = false;
   gmComment = '';
   gmApproveDecision = true;
+  gmVacancyAvailable = true;
+  gmVacancySelection: '' | 'yes' | 'no' = '';
 
   // HR action state
   showHrActions = false;
@@ -109,7 +128,7 @@ export class EvaluationDetailComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     private evaluationService: EvaluationService,
-    private authService: MsalService
+    private authService: AuthService
   ) {}
 
   ngOnInit(): void {
@@ -127,8 +146,9 @@ export class EvaluationDetailComponent implements OnInit {
       next: (evaluation) => {
         this.evaluation = evaluation;
         this.resolveCurrentUserId();
-        this.determineUserRole();
         this.determineGoalOwnership();
+        this.determineUserRole();
+        this.initializeActivationState();
         this.checkForPendingReview();
         this.loading = false;
       },
@@ -146,8 +166,7 @@ export class EvaluationDetailComponent implements OnInit {
   resolveCurrentUserId(): void {
     if (!this.evaluation) return;
 
-    const account = this.authService.instance.getActiveAccount();
-    const currentUserEmail = account?.username?.toLowerCase() || '';
+    const currentUserEmail = this.authService.getCurrentUser()?.email?.toLowerCase() || '';
     const emailPrefix = currentUserEmail.split('@')[0];
     
     console.log('=== resolveCurrentUserId ===');
@@ -236,6 +255,14 @@ export class EvaluationDetailComponent implements OnInit {
       reviewerRole: r.reviewerRole,
       status: r.status
     })));
+
+    // In workflow-v2, HOD finalization is a dedicated action and does not require
+    // manual per-goal scoring in the UI.
+    if (this.isWorkflowV2() && this.evaluation.status.toLowerCase().includes('v2_pending_hod_review')) {
+      this.hasPendingScoringRequirement = false;
+      this.pendingReviewId = null;
+      return;
+    }
 
     // Find the first pending review for current user that requires action
     const pendingReview = allPendingReviewsForCurrentUser.find((r) => {
@@ -472,57 +499,97 @@ export class EvaluationDetailComponent implements OnInit {
     this.showGmActions = false;
     this.showHrActions = false;
     this.tlCombinedReviewMode = false;
+    this.gmVacancySelection = '';
+
+    if (status.includes('v2_pending_employee_activation') || status.includes('v2_returned_for_activation')) {
+      if (this.isGoalOwner) {
+        this.isActiveApprover = true;
+        this.currentUserRole = 'Employee';
+      }
+      return;
+    }
+
+    if (status.includes('v2_pending_tl_activation_review')) {
+      if (this.currentUserHasRole('TL')) {
+        this.isActiveApprover = true;
+        this.currentUserRole = 'TL';
+      }
+      return;
+    }
+
+    if (status.includes('v2_active_goals')) {
+      if (this.isGoalOwner) {
+        this.isActiveApprover = true;
+        this.currentUserRole = 'Employee';
+        this.loadSelfEvaluationPeers();
+      }
+      return;
+    }
     
     // Check if peer assignment is needed (after TL has already approved)
     if (status.includes('pending_peer_assignment')) {
-      this.needsPeerAssignment = true;
-      this.isActiveApprover = false;
-      this.currentUserRole = 'TL';
-      console.log('User role: TL (peer assignment stage)');
-      this.loadAvailablePeers();
+      if (this.currentUserHasRole('TL')) {
+        this.needsPeerAssignment = true;
+        this.isActiveApprover = false;
+        this.currentUserRole = 'TL';
+        console.log('User role: TL (peer assignment stage)');
+        this.loadAvailablePeers();
+      }
       return;
     }
 
     // Determine active approver role
     if (status.includes('pending_hod')) {
-      this.isActiveApprover = true;
-      this.showGmActions = false;
-      this.currentUserRole = 'HOD';
-      console.log('User role: HOD');
+      if (this.currentUserHasRole('HOD')) {
+        this.isActiveApprover = true;
+        this.showGmActions = false;
+        this.currentUserRole = 'HOD';
+        console.log('User role: HOD');
+      }
     } else if (status.includes('pending_gm')) {
-      this.isActiveApprover = false;
-      this.showGmActions = true;
-      this.currentUserRole = 'GM';
-      console.log('User role: GM');
+      if (this.currentUserHasRole('GM')) {
+        this.isActiveApprover = false;
+        this.showGmActions = true;
+        this.currentUserRole = 'GM';
+        console.log('User role: GM');
+      }
     } else if (status.includes('pending_hr')) {
-      this.isActiveApprover = false;
-      this.showHrActions = true;
-      this.currentUserRole = 'HR';
-      console.log('User role: HR');
+      if (this.currentUserHasRole('HR')) {
+        this.isActiveApprover = false;
+        this.showHrActions = true;
+        this.currentUserRole = 'HR';
+        console.log('User role: HR');
+      }
     } else if (status.includes('pending_rm_review_postcompletion') || 
                status === 'pending_rm_review_postcompletion') {
-      this.isActiveApprover = true;
-      this.currentUserRole = 'RM';
-      console.log('User role: RM (post-completion - scoring required)');
-      this.initializeRmScoring();
+      if (this.currentUserHasRole('RM')) {
+        this.isActiveApprover = true;
+        this.currentUserRole = 'RM';
+        console.log('User role: RM (post-completion - scoring required)');
+        this.initializeRmScoring();
+      }
     } else if (status.includes('pending_rm')) {
-      this.isActiveApprover = true;
-      this.currentUserRole = 'RM';
-      console.log('User role: RM (first approval - no scoring)');
+      if (this.currentUserHasRole('RM')) {
+        this.isActiveApprover = true;
+        this.currentUserRole = 'RM';
+        console.log('User role: RM (first approval - no scoring)');
+      }
     } else if (status.includes('pending_tl')) {
       // TL Review stage - enable combined mode (score + peer assignment)
-      this.isActiveApprover = true;
-      this.currentUserRole = 'TL';
-      this.tlCombinedReviewMode = true;
-      console.log('User role: TL (combined review mode - score + peer assignment)');
-      // Load available peers for the combined form
-      this.loadAvailablePeers();
+      if (this.currentUserHasRole('TL')) {
+        this.isActiveApprover = true;
+        this.currentUserRole = 'TL';
+        this.tlCombinedReviewMode = true;
+        console.log('User role: TL (combined review mode - score + peer assignment)');
+        // Load available peers for the combined form
+        this.loadAvailablePeers();
+      }
     } else if (status.includes('pending_peer')) {
       // For peer reviews, check if current user has ANY pending review using userId
       console.log('Checking for pending peer reviews...');
       console.log('Current userId:', this.currentUserId);
       
-      if (this.currentUserId !== null) {
+      if (this.currentUserHasRole('Peer') && this.currentUserId !== null) {
         // Get all peer reviews for the current user
         const allPeerReviewsForUser = this.evaluation.reviews.filter(r => 
           r.reviewerRole === ReviewerRole.Peer && r.reviewerUserId === this.currentUserId
@@ -557,12 +624,226 @@ export class EvaluationDetailComponent implements OnInit {
     console.log('Final: isActiveApprover=', this.isActiveApprover, ', currentUserRole=', this.currentUserRole, ', tlCombinedReviewMode=', this.tlCombinedReviewMode);
   }
 
+  private initializeActivationState(): void {
+    if (!this.evaluation) return;
+
+    this.activationMethods = {};
+    this.evaluation.goals.forEach(goal => {
+      if (!goal.goalAssignmentId) {
+        return;
+      }
+
+      this.activationMethods[goal.goalAssignmentId] = goal.activationMethod || '';
+    });
+  }
+
+  isEmployeeActivationStage(): boolean {
+    if (!this.evaluation) return false;
+    const status = this.evaluation.status.toLowerCase();
+    return this.isGoalOwner &&
+      (status.includes('v2_pending_employee_activation') || status.includes('v2_returned_for_activation'));
+  }
+
+  isTlActivationStage(): boolean {
+    if (!this.evaluation) return false;
+    return this.currentUserRole === 'TL' && this.evaluation.status.toLowerCase().includes('v2_pending_tl_activation_review');
+  }
+
+  isWorkflowV2(): boolean {
+    if (!this.evaluation) return false;
+    return (this.evaluation.workflowVersion || '').toLowerCase() === 'v2'
+      || this.evaluation.status.toLowerCase().startsWith('v2_');
+  }
+
+  isEmployeeSelfEvaluationStage(): boolean {
+    if (!this.evaluation) return false;
+    return this.isGoalOwner && this.isWorkflowV2() && this.evaluation.status.toLowerCase().includes('v2_active_goals');
+  }
+
+  isV2HodFinalizeStage(): boolean {
+    if (!this.evaluation) return false;
+    return this.currentUserRole === 'HOD'
+      && this.isWorkflowV2()
+      && this.evaluation.status.toLowerCase().includes('v2_pending_hod_review');
+  }
+
+  private loadSelfEvaluationPeers(): void {
+    if (!this.isEmployeeSelfEvaluationStage()) {
+      return;
+    }
+
+    if (this.availablePeers.length > 0 || this.loadingSelfEvaluationPeers) {
+      return;
+    }
+
+    this.loadingSelfEvaluationPeers = true;
+    this.evaluationService.getAvailablePeers(this.evaluationId).subscribe({
+      next: (peers) => {
+        this.availablePeers = peers.map(p => ({
+          userId: p.userId,
+          name: `${p.fullName}${p.department ? ` (${p.department})` : ''}`
+        }));
+        this.loadingSelfEvaluationPeers = false;
+      },
+      error: (err) => {
+        this.loadingSelfEvaluationPeers = false;
+        const errorMessage = err.error?.message || err.message || 'Failed to load available peer options.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
+  getSelfEvaluationPeerOptions(): Array<{ userId: number; name: string }> {
+    if (!this.evaluation) return [];
+
+    const excluded = new Set<number>([
+      this.evaluation.employeeId,
+      this.evaluation.reportingManagerId,
+      this.evaluation.teamLeadId
+    ]);
+
+    return this.availablePeers.filter(peer => !excluded.has(peer.userId));
+  }
+
+  canSubmitSelfEvaluationV2(): boolean {
+    if (!this.evaluation || !this.isEmployeeSelfEvaluationStage()) return false;
+    if (this.selfEvaluationScore < 0 || this.selfEvaluationScore > 100) return false;
+    if (!this.selfEvaluationPeerUserId1 || !this.selfEvaluationPeerUserId2) return false;
+    if (this.selfEvaluationPeerUserId1 === this.selfEvaluationPeerUserId2) return false;
+    return true;
+  }
+
+  submitSelfEvaluationV2(): void {
+    if (!this.evaluation || this.submittingSelfEvaluation) return;
+
+    if (!this.canSubmitSelfEvaluationV2()) {
+      this.showToast('error', 'Please provide score and two different peer reviewers before submitting.');
+      return;
+    }
+
+    const payload: SubmitSelfEvaluationV2Dto = {
+      selfScore: this.selfEvaluationScore,
+      comment: this.selfEvaluationComment || undefined,
+      peerUserId1: this.selfEvaluationPeerUserId1!,
+      peerUserId2: this.selfEvaluationPeerUserId2!
+    };
+
+    this.submittingSelfEvaluation = true;
+    this.error = null;
+
+    this.evaluationService.submitSelfEvaluationV2(this.evaluationId, payload).subscribe({
+      next: () => {
+        this.submittingSelfEvaluation = false;
+        this.showToast('success', 'Self-evaluation submitted. TL, RM, and peer reviews are now in progress.');
+        this.loadEvaluation();
+      },
+      error: (err) => {
+        this.submittingSelfEvaluation = false;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to submit self-evaluation.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
+  getActivationMethod(goal: GoalDto): string {
+    if (!goal.goalAssignmentId) return '';
+    return this.activationMethods[goal.goalAssignmentId] || '';
+  }
+
+  setActivationMethod(goal: GoalDto, value: string): void {
+    if (!goal.goalAssignmentId) return;
+    this.activationMethods[goal.goalAssignmentId] = value;
+  }
+
+  canSubmitActivationPlan(): boolean {
+    if (!this.evaluation || !this.evaluation.goalSetId) return false;
+    const activationGoals = this.evaluation.goals.filter(g => !!g.goalAssignmentId);
+    if (activationGoals.length < 5) return false;
+
+    return activationGoals.every(goal => {
+      const method = this.getActivationMethod(goal).trim();
+      return method.length > 0;
+    });
+  }
+
+  submitActivationPlan(): void {
+    if (!this.evaluation || !this.evaluation.goalSetId || this.submittingActivationPlan) return;
+
+    const goals = this.evaluation.goals
+      .filter(g => !!g.goalAssignmentId)
+      .map(g => ({
+        goalAssignmentId: g.goalAssignmentId!,
+        method: this.getActivationMethod(g).trim()
+      }));
+
+    const payload: SubmitActivationPlanRequestDto = { goals };
+
+    this.submittingActivationPlan = true;
+    this.error = null;
+
+    this.evaluationService.submitActivationPlan(this.evaluation.goalSetId, payload).subscribe({
+      next: () => {
+        this.submittingActivationPlan = false;
+        this.showToast('success', 'Activation plan submitted successfully.');
+        this.loadEvaluation();
+      },
+      error: (err) => {
+        this.submittingActivationPlan = false;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to submit activation plan.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
+  processActivationDecision(approved: boolean): void {
+    if (!this.evaluation || this.processingActivationDecision) return;
+
+    if (!approved && !this.activationDecisionComment.trim()) {
+      this.showToast('error', 'Comment is required when returning activation plan.');
+      return;
+    }
+
+    const rejectedGoalIds = approved
+      ? []
+      : this.evaluation.goals
+          .filter(g => !!g.goalAssignmentId)
+          .map(g => g.goalAssignmentId!);
+
+    const payload: ActivationPlanDecisionDto = {
+      approved,
+      comment: this.activationDecisionComment || undefined,
+      rejectedGoalAssignmentIds: rejectedGoalIds
+    };
+
+    this.processingActivationDecision = true;
+    this.error = null;
+
+    this.evaluationService.tlActivationDecision(this.evaluationId, payload).subscribe({
+      next: () => {
+        this.processingActivationDecision = false;
+        this.activationDecisionComment = '';
+        this.showToast('success', approved ? 'Activation plan approved.' : 'Activation plan returned for rework.');
+        this.loadEvaluation();
+      },
+      error: (err) => {
+        this.processingActivationDecision = false;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to process activation decision.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
   getUserRolesFromStatus(status: string): string[] {
     const roles: string[] = ['Employee'];
     if (status.includes('hod')) roles.push('HOD');
     if (status.includes('gm')) roles.push('GM');
     if (status.includes('hr')) roles.push('HR');
     return roles;
+  }
+
+  private currentUserHasRole(role: string): boolean {
+    const currentRoles = (this.authService.getCurrentUser()?.roles || []).map(r => r.toUpperCase());
+    return currentRoles.includes(role.toUpperCase()) || currentRoles.includes('SUPERADMIN');
   }
 
   loadAvailablePeers(): void {
@@ -646,6 +927,11 @@ export class EvaluationDetailComponent implements OnInit {
 
   approveEvaluation(): void {
     if (this.approving || !this.evaluation) return;
+
+    if (this.isV2HodFinalizeStage()) {
+      this.finalizeHodV2();
+      return;
+    }
 
     // Check if user has pending scoring requirement that hasn't been fulfilled
     if (this.hasPendingScoringRequirement && this.pendingReviewId) {
@@ -895,8 +1181,7 @@ export class EvaluationDetailComponent implements OnInit {
   determineGoalOwnership(): void {
     if (!this.evaluation) return;
 
-    const account = this.authService.instance.getActiveAccount();
-    const currentUserEmail = account?.username?.toLowerCase() || '';
+    const currentUserEmail = this.authService.getCurrentUser()?.email?.toLowerCase() || '';
     
     this.isGoalOwner = this.evaluation.employeeEmail?.toLowerCase() === currentUserEmail;
     
@@ -1099,6 +1384,31 @@ export class EvaluationDetailComponent implements OnInit {
     return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   }
 
+  shouldShowParallelReviewProgress(): boolean {
+    if (!this.evaluation || !this.isWorkflowV2()) return false;
+    return this.evaluation.reviews.some(r =>
+      r.reviewerRole === ReviewerRole.TL ||
+      r.reviewerRole === ReviewerRole.RM ||
+      r.reviewerRole === ReviewerRole.Peer);
+  }
+
+  getParallelReviewerRows(): Array<{ label: string; status: string }> {
+    if (!this.evaluation) return [];
+
+    const tlReview = this.evaluation.reviews.find(r => r.reviewerRole === ReviewerRole.TL);
+    const rmReview = this.evaluation.reviews.find(r => r.reviewerRole === ReviewerRole.RM);
+    const peerReviews = this.evaluation.reviews
+      .filter(r => r.reviewerRole === ReviewerRole.Peer)
+      .slice(0, 2);
+
+    return [
+      { label: 'Team Lead', status: tlReview?.status || 'Pending' },
+      { label: 'Reporting Manager', status: rmReview?.status || 'Pending' },
+      { label: 'Peer Reviewer 1', status: peerReviews[0]?.status || 'Pending' },
+      { label: 'Peer Reviewer 2', status: peerReviews[1]?.status || 'Pending' }
+    ];
+  }
+
   getRoleName(role: ReviewerRole | number): string {
     const roleNum = typeof role === 'number' ? role : role;
     const roleNames: { [key: number]: string } = {
@@ -1190,6 +1500,31 @@ export class EvaluationDetailComponent implements OnInit {
   }
 
   // HOD Actions
+  finalizeHodV2(): void {
+    if (!this.evaluation || this.approving) return;
+
+    if (!confirm('Finalize HOD review and route by threshold score?')) {
+      return;
+    }
+
+    this.approving = true;
+    this.error = null;
+
+    this.evaluationService.hodFinalizeV2(this.evaluationId, this.hodComment || undefined).subscribe({
+      next: () => {
+        this.approving = false;
+        this.showToast('success', 'HOD finalization completed.');
+        this.hodComment = '';
+        this.loadEvaluation();
+      },
+      error: (err) => {
+        this.approving = false;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to finalize HOD review.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
   recommendPromotionToGm(): void {
     if (this.recommendingPromotion || !this.evaluation) return;
 
@@ -1248,11 +1583,27 @@ export class EvaluationDetailComponent implements OnInit {
   }
 
   // GM Actions
+  setGmVacancySelection(value: 'yes' | 'no'): void {
+    this.gmVacancySelection = value;
+    this.gmVacancyAvailable = value === 'yes';
+  }
+
   processGmDecision(): void {
     if (this.processingGmDecision || !this.evaluation) return;
 
+    const isWorkflowV2 =
+      (this.evaluation.workflowVersion || '').toLowerCase() === 'v2' ||
+      this.evaluation.status.toLowerCase().startsWith('v2_');
+
+    if (isWorkflowV2 && this.gmApproveDecision && this.gmVacancySelection === '') {
+      this.showToast('error', 'Please confirm vacancy availability before submitting GM decision.');
+      return;
+    }
+
     const confirmMessage = this.gmApproveDecision
-      ? 'Are you sure you want to approve this promotion? HR will be notified for processing.'
+      ? isWorkflowV2 && !this.gmVacancyAvailable
+        ? 'Approve recommendation with NO vacancy available? This will defer promotion to a future cycle.'
+        : 'Are you sure you want to approve this promotion? HR will be notified for processing.'
       : 'Are you sure you want to decline this promotion? The employee will be notified.';
 
     if (!confirm(confirmMessage)) {
@@ -1262,14 +1613,28 @@ export class EvaluationDetailComponent implements OnInit {
     this.processingGmDecision = true;
     this.error = null;
 
-    this.evaluationService.gmDecision(this.evaluationId, this.gmApproveDecision, this.gmComment || undefined).subscribe({
+    const request$ = isWorkflowV2
+      ? this.evaluationService.gmV2Decision(
+          this.evaluationId,
+          this.gmApproveDecision,
+          this.gmVacancyAvailable,
+          this.gmComment || undefined)
+      : this.evaluationService.gmDecision(
+          this.evaluationId,
+          this.gmApproveDecision,
+          this.gmComment || undefined);
+
+    request$.subscribe({
       next: () => {
         const successMessage = this.gmApproveDecision
-          ? 'Promotion approved successfully. HR has been notified.'
+          ? isWorkflowV2 && !this.gmVacancyAvailable
+            ? 'GM decision saved. Promotion deferred because no vacancy is available.'
+            : 'Promotion approved successfully. HR has been notified.'
           : 'Promotion declined. Employee has been notified.';
         this.showToast('success', successMessage);
         this.processingGmDecision = false;
         this.gmComment = '';
+        this.gmVacancySelection = '';
         this.loadEvaluation();
       },
       error: (err) => {
@@ -1282,8 +1647,19 @@ export class EvaluationDetailComponent implements OnInit {
   }
 
   // HR Actions
+  openPipCaseManagement(): void {
+    this.router.navigate(['/employee/hr-pip-cases'], {
+      queryParams: { evaluationId: this.evaluationId }
+    });
+  }
+
   processHrAction(): void {
     if (this.processingHrAction || !this.evaluation) return;
+
+    if (this.evaluation.status.toLowerCase().includes('v2_pending_hr_low_performer')) {
+      this.openPipCaseManagement();
+      return;
+    }
 
     const confirmMessage = this.hrProceedDecision
       ? 'Are you sure you want to process this promotion? The employee will be notified with congratulations.'

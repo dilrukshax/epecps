@@ -1,5 +1,5 @@
 using Epecps.Application.DTOs.Evaluations;
-using Epecps.Application.DTOs.Evaluations;
+using Epecps.Application.DTOs.WorkflowV2;
 using Epecps.Application.Exceptions;
 using Epecps.Application.Interfaces;
 using Epecps.Domain.Entities;
@@ -17,6 +17,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 {
     private readonly EpecpsDbContext _context;
     private readonly IEmailService _emailService;
+    private readonly IWorkflowV2Service _workflowV2Service;
 
     // Evaluation status constants
     private const string STATUS_PENDING_RM_REVIEW = "Pending_RM_Review";
@@ -33,6 +34,17 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
     private const string STATUS_COMPLETED_PROMOTION_APPROVED = "Completed_PromotionApproved";
     private const string STATUS_COMPLETED_PROMOTION_REJECTED = "Completed_PromotionRejected";
     private const string STATUS_REJECTED = "Rejected";
+    private const string STATUS_V2_PENDING_EMPLOYEE_ACTIVATION = "V2_PENDING_EMPLOYEE_ACTIVATION";
+    private const string STATUS_V2_RETURNED_FOR_ACTIVATION = "V2_RETURNED_FOR_ACTIVATION";
+    private const string STATUS_V2_PENDING_TL_ACTIVATION_REVIEW = "V2_PENDING_TL_ACTIVATION_REVIEW";
+    private const string STATUS_V2_ACTIVE_GOALS = "V2_ACTIVE_GOALS";
+    private const string STATUS_V2_PENDING_PARALLEL_REVIEWS = "V2_PENDING_PARALLEL_REVIEWS";
+    private const string STATUS_V2_PENDING_HOD_REVIEW = "V2_PENDING_HOD_REVIEW";
+    private const string STATUS_V2_PENDING_GM_DECISION = "V2_PENDING_GM_DECISION";
+    private const string STATUS_V2_PENDING_HR_PROMOTION = "V2_PENDING_HR_PROMOTION";
+    private const string STATUS_V2_PENDING_HR_LOW_PERFORMER = "V2_PENDING_HR_LOW_PERFORMER";
+    private const string STATUS_V2_COMPLETED_PROMOTION_APPROVED = "V2_COMPLETED_PROMOTION_APPROVED";
+    private const string STATUS_V2_COMPLETED_NO_PROMOTION = "V2_COMPLETED_NO_PROMOTION";
 
     // Review status constants
     private const string REVIEW_STATUS_PENDING = "Pending";
@@ -43,10 +55,14 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
     // Score threshold for promotion
     private const decimal PROMOTION_THRESHOLD = 80.0m;
 
-    public EvaluationWorkflowService(EpecpsDbContext context, IEmailService emailService)
+    public EvaluationWorkflowService(
+        EpecpsDbContext context,
+        IEmailService emailService,
+        IWorkflowV2Service workflowV2Service)
     {
         _context = context;
         _emailService = emailService;
+        _workflowV2Service = workflowV2Service;
     }
 
     public async Task<Evaluation> StartEvaluationForGoalSetAsync(int employeeId, Guid goalSetId, int cycleId, CancellationToken cancellationToken = default)
@@ -273,7 +289,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 var employeeNotification = new Notification
                 {
                     UserId = evaluation.EmployeeId,
-                    Subject = "Goal Set Approved – Ready to Start!",
+                    Subject = "Goal Set Approved â€“ Ready to Start!",
                     Channel = "Email",
                     SentAt = DateTime.UtcNow
                 };
@@ -1131,6 +1147,11 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
     {
         var userRoles = await GetUserRolesAsync(userId, cancellationToken);
         var myEvaluations = new List<MyEvaluationDto>();
+        var managedEmployeeIds = await _context.UserManagerMappings
+            .Where(m => m.ManagerUserId == userId)
+            .Select(m => m.EmployeeUserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
 
         // Get evaluations where I am the employee
         var myEvaluationsAsEmployee = await _context.Set<Evaluation>()
@@ -1159,11 +1180,16 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         myEvaluations.AddRange(myEvaluationsAsEmployee);
 
-        // Get evaluations where I am the RM and status is pending RM review (first or second)
+        // Get evaluations where I am the RM (legacy + workflow-v2 managed employees)
         var rmEvaluations = await _context.Set<Evaluation>()
             .Include(e => e.Employee)
             .Include(e => e.Cycle)
-            .Where(e => e.ReportingManagerId == userId && (e.Status == STATUS_PENDING_RM_REVIEW || e.Status == "Pending_RM_Review_PostCompletion"))
+            .Where(e =>
+                (e.ReportingManagerId == userId || managedEmployeeIds.Contains(e.EmployeeId)) &&
+                (
+                    e.Status == STATUS_PENDING_RM_REVIEW ||
+                    e.Status == "Pending_RM_Review_PostCompletion" ||
+                    e.WorkflowVersion == "v2"))
             .Select(e => new MyEvaluationDto
             {
                 EvaluationId = e.EvaluationId,
@@ -1186,11 +1212,17 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         myEvaluations.AddRange(rmEvaluations);
 
-        // Get evaluations where I am the TL and status is pending TL review
+        // Get evaluations where I am the TL (legacy + workflow-v2 activation/review stages)
         var tlEvaluations = await _context.Set<Evaluation>()
             .Include(e => e.Employee)
             .Include(e => e.Cycle)
-            .Where(e => e.TeamLeadId == userId && (e.Status == STATUS_PENDING_TL_REVIEW || e.Status == STATUS_PENDING_PEER_ASSIGNMENT))
+            .Where(e =>
+                e.TeamLeadId == userId &&
+                (
+                    e.Status == STATUS_PENDING_TL_REVIEW ||
+                    e.Status == STATUS_PENDING_PEER_ASSIGNMENT ||
+                    e.Status == STATUS_V2_PENDING_TL_ACTIVATION_REVIEW ||
+                    e.Status == STATUS_V2_PENDING_PARALLEL_REVIEWS))
             .Select(e => new MyEvaluationDto
             {
                 EvaluationId = e.EvaluationId,
@@ -1223,8 +1255,14 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .ThenInclude(r => r.ReviewScores)
                 .Include(e => e.Reviews)
                 .ThenInclude(r => r.ReviewItems)
-                .Where(e => (e.Status == STATUS_PENDING_GM_DECISION || e.Status.Contains("Completed")) &&
-                           e.EmployeeId != userId)
+                .Where(e =>
+                    (
+                        e.Status == STATUS_PENDING_GM_DECISION ||
+                        e.Status == STATUS_V2_PENDING_GM_DECISION ||
+                        e.Status == "V2_PROMOTION_DEFERRED" ||
+                        e.Status.Contains("Completed")
+                    ) &&
+                    e.EmployeeId != userId)
                 .Select(e => new MyEvaluationDto
                 {
                     EvaluationId = e.EvaluationId,
@@ -1255,8 +1293,14 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .Include(e => e.Employee)
                 .Include(e => e.Cycle)
                 .Include(e => e.Reviews)
-                .Where(e => (e.Status == STATUS_PENDING_HR_PROCESSING || e.Status.Contains("Completed")) &&
-                           e.EmployeeId != userId)
+                .Where(e =>
+                    (
+                        e.Status == STATUS_PENDING_HR_PROCESSING ||
+                        e.Status == STATUS_V2_PENDING_HR_PROMOTION ||
+                        e.Status == STATUS_V2_PENDING_HR_LOW_PERFORMER ||
+                        e.Status.Contains("Completed")
+                    ) &&
+                    e.EmployeeId != userId)
                 .Select(e => new MyEvaluationDto
                 {
                     EvaluationId = e.EvaluationId,
@@ -1291,12 +1335,46 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
     {
         var userRoles = await GetUserRolesAsync(userId, cancellationToken);
         var pendingApprovals = new List<PendingApprovalDto>();
+        var managedEmployeeIds = await _context.UserManagerMappings
+            .Where(m => m.ManagerUserId == userId)
+            .Select(m => m.EmployeeUserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
 
-        // Get evaluations where user is RM and status is pending RM review (first approval)
+        // Workflow-v2 employee actions (activation + self-evaluation)
+        var employeeV2Actions = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Where(e =>
+                e.EmployeeId == userId &&
+                (e.Status == STATUS_V2_PENDING_EMPLOYEE_ACTIVATION ||
+                 e.Status == STATUS_V2_RETURNED_FOR_ACTIVATION ||
+                 e.Status == STATUS_V2_ACTIVE_GOALS))
+            .Select(e => new PendingApprovalDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                RequiredRole = "Employee",
+                SubmittedDate = e.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                    .Select(r => r.SubmittedAt)
+                    .FirstOrDefault(),
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name
+            })
+            .ToListAsync(cancellationToken);
+
+        pendingApprovals.AddRange(employeeV2Actions);
+
+        // Legacy RM first approval
         var rmApprovalsFirst = await _context.Set<Evaluation>()
             .Include(e => e.Employee)
             .Include(e => e.Cycle)
-            .Where(e => e.ReportingManagerId == userId && e.Status == STATUS_PENDING_RM_REVIEW)
+            .Where(e =>
+                (e.ReportingManagerId == userId || managedEmployeeIds.Contains(e.EmployeeId)) &&
+                e.Status == STATUS_PENDING_RM_REVIEW)
             .Select(e => new PendingApprovalDto
             {
                 EvaluationId = e.EvaluationId,
@@ -1315,11 +1393,13 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         pendingApprovals.AddRange(rmApprovalsFirst);
 
-        // Get evaluations where user is RM and status is pending RM review (second approval after employee completion)
+        // Legacy RM second approval
         var rmApprovalsSecond = await _context.Set<Evaluation>()
             .Include(e => e.Employee)
             .Include(e => e.Cycle)
-            .Where(e => e.ReportingManagerId == userId && e.Status == "Pending_RM_Review_PostCompletion")
+            .Where(e =>
+                (e.ReportingManagerId == userId || managedEmployeeIds.Contains(e.EmployeeId)) &&
+                e.Status == "Pending_RM_Review_PostCompletion")
             .Select(e => new PendingApprovalDto
             {
                 EvaluationId = e.EvaluationId,
@@ -1338,7 +1418,36 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         pendingApprovals.AddRange(rmApprovalsSecond);
 
-        // Get evaluations where user is TL and status is pending TL review
+        // Workflow-v2 RM review task (parallel stage)
+        var rmV2ParallelApprovals = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Include(e => e.Reviews)
+            .Where(e =>
+                e.Status == STATUS_V2_PENDING_PARALLEL_REVIEWS &&
+                e.Reviews.Any(r =>
+                    r.ReviewerRole == ReviewerRole.RM &&
+                    r.ReviewerUserId == userId &&
+                    r.Status == REVIEW_STATUS_PENDING))
+            .Select(e => new PendingApprovalDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                RequiredRole = "RM",
+                SubmittedDate = e.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                    .Select(r => r.SubmittedAt)
+                    .FirstOrDefault(),
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name
+            })
+            .ToListAsync(cancellationToken);
+
+        pendingApprovals.AddRange(rmV2ParallelApprovals);
+
+        // Legacy TL approvals
         var tlApprovals = await _context.Set<Evaluation>()
             .Include(e => e.Employee)
             .Include(e => e.Cycle)
@@ -1361,7 +1470,56 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         pendingApprovals.AddRange(tlApprovals);
 
-        // Get evaluations where user is assigned as peer and status is pending peer reviews
+        // Workflow-v2 TL activation review
+        var tlActivationApprovals = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Where(e => e.TeamLeadId == userId && e.Status == STATUS_V2_PENDING_TL_ACTIVATION_REVIEW)
+            .Select(e => new PendingApprovalDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                RequiredRole = "TL",
+                SubmittedDate = null,
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name
+            })
+            .ToListAsync(cancellationToken);
+
+        pendingApprovals.AddRange(tlActivationApprovals);
+
+        // Workflow-v2 TL parallel review
+        var tlV2ParallelApprovals = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Include(e => e.Reviews)
+            .Where(e =>
+                e.Status == STATUS_V2_PENDING_PARALLEL_REVIEWS &&
+                e.Reviews.Any(r =>
+                    r.ReviewerRole == ReviewerRole.TL &&
+                    r.ReviewerUserId == userId &&
+                    r.Status == REVIEW_STATUS_PENDING))
+            .Select(e => new PendingApprovalDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                RequiredRole = "TL",
+                SubmittedDate = e.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                    .Select(r => r.SubmittedAt)
+                    .FirstOrDefault(),
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name
+            })
+            .ToListAsync(cancellationToken);
+
+        pendingApprovals.AddRange(tlV2ParallelApprovals);
+
+        // Legacy peer approvals
         var peerApprovals = await _context.Set<Evaluation>()
             .Include(e => e.Employee)
             .Include(e => e.Cycle)
@@ -1388,13 +1546,55 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         pendingApprovals.AddRange(peerApprovals);
 
-        // Get evaluations where user is HOD and status is pending HOD review
+        // Workflow-v2 peer approvals
+        var peerV2Approvals = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Include(e => e.Reviews)
+            .Where(e =>
+                e.Status == STATUS_V2_PENDING_PARALLEL_REVIEWS &&
+                e.Reviews.Any(r =>
+                    r.ReviewerRole == ReviewerRole.Peer &&
+                    r.ReviewerUserId == userId &&
+                    r.Status == REVIEW_STATUS_PENDING))
+            .Select(e => new PendingApprovalDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                RequiredRole = "Peer",
+                SubmittedDate = e.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Self)
+                    .Select(r => r.SubmittedAt)
+                    .FirstOrDefault(),
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name
+            })
+            .ToListAsync(cancellationToken);
+
+        pendingApprovals.AddRange(peerV2Approvals);
+
+        // HOD approvals (legacy + workflow-v2 with department mapping)
         if (userRoles.Contains("HOD"))
         {
-            var hodApprovals = await _context.Set<Evaluation>()
+            var hodDeptIds = await _context.DepartmentHodMappings
+                .Where(m => m.HodUserId == userId)
+                .Select(m => m.DeptId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var hodApprovalsQuery = _context.Set<Evaluation>()
                 .Include(e => e.Employee)
                 .Include(e => e.Cycle)
-                .Where(e => e.Status == STATUS_PENDING_HOD_REVIEW)
+                .Where(e => e.Status == STATUS_PENDING_HOD_REVIEW || e.Status == STATUS_V2_PENDING_HOD_REVIEW);
+
+            if (hodDeptIds.Count > 0)
+            {
+                hodApprovalsQuery = hodApprovalsQuery.Where(e => hodDeptIds.Contains(e.Employee.DeptId));
+            }
+
+            var hodApprovals = await hodApprovalsQuery
                 .Select(e => new PendingApprovalDto
                 {
                     EvaluationId = e.EvaluationId,
@@ -1403,7 +1603,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     Status = e.Status,
                     RequiredRole = "HOD",
                     SubmittedDate = e.Reviews
-                        .Where(r => r.ReviewerRole == ReviewerRole.Peer)
+                        .Where(r =>
+                            r.ReviewerRole == ReviewerRole.Peer ||
+                            r.ReviewerRole == ReviewerRole.RM ||
+                            r.ReviewerRole == ReviewerRole.TL)
                         .OrderByDescending(r => r.SubmittedAt)
                         .Select(r => r.SubmittedAt)
                         .FirstOrDefault(),
@@ -1415,13 +1618,13 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             pendingApprovals.AddRange(hodApprovals);
         }
 
-        // Get evaluations where user is GM and status is pending GM decision
+        // GM approvals (legacy + workflow-v2)
         if (userRoles.Contains("GM"))
         {
             var gmApprovals = await _context.Set<Evaluation>()
                 .Include(e => e.Employee)
                 .Include(e => e.Cycle)
-                .Where(e => e.Status == STATUS_PENDING_GM_DECISION)
+                .Where(e => e.Status == STATUS_PENDING_GM_DECISION || e.Status == STATUS_V2_PENDING_GM_DECISION)
                 .Select(e => new PendingApprovalDto
                 {
                     EvaluationId = e.EvaluationId,
@@ -1441,14 +1644,17 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             pendingApprovals.AddRange(gmApprovals);
         }
 
-        // Get evaluations where user is HR and status is pending HR processing
+        // HR approvals (legacy + workflow-v2 promotion + low performer queue)
         if (userRoles.Contains("HR"))
         {
             var hrApprovals = await _context.Set<Evaluation>()
                 .Include(e => e.Employee)
                 .Include(e => e.Cycle)
                 .Include(e => e.Reviews)
-                .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING)
+                .Where(e =>
+                    e.Status == STATUS_PENDING_HR_PROCESSING ||
+                    e.Status == STATUS_V2_PENDING_HR_PROMOTION ||
+                    e.Status == STATUS_V2_PENDING_HR_LOW_PERFORMER)
                 .Select(e => new PendingApprovalDto
                 {
                     EvaluationId = e.EvaluationId,
@@ -1479,11 +1685,11 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             throw new BusinessRuleException("Only GM or HR can view bulk approval statistics.");
 
         var pendingGmCount = await _context.Set<Evaluation>()
-            .Where(e => e.Status == STATUS_PENDING_GM_DECISION)
+            .Where(e => e.Status == STATUS_PENDING_GM_DECISION || e.Status == STATUS_V2_PENDING_GM_DECISION)
             .CountAsync(cancellationToken);
 
         var pendingHrCount = await _context.Set<Evaluation>()
-            .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING)
+            .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING || e.Status == STATUS_V2_PENDING_HR_PROMOTION)
             .CountAsync(cancellationToken);
 
         // Get evaluations with their reviews to calculate scores
@@ -1492,7 +1698,11 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .ThenInclude(r => r.ReviewScores)
             .Include(e => e.Reviews)
                 .ThenInclude(r => r.ReviewItems)
-            .Where(e => e.Status == STATUS_PENDING_GM_DECISION || e.Status == STATUS_PENDING_HR_PROCESSING)
+            .Where(e =>
+                e.Status == STATUS_PENDING_GM_DECISION ||
+                e.Status == STATUS_PENDING_HR_PROCESSING ||
+                e.Status == STATUS_V2_PENDING_GM_DECISION ||
+                e.Status == STATUS_V2_PENDING_HR_PROMOTION)
             .ToListAsync(cancellationToken);
 
         // Calculate scores for each evaluation
@@ -1554,7 +1764,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .ThenInclude(r => r.ReviewScores)
             .Include(e => e.Reviews)
                 .ThenInclude(r => r.ReviewItems)
-            .Where(e => e.Status == STATUS_PENDING_GM_DECISION)
+            .Where(e => e.Status == STATUS_PENDING_GM_DECISION || e.Status == STATUS_V2_PENDING_GM_DECISION)
             .OrderByDescending(e => e.OverallScore)
             .ToListAsync(cancellationToken);
 
@@ -1638,7 +1848,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .ThenInclude(r => r.ReviewScores)
             .Include(e => e.Reviews)
                 .ThenInclude(r => r.ReviewItems)
-            .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING)
+            .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING || e.Status == STATUS_V2_PENDING_HR_PROMOTION)
             .OrderByDescending(e => e.OverallScore)
             .ToListAsync(cancellationToken);
 
@@ -1722,11 +1932,37 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         {
             try
             {
-                await ProcessPromotionDecisionAsync(evaluationId, gmUserId, true, request.Comment ?? "Bulk approved by GM", cancellationToken);
-                
                 var evaluation = await _context.Set<Evaluation>()
                     .Include(e => e.Employee)
                     .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+                if (evaluation == null)
+                {
+                    throw new NotFoundException(nameof(Evaluation), evaluationId);
+                }
+
+                if (evaluation.WorkflowVersion == "v2" || evaluation.Status == STATUS_V2_PENDING_GM_DECISION)
+                {
+                    await _workflowV2Service.GmDecisionAsync(
+                        evaluationId,
+                        gmUserId,
+                        new GmV2DecisionDto
+                        {
+                            Approve = true,
+                            VacancyAvailable = true,
+                            Comment = request.Comment ?? "Bulk approved by GM"
+                        },
+                        cancellationToken);
+                }
+                else
+                {
+                    await ProcessPromotionDecisionAsync(
+                        evaluationId,
+                        gmUserId,
+                        true,
+                        request.Comment ?? "Bulk approved by GM",
+                        cancellationToken);
+                }
 
                 results.Add(new BulkApprovalResultItemDto
                 {
@@ -1734,7 +1970,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     EmployeeName = evaluation?.Employee?.FullName ?? "Unknown",
                     Success = true,
                     Message = "Approved successfully",
-                    NewStatus = STATUS_PENDING_HR_PROCESSING
+                    NewStatus = evaluation.WorkflowVersion == "v2" ? STATUS_V2_PENDING_HR_PROMOTION : STATUS_PENDING_HR_PROCESSING
                 });
                 successCount++;
             }
@@ -1783,11 +2019,21 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         {
             try
             {
-                await FinalizePromotionByHrAsync(evaluationId, hrUserId, true, request.Comment ?? "Bulk processed by HR", cancellationToken);
-                
                 var evaluation = await _context.Set<Evaluation>()
                     .Include(e => e.Employee)
                     .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+                if (evaluation == null)
+                {
+                    throw new NotFoundException(nameof(Evaluation), evaluationId);
+                }
+
+                await FinalizePromotionByHrAsync(
+                    evaluationId,
+                    hrUserId,
+                    true,
+                    request.Comment ?? "Bulk processed by HR",
+                    cancellationToken);
 
                 results.Add(new BulkApprovalResultItemDto
                 {
@@ -1795,7 +2041,9 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     EmployeeName = evaluation?.Employee?.FullName ?? "Unknown",
                     Success = true,
                     Message = "Promotion processed successfully",
-                    NewStatus = STATUS_COMPLETED_PROMOTION_APPROVED
+                    NewStatus = evaluation.WorkflowVersion == "v2"
+                        ? STATUS_V2_COMPLETED_PROMOTION_APPROVED
+                        : STATUS_COMPLETED_PROMOTION_APPROVED
                 });
                 successCount++;
             }
@@ -1985,8 +2233,26 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             throw new NotFoundException(nameof(Evaluation), evaluationId);
 
         var userRoles = await GetUserRolesAsync(userId, cancellationToken);
-        var isAuthorized = userId == evaluation.EmployeeId || userId == evaluation.ReportingManagerId || userId == evaluation.TeamLeadId ||
-            evaluation.PeerAssignments.Any(pa => pa.PeerUserId == userId) || userRoles.Contains("HOD") || userRoles.Contains("GM") || userRoles.Contains("HR") || userRoles.Contains("Admin");
+        var isMappedManager = await _context.UserManagerMappings
+            .AnyAsync(
+                m => m.ManagerUserId == userId && m.EmployeeUserId == evaluation.EmployeeId,
+                cancellationToken);
+
+        var isMappedHod = await _context.DepartmentHodMappings
+            .AnyAsync(
+                m => m.HodUserId == userId && m.DeptId == evaluation.Employee.DeptId,
+                cancellationToken);
+
+        var isAuthorized = userId == evaluation.EmployeeId ||
+                           userId == evaluation.ReportingManagerId ||
+                           userId == evaluation.TeamLeadId ||
+                           isMappedManager ||
+                           isMappedHod ||
+                           evaluation.PeerAssignments.Any(pa => pa.PeerUserId == userId) ||
+                           userRoles.Contains("HOD") ||
+                           userRoles.Contains("GM") ||
+                           userRoles.Contains("HR") ||
+                           userRoles.Contains("Admin");
 
         if (!isAuthorized)
             throw new BusinessRuleException("You do not have permission to view this evaluation.");
@@ -2011,6 +2277,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .Where(pg => personalGoalIds.Contains(pg.Id))
             .ToListAsync(cancellationToken);
 
+        var goalAssignments = await _context.GoalAssignments
+            .Where(ga => ga.GoalSetId == evaluation.GoalSetId && ga.AssignedToUserId == evaluation.EmployeeId)
+            .ToListAsync(cancellationToken);
+
         // Load all per-goal ReviewScores for this evaluation (with reviewer info)
         var allGoalReviewScores = await _context.Set<ReviewScore>()
             .Include(rs => rs.Review)
@@ -2022,6 +2292,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         var goalsWithDetails = evaluation.EmployeeGoals.Select(g => {
             var personalGoal = g.PersonalGoalId.HasValue 
                 ? personalGoals.FirstOrDefault(pg => pg.Id == g.PersonalGoalId.Value) 
+                : null;
+
+            var goalAssignment = g.PersonalGoalId.HasValue
+                ? goalAssignments.FirstOrDefault(ga => ga.PersonalGoalId == g.PersonalGoalId.Value)
                 : null;
 
             // Get all reviewer scores for this specific goal
@@ -2052,6 +2326,12 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 WeightPct = g.WeightPct, 
                 EvidenceUri = g.EvidenceUri, 
                 PersonalGoalId = g.PersonalGoalId,
+                GoalAssignmentId = goalAssignment?.Id,
+                ActivationMethod = goalAssignment?.ActivationMethod,
+                ActivationSubmittedAt = goalAssignment?.ActivationSubmittedAt,
+                ActivationStatus = goalAssignment?.ActivationStatus,
+                ActivationTlComment = goalAssignment?.ActivationTlComment,
+                ActivationReviewedAt = goalAssignment?.ActivationReviewedAt,
                 // Additional details from PersonalGoal
                 TargetScore = personalGoal?.TargetScore ?? 0,
                 CurrentScore = personalGoal?.CurrentScore ?? 0,
@@ -2086,11 +2366,11 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         return new EvaluationDetailDto
         {
-            EvaluationId = evaluation.EvaluationId, CycleId = evaluation.CycleId, CycleName = evaluation.Cycle?.Name ?? "", EmployeeId = evaluation.EmployeeId,
+            EvaluationId = evaluation.EvaluationId, CycleId = evaluation.CycleId, CycleName = evaluation.Cycle?.Name ?? "", EmployeeId = evaluation.EmployeeId, GoalSetId = evaluation.GoalSetId,
             EmployeeName = evaluation.Employee?.FullName ?? "", EmployeeEmail = evaluation.Employee?.Email ?? "",
             ReportingManagerId = evaluation.ReportingManagerId, ReportingManagerName = evaluation.ReportingManager?.FullName ?? "",
             TeamLeadId = evaluation.TeamLeadId, TeamLeadName = evaluation.TeamLead?.FullName ?? "",
-            Status = evaluation.Status, OverallScore = evaluation.OverallScore,
+            Status = evaluation.Status, WorkflowVersion = evaluation.WorkflowVersion, OverallScore = evaluation.OverallScore,
             Reviews = evaluation.Reviews.Select(r => new ReviewDto
             {
                 ReviewId = r.ReviewId, ReviewerUserId = r.ReviewerUserId, ReviewerName = r.Reviewer?.FullName ?? "",
@@ -2242,7 +2522,8 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
 
         if (evaluation == null) throw new NotFoundException(nameof(Evaluation), evaluationId);
-        if (evaluation.Status != STATUS_PENDING_HR_PROCESSING) throw new BusinessRuleException("HR can only process promotion when it's pending HR processing.");
+        if (evaluation.Status != STATUS_PENDING_HR_PROCESSING && evaluation.Status != STATUS_V2_PENDING_HR_PROMOTION)
+            throw new BusinessRuleException("HR can only process promotion when it's pending HR processing.");
 
         var userRoles = await GetUserRolesAsync(hrUserId, cancellationToken);
         if (!userRoles.Contains("HR")) throw new BusinessRuleException("Only HR can process promotions.");
@@ -2254,7 +2535,9 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         if (proceed)
         {
-            evaluation.Status = STATUS_COMPLETED_PROMOTION_APPROVED;
+            evaluation.Status = evaluation.WorkflowVersion == "v2"
+                ? STATUS_V2_COMPLETED_PROMOTION_APPROVED
+                : STATUS_COMPLETED_PROMOTION_APPROVED;
             _context.Set<ApprovalHistory>().Add(new ApprovalHistory { EvaluationId = evaluationId, ActorUserId = hrUserId, ActorRole = "HR", Action = "HrProcessedPromotion", Comment = comment, FromStatus = oldStatus, ToStatus = evaluation.Status, CreatedAt = DateTime.UtcNow });
             _context.Set<Notification>().Add(new Notification { UserId = evaluation.EmployeeId, Subject = "Congratulations! Your promotion has been processed", Channel = "Email", SentAt = DateTime.UtcNow });
             await _emailService.SendPromotionNotificationAsync(evaluation.Employee.Email, evaluation.Employee.FullName, evaluation.Employee.FullName, true, comment, cancellationToken);
@@ -2262,6 +2545,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         }
         else
         {
+            evaluation.Status = evaluation.WorkflowVersion == "v2"
+                ? STATUS_V2_COMPLETED_NO_PROMOTION
+                : STATUS_COMPLETED_PROMOTION_REJECTED;
+            _context.Set<ApprovalHistory>().Add(new ApprovalHistory { EvaluationId = evaluationId, ActorUserId = hrUserId, ActorRole = "HR", Action = "HrDeclinedPromotion", Comment = comment, FromStatus = oldStatus, ToStatus = evaluation.Status, CreatedAt = DateTime.UtcNow });
             _context.Set<Notification>().Add(new Notification { UserId = evaluation.EmployeeId, Subject = "Evaluation Complete", Channel = "Email", SentAt = DateTime.UtcNow });
             await _emailService.SendPromotionNotificationAsync(evaluation.Employee.Email, evaluation.Employee.FullName, evaluation.Employee.FullName, false, comment, cancellationToken);
         }
@@ -2269,5 +2556,3 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
-
-

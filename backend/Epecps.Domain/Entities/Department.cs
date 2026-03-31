@@ -10,4 +10,5 @@ public class Department
     public Department? ParentDepartment { get; set; }
     public ICollection<Department> SubDepartments { get; set; } = new List<Department>();
     public ICollection<User> Users { get; set; } = new List<User>();
+    public ICollection<DepartmentHodMapping> DepartmentHodMappings { get; set; } = new List<DepartmentHodMapping>();
 }

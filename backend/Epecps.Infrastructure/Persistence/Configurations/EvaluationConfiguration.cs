@@ -19,6 +19,11 @@ public class EvaluationConfiguration : IEntityTypeConfiguration<Evaluation>
             .IsRequired()
             .HasMaxLength(50);
 
+        builder.Property(e => e.WorkflowVersion)
+            .IsRequired()
+            .HasMaxLength(16)
+            .HasDefaultValue("v1");
+
         builder.Property(e => e.OverallScore)
             .HasPrecision(10, 2);
         
@@ -57,6 +62,7 @@ public class EvaluationConfiguration : IEntityTypeConfiguration<Evaluation>
         builder.HasIndex(e => e.EmployeeId);
         builder.HasIndex(e => e.CycleId);
         builder.HasIndex(e => e.Status);
+        builder.HasIndex(e => e.WorkflowVersion);
         builder.HasIndex(e => e.GoalSetId); // Index for faster lookups by goal set
     }
 }

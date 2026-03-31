@@ -7,10 +7,17 @@ public class User
     public string Email { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public int DeptId { get; set; }
+    public string? PasswordHash { get; set; }
+    public DateTime? PasswordSetAt { get; set; }
+    public DateTime? LastLoginAt { get; set; }
+    public int FailedLoginCount { get; set; }
+    public DateTime? LockedUntil { get; set; }
+    public bool IsActive { get; set; } = true;
 
     // Navigation properties
     public Department Department { get; set; } = null!;
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
     public ICollection<Evaluation> EvaluationsAsEmployee { get; set; } = new List<Evaluation>();
     public ICollection<Evaluation> EvaluationsAsReportingManager { get; set; } = new List<Evaluation>();
     public ICollection<Evaluation> EvaluationsAsTeamLead { get; set; } = new List<Evaluation>();
@@ -23,4 +30,10 @@ public class User
     public ICollection<PersonalGoal> PersonalGoals { get; set; } = new List<PersonalGoal>();
     public ICollection<GoalAssignment> GoalAssignmentsReceived { get; set; } = new List<GoalAssignment>();
     public ICollection<GoalAssignment> GoalAssignmentsMade { get; set; } = new List<GoalAssignment>();
+    public ICollection<GoalAssignment> GoalAssignmentsActivationReviewed { get; set; } = new List<GoalAssignment>();
+    public ICollection<UserManagerMapping> ManagerMappingsAsEmployee { get; set; } = new List<UserManagerMapping>();
+    public ICollection<UserManagerMapping> ManagerMappingsAsManager { get; set; } = new List<UserManagerMapping>();
+    public ICollection<DepartmentHodMapping> DepartmentHodMappings { get; set; } = new List<DepartmentHodMapping>();
+    public ICollection<PipCase> PipCasesAsEmployee { get; set; } = new List<PipCase>();
+    public ICollection<PipCase> PipCasesAsAssignedHr { get; set; } = new List<PipCase>();
 }

@@ -108,6 +108,15 @@ public class DashboardController : ControllerBase
     /// </summary>
     private async Task<int> GetAuthenticatedUserIdAsync(CancellationToken cancellationToken = default)
     {
+        var userIdClaim = User.FindFirst("userId")?.Value
+            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst("sub")?.Value;
+
+        if (!string.IsNullOrWhiteSpace(userIdClaim) && int.TryParse(userIdClaim, out var parsedUserId))
+        {
+            return parsedUserId;
+        }
+
         // Azure AD tokens typically use "preferred_username" or "email" for the user's email
         var email = User.FindFirst("preferred_username")?.Value
             ?? User.FindFirst("email")?.Value

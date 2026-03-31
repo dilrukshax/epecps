@@ -9,4 +9,5 @@ public class TrainingMaterial
 
     // Navigation properties
     public ICollection<TrainingRecommendation> TrainingRecommendations { get; set; } = new List<TrainingRecommendation>();
+    public ICollection<PipActionItem> PipActionItems { get; set; } = new List<PipActionItem>();
 }

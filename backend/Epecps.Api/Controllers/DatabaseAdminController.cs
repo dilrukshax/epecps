@@ -11,7 +11,7 @@ namespace Epecps.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/admin/database")]
-[Authorize] // In production, add [Authorize(Roles = "Admin")]
+[Authorize(Roles = "SuperAdmin")]
 public class DatabaseAdminController : ControllerBase
 {
     private readonly DatabaseSeeder _seeder;
@@ -72,7 +72,7 @@ public class DatabaseAdminController : ControllerBase
             {
                 message = $"All roles assigned successfully to {email}",
                 email,
-                roles = new[] { "Employee", "RM", "TL", "Peer", "HOD", "GM", "HR", "Admin" }
+                roles = new[] { "Employee", "RM", "TL", "Peer", "HOD", "GM", "HR", "Admin", "SuperAdmin" }
             });
         }
         catch (Exception ex)

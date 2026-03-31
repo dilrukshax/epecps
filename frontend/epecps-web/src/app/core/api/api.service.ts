@@ -1,17 +1,21 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 
 export interface MeResponse {
-  name?: string;
-  preferred_username?: string;
-  roles?: string[];
-  scopes?: string[];
-  claims?: Record<string, any>;
+  userId: number;
+  fullName: string;
+  email: string;
+  status: string;
+  isActive: boolean;
+  departmentId: number;
+  departmentName: string;
+  roles: string[];
 }
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  private readonly baseUrl = 'https://localhost:7275/api/v1';
+  private readonly baseUrl = `${environment.apiUrl.replace(/\/+$/, '')}/api/v1`;
 
   constructor(private http: HttpClient) {}
 

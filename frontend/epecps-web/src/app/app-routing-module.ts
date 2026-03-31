@@ -1,60 +1,51 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { MsalGuard, MsalRedirectComponent } from '@azure/msal-angular';
 import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { AdminDashboardComponent } from './pages/admin-dashboard/admin-dashboard.component';
 import { UnauthorizedComponent } from './pages/unauthorized/unauthorized.component';
 import { MyApprovalsComponent } from './employee/components/my-approvals/my-approvals.component';
 import { EvaluationDetailComponent } from './employee/components/evaluation-detail/evaluation-detail.component';
+import { AuthGuard } from './core/auth/auth.guard';
+import { RoleGuard } from './core/auth/role.guard';
 
 const routes: Routes = [
-  // MSAL processes the hash on this route after login
-  { path: 'auth-callback', component: MsalRedirectComponent },
-
-  // Public (unauthorized) route
   { path: 'login', component: UnauthorizedComponent },
+  { path: 'register', component: UnauthorizedComponent, data: { mode: 'register' } },
+  { path: 'setup-password', component: UnauthorizedComponent, data: { mode: 'setup' } },
 
-  // Protected routes - require authentication
-  { 
-    path: 'dashboard', 
-    component: DashboardComponent, 
-    canActivate: [MsalGuard] 
+  {
+    path: 'dashboard',
+    component: DashboardComponent,
+    canActivate: [AuthGuard]
   },
-  
-  // Admin routes - authentication only (no role restrictions)
   {
     path: 'admin/dashboard',
     component: AdminDashboardComponent,
-    canActivate: [MsalGuard]
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: ['Admin', 'SuperAdmin', 'HOD', 'GM'] }
   },
   {
     path: 'admin/templates',
-    loadChildren: () => import('./admin/admin-templates.module').then(m => m.AdminTemplatesModule)
+    loadChildren: () => import('./admin/admin-templates.module').then(m => m.AdminTemplatesModule),
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: ['Admin', 'SuperAdmin', 'HOD', 'GM'] }
   },
-
-  // Employee routes - personal goal management
   {
     path: 'employee',
     loadChildren: () => import('./employee/employee.module').then(m => m.EmployeeModule),
-    canActivate: [MsalGuard]
+    canActivate: [AuthGuard]
   },
-
-  // Evaluation routes - approval workflow (loaded separately for direct navigation)
   {
     path: 'evaluations/my-approvals',
     component: MyApprovalsComponent,
-    canActivate: [MsalGuard]
+    canActivate: [AuthGuard]
   },
   {
     path: 'evaluations/:id',
     component: EvaluationDetailComponent,
-    canActivate: [MsalGuard]
+    canActivate: [AuthGuard]
   },
-
-  // Redirect root to dashboard if authenticated, otherwise to login
   { path: '', redirectTo: '/dashboard', pathMatch: 'full' },
-
-  // Wildcard route
   { path: '**', redirectTo: '/dashboard' }
 ];
 

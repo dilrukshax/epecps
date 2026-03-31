@@ -7,6 +7,7 @@ import { EmployeeRoutingModule } from './employee-routing.module';
 import { MyGoalsComponent } from './components/my-goals/my-goals.component';
 import { GoalDetailsComponent } from './components/goal-details/goal-details.component';
 import { HrReportsComponent } from './components/hr-reports/hr-reports.component';
+import { HrPipCasesComponent } from './components/hr-pip-cases/hr-pip-cases.component';
 import { RmAssignGoalsComponent } from './components/rm-assign-goals/rm-assign-goals.component';
 
 // Shared Module (contains HeaderComponent)
@@ -20,6 +21,7 @@ import { SharedModule } from '../shared/shared.module';
     MyGoalsComponent,
     GoalDetailsComponent,
     HrReportsComponent,
+    HrPipCasesComponent,
     RmAssignGoalsComponent
   ],
   imports: [

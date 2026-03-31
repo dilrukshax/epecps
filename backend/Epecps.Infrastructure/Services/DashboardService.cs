@@ -53,7 +53,9 @@ public class DashboardService : IDashboardService
         var pendingMyApproval = await GetPendingMyApprovalCountAsync(userId, userRoles, cancellationToken);
         
         // Total under review (not completed)
-        var underReview = visibleEvaluations.Count(e => !e.Status.Contains("Completed") && e.Status != "Rejected");
+        var underReview = visibleEvaluations.Count(e =>
+            !e.Status.Contains("completed", StringComparison.OrdinalIgnoreCase) &&
+            !e.Status.Contains("rejected", StringComparison.OrdinalIgnoreCase));
         
         // Completed this month
         var completedThisMonth = await _context.Set<ApprovalHistory>()
@@ -180,15 +182,41 @@ public class DashboardService : IDashboardService
             .Include(e => e.Reviews)
             .Include(e => e.PeerAssignments)
             .AsQueryable();
-        
+
+        var managedEmployeeIds = userRoles.Contains("RM")
+            ? await _context.UserManagerMappings
+                .Where(m => m.ManagerUserId == userId)
+                .Select(m => m.EmployeeUserId)
+                .Distinct()
+                .ToListAsync(cancellationToken)
+            : new List<int>();
+
+        var hodDeptIds = userRoles.Contains("HOD")
+            ? await _context.DepartmentHodMappings
+                .Where(m => m.HodUserId == userId)
+                .Select(m => m.DeptId)
+                .Distinct()
+                .ToListAsync(cancellationToken)
+            : new List<int>();
+
         // Filter based on roles
-        if (userRoles.Contains("GM") || userRoles.Contains("HOD") || userRoles.Contains("HR"))
+        if (userRoles.Contains("GM") || userRoles.Contains("HR"))
         {
             // Can see all evaluations
         }
+        else if (userRoles.Contains("HOD"))
+        {
+            if (hodDeptIds.Count > 0)
+            {
+                query = query.Where(e => hodDeptIds.Contains(e.Employee.DeptId));
+            }
+        }
         else if (userRoles.Contains("RM"))
         {
-            query = query.Where(e => e.ReportingManagerId == userId || e.EmployeeId == userId);
+            query = query.Where(e =>
+                e.ReportingManagerId == userId ||
+                managedEmployeeIds.Contains(e.EmployeeId) ||
+                e.EmployeeId == userId);
         }
         else if (userRoles.Contains("TL"))
         {
@@ -209,16 +237,50 @@ public class DashboardService : IDashboardService
     private async Task<int> GetPendingMyApprovalCountAsync(int userId, List<string> userRoles, CancellationToken cancellationToken)
     {
         var count = 0;
-        
+
+        // Employee-facing workflow-v2 tasks
+        count += await _context.Set<Evaluation>()
+            .Where(e => e.EmployeeId == userId)
+            .Where(e =>
+                e.Status == "V2_PENDING_EMPLOYEE_ACTIVATION" ||
+                e.Status == "V2_RETURNED_FOR_ACTIVATION" ||
+                e.Status == "V2_ACTIVE_GOALS")
+            .CountAsync(cancellationToken);
+
+        var managedEmployeeIds = userRoles.Contains("RM")
+            ? await _context.UserManagerMappings
+                .Where(m => m.ManagerUserId == userId)
+                .Select(m => m.EmployeeUserId)
+                .Distinct()
+                .ToListAsync(cancellationToken)
+            : new List<int>();
+
+        var hodDeptIds = userRoles.Contains("HOD")
+            ? await _context.DepartmentHodMappings
+                .Where(m => m.HodUserId == userId)
+                .Select(m => m.DeptId)
+                .Distinct()
+                .ToListAsync(cancellationToken)
+            : new List<int>();
+
         // RM pending
         if (userRoles.Contains("RM"))
         {
             count += await _context.Set<Evaluation>()
-                .Where(e => e.ReportingManagerId == userId)
+                .Where(e => e.ReportingManagerId == userId || managedEmployeeIds.Contains(e.EmployeeId))
                 .Where(e => e.Status == "Pending_RM_Review" || e.Status == "Pending_RM_Review_PostCompletion")
                 .CountAsync(cancellationToken);
+
+            count += await _context.Set<Evaluation>()
+                .Include(e => e.Reviews)
+                .Where(e => e.Status == "V2_PENDING_PARALLEL_REVIEWS")
+                .Where(e => e.Reviews.Any(r =>
+                    r.ReviewerRole == ReviewerRole.RM &&
+                    r.ReviewerUserId == userId &&
+                    r.Status == "Pending"))
+                .CountAsync(cancellationToken);
         }
-        
+
         // TL pending
         if (userRoles.Contains("TL"))
         {
@@ -226,8 +288,20 @@ public class DashboardService : IDashboardService
                 .Where(e => e.TeamLeadId == userId)
                 .Where(e => e.Status == "Pending_TL_Review" || e.Status == "Pending_Peer_Assignment")
                 .CountAsync(cancellationToken);
+
+            count += await _context.Set<Evaluation>()
+                .Include(e => e.Reviews)
+                .Where(e => e.TeamLeadId == userId)
+                .Where(e =>
+                    e.Status == "V2_PENDING_TL_ACTIVATION_REVIEW" ||
+                    (e.Status == "V2_PENDING_PARALLEL_REVIEWS" &&
+                     e.Reviews.Any(r =>
+                         r.ReviewerRole == ReviewerRole.TL &&
+                         r.ReviewerUserId == userId &&
+                         r.Status == "Pending")))
+                .CountAsync(cancellationToken);
         }
-        
+
         // Peer pending
         if (userRoles.Contains("Peer"))
         {
@@ -238,24 +312,52 @@ public class DashboardService : IDashboardService
                 .Where(e => e.PeerAssignments.Any(pa => pa.PeerUserId == userId))
                 .Where(e => e.Reviews.Any(r => r.ReviewerUserId == userId && r.ReviewerRole == ReviewerRole.Peer && r.Status == "Pending"))
                 .CountAsync(cancellationToken);
+
+            count += await _context.Set<Evaluation>()
+                .Include(e => e.Reviews)
+                .Where(e => e.Status == "V2_PENDING_PARALLEL_REVIEWS")
+                .Where(e => e.Reviews.Any(r =>
+                    r.ReviewerUserId == userId &&
+                    r.ReviewerRole == ReviewerRole.Peer &&
+                    r.Status == "Pending"))
+                .CountAsync(cancellationToken);
         }
-        
+
         // HOD pending
         if (userRoles.Contains("HOD"))
         {
-            count += await _context.Set<Evaluation>()
-                .Where(e => e.Status == "Pending_HOD_Review")
-                .CountAsync(cancellationToken);
+            var hodQuery = _context.Set<Evaluation>()
+                .Include(e => e.Employee)
+                .Where(e => e.Status == "Pending_HOD_Review" || e.Status == "V2_PENDING_HOD_REVIEW")
+                .AsQueryable();
+
+            if (hodDeptIds.Count > 0)
+            {
+                hodQuery = hodQuery.Where(e => hodDeptIds.Contains(e.Employee.DeptId));
+            }
+
+            count += await hodQuery.CountAsync(cancellationToken);
         }
-        
+
         // GM pending
         if (userRoles.Contains("GM"))
         {
             count += await _context.Set<Evaluation>()
-                .Where(e => e.Status == "Pending_GM_Decision")
+                .Where(e => e.Status == "Pending_GM_Decision" || e.Status == "V2_PENDING_GM_DECISION")
                 .CountAsync(cancellationToken);
         }
-        
+
+        // HR pending
+        if (userRoles.Contains("HR"))
+        {
+            count += await _context.Set<Evaluation>()
+                .Where(e =>
+                    e.Status == "Pending_HR_Processing" ||
+                    e.Status == "V2_PENDING_HR_PROMOTION" ||
+                    e.Status == "V2_PENDING_HR_LOW_PERFORMER")
+                .CountAsync(cancellationToken);
+        }
+
         return count;
     }
 
@@ -327,10 +429,11 @@ public class DashboardService : IDashboardService
 
     private string GetStatusCategory(string status)
     {
-        if (status.Contains("Completed")) return "Completed";
-        if (status.Contains("Rejected")) return "Rejected";
-        if (status.Contains("Pending")) return "Pending";
-        if (status.Contains("Approved")) return "Approved";
+        var normalized = status.ToLowerInvariant();
+        if (normalized.Contains("completed")) return "Completed";
+        if (normalized.Contains("rejected")) return "Rejected";
+        if (normalized.Contains("pending")) return "Pending";
+        if (normalized.Contains("approved")) return "Approved";
         return "Under Review";
     }
 
@@ -338,16 +441,37 @@ public class DashboardService : IDashboardService
     {
         if (userRoles.Contains("RM") && (status == "Pending_RM_Review" || status == "Pending_RM_Review_PostCompletion") && evaluation.ReportingManagerId == userId)
             return true;
-        
+
+        if (userRoles.Contains("RM") &&
+            status == "V2_PENDING_PARALLEL_REVIEWS" &&
+            evaluation.Reviews.Any(r => r.ReviewerRole == ReviewerRole.RM && r.ReviewerUserId == userId && r.Status == "Pending"))
+            return true;
+
         if (userRoles.Contains("TL") && (status == "Pending_TL_Review" || status == "Pending_Peer_Assignment") && evaluation.TeamLeadId == userId)
             return true;
-        
-        if (userRoles.Contains("HOD") && status == "Pending_HOD_Review")
+
+        if (userRoles.Contains("TL") &&
+            (status == "V2_PENDING_TL_ACTIVATION_REVIEW" ||
+             (status == "V2_PENDING_PARALLEL_REVIEWS" &&
+              evaluation.Reviews.Any(r => r.ReviewerRole == ReviewerRole.TL && r.ReviewerUserId == userId && r.Status == "Pending"))) &&
+            evaluation.TeamLeadId == userId)
             return true;
-        
-        if (userRoles.Contains("GM") && status == "Pending_GM_Decision")
+
+        if (userRoles.Contains("Peer") &&
+            status == "V2_PENDING_PARALLEL_REVIEWS" &&
+            evaluation.Reviews.Any(r => r.ReviewerRole == ReviewerRole.Peer && r.ReviewerUserId == userId && r.Status == "Pending"))
             return true;
-        
+
+        if (userRoles.Contains("HOD") && (status == "Pending_HOD_Review" || status == "V2_PENDING_HOD_REVIEW"))
+            return true;
+
+        if (userRoles.Contains("GM") && (status == "Pending_GM_Decision" || status == "V2_PENDING_GM_DECISION"))
+            return true;
+
+        if (userRoles.Contains("HR") &&
+            (status == "Pending_HR_Processing" || status == "V2_PENDING_HR_PROMOTION" || status == "V2_PENDING_HR_LOW_PERFORMER"))
+            return true;
+
         return false;
     }
 
@@ -361,14 +485,27 @@ public class DashboardService : IDashboardService
         switch (primaryRole)
         {
             case "RM":
-                stats.DirectReports = await _context.Set<Evaluation>()
-                    .Where(e => e.ReportingManagerId == userId)
-                    .Select(e => e.EmployeeId)
+                var rmEmployeeIds = await _context.UserManagerMappings
+                    .Where(m => m.ManagerUserId == userId)
+                    .Select(m => m.EmployeeUserId)
                     .Distinct()
-                    .CountAsync(cancellationToken);
-                
+                    .ToListAsync(cancellationToken);
+
+                stats.DirectReports = rmEmployeeIds.Count;
+
                 stats.GoalSetsAwaitingReview = await _context.Set<Evaluation>()
-                    .Where(e => e.ReportingManagerId == userId && e.Status == "Pending_RM_Review")
+                    .Include(e => e.Reviews)
+                    .Where(e =>
+                        (e.ReportingManagerId == userId || rmEmployeeIds.Contains(e.EmployeeId)) &&
+                        (
+                            e.Status == "Pending_RM_Review" ||
+                            e.Status == "Pending_RM_Review_PostCompletion" ||
+                            (e.Status == "V2_PENDING_PARALLEL_REVIEWS" &&
+                             e.Reviews.Any(r =>
+                                 r.ReviewerRole == ReviewerRole.RM &&
+                                 r.ReviewerUserId == userId &&
+                                 r.Status == "Pending"))
+                        ))
                     .CountAsync(cancellationToken);
                 
                 var weekAgo = DateTime.UtcNow.AddDays(-7);
@@ -394,16 +531,38 @@ public class DashboardService : IDashboardService
                 break;
             
             case "HOD":
-                stats.PromotionRecommendationsPending = await _context.Set<Evaluation>()
-                    .Where(e => e.Status == "Pending_HOD_Review")
-                    .CountAsync(cancellationToken);
-                
-                var deptEvaluations = await _context.Set<Evaluation>()
-                    .Where(e => e.OverallScore.HasValue && e.OverallScore.Value > 0)
+                var hodDeptIdsForStats = await _context.DepartmentHodMappings
+                    .Where(m => m.HodUserId == userId)
+                    .Select(m => m.DeptId)
+                    .Distinct()
                     .ToListAsync(cancellationToken);
-                
+
+                var hodPendingQuery = _context.Set<Evaluation>()
+                    .Include(e => e.Employee)
+                    .Where(e => e.Status == "Pending_HOD_Review" || e.Status == "V2_PENDING_HOD_REVIEW")
+                    .AsQueryable();
+
+                if (hodDeptIdsForStats.Count > 0)
+                {
+                    hodPendingQuery = hodPendingQuery.Where(e => hodDeptIdsForStats.Contains(e.Employee.DeptId));
+                }
+
+                stats.PromotionRecommendationsPending = await hodPendingQuery.CountAsync(cancellationToken);
+
+                var deptEvaluationsQuery = _context.Set<Evaluation>()
+                    .Include(e => e.Employee)
+                    .Where(e => e.OverallScore.HasValue && e.OverallScore.Value > 0)
+                    .AsQueryable();
+
+                if (hodDeptIdsForStats.Count > 0)
+                {
+                    deptEvaluationsQuery = deptEvaluationsQuery.Where(e => hodDeptIdsForStats.Contains(e.Employee.DeptId));
+                }
+
+                var deptEvaluations = await deptEvaluationsQuery.ToListAsync(cancellationToken);
+
                 stats.DepartmentSize = deptEvaluations.Select(e => e.EmployeeId).Distinct().Count();
-                stats.DepartmentAverageScore = deptEvaluations.Any() 
+                stats.DepartmentAverageScore = deptEvaluations.Any()
                     ? Math.Round(deptEvaluations.Average(e => e.OverallScore!.Value), 2)
                     : 0;
                 break;
@@ -411,7 +570,7 @@ public class DashboardService : IDashboardService
             case "GM":
                 stats.TotalEmployees = await _context.Users.CountAsync(cancellationToken);
                 stats.PendingPromotionDecisions = await _context.Set<Evaluation>()
-                    .Where(e => e.Status == "Pending_GM_Decision")
+                    .Where(e => e.Status == "Pending_GM_Decision" || e.Status == "V2_PENDING_GM_DECISION")
                     .CountAsync(cancellationToken);
                 
                 var quarterStart = new DateTime(DateTime.UtcNow.Year, ((DateTime.UtcNow.Month - 1) / 3) * 3 + 1, 1);

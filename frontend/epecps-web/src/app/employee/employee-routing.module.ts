@@ -3,8 +3,10 @@ import { RouterModule, Routes } from '@angular/router';
 import { MyGoalsComponent } from './components/my-goals/my-goals.component';
 import { GoalDetailsComponent } from './components/goal-details/goal-details.component';
 import { HrReportsComponent } from './components/hr-reports/hr-reports.component';
+import { HrPipCasesComponent } from './components/hr-pip-cases/hr-pip-cases.component';
 import { RmAssignGoalsComponent } from './components/rm-assign-goals/rm-assign-goals.component';
-import { MsalGuard } from '@azure/msal-angular';
+import { AuthGuard } from '../core/auth/auth.guard';
+import { RoleGuard } from '../core/auth/role.guard';
 
 const routes: Routes = [
   {
@@ -14,7 +16,7 @@ const routes: Routes = [
   },
   {
     path: 'goals',
-    canActivate: [MsalGuard],
+    canActivate: [AuthGuard],
     children: [
       {
         path: '',
@@ -29,12 +31,20 @@ const routes: Routes = [
   {
     path: 'rm-assign-goals',
     component: RmAssignGoalsComponent,
-    canActivate: [MsalGuard]
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: ['RM', 'SuperAdmin'] }
   },
   {
     path: 'hr-reports',
     component: HrReportsComponent,
-    canActivate: [MsalGuard]
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: ['HR', 'SuperAdmin', 'Admin'] }
+  },
+  {
+    path: 'hr-pip-cases',
+    component: HrPipCasesComponent,
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: ['HR', 'SuperAdmin'] }
   }
 ];
 

@@ -12,6 +12,7 @@ public class EvaluationDetailDto
     public int CycleId { get; set; }
     public string CycleName { get; set; } = string.Empty;
     public int EmployeeId { get; set; }
+    public Guid? GoalSetId { get; set; }
     public string EmployeeName { get; set; } = string.Empty;
     public string EmployeeEmail { get; set; } = string.Empty;
     public int ReportingManagerId { get; set; }
@@ -19,6 +20,7 @@ public class EvaluationDetailDto
     public int TeamLeadId { get; set; }
     public string TeamLeadName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public string WorkflowVersion { get; set; } = "v1";
     public decimal? OverallScore { get; set; }
     
     public List<ReviewDto> Reviews { get; set; } = new List<ReviewDto>();
@@ -61,6 +63,12 @@ public class GoalDto
     public string Description { get; set; } = string.Empty;
     public decimal WeightPct { get; set; }
     public string? EvidenceUri { get; set; }
+    public Guid? GoalAssignmentId { get; set; }
+    public string? ActivationMethod { get; set; }
+    public DateTime? ActivationSubmittedAt { get; set; }
+    public string? ActivationStatus { get; set; }
+    public string? ActivationTlComment { get; set; }
+    public DateTime? ActivationReviewedAt { get; set; }
     
     // Additional details
     public decimal TargetScore { get; set; }

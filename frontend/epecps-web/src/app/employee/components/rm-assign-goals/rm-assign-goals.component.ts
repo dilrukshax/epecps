@@ -16,6 +16,8 @@ import {
   standalone: false
 })
 export class RmAssignGoalsComponent implements OnInit {
+  readonly minRequiredGoals = 5;
+
   // Active tab
   activeTab: 'assign' | 'history' = 'assign';
 
@@ -193,8 +195,8 @@ export class RmAssignGoalsComponent implements OnInit {
   }
 
   proceedToConfiguration(): void {
-    if (this.selectedGoalIds.size === 0) {
-      this.error = 'Please select at least one goal to assign.';
+    if (this.selectedGoalIds.size < this.minRequiredGoals) {
+      this.error = `Please select at least ${this.minRequiredGoals} goals to assign.`;
       return;
     }
     this.error = null;
@@ -231,6 +233,11 @@ export class RmAssignGoalsComponent implements OnInit {
 
   async assignGoals(): Promise<void> {
     if (!this.selectedEmployee) return;
+
+    if (this.selectedGoalIds.size < this.minRequiredGoals) {
+      this.error = `At least ${this.minRequiredGoals} goals are required for assignment.`;
+      return;
+    }
 
     this.loading = true;
     this.error = null;

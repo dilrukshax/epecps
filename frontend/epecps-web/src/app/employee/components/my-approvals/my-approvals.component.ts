@@ -295,6 +295,9 @@ export class MyApprovalsComponent implements OnInit {
     if (statusLower.includes('pending_hod')) return 'bg-orange-100 text-orange-800';
     if (statusLower.includes('pending_gm')) return 'bg-red-100 text-red-800';
     if (statusLower.includes('pending_hr')) return 'bg-pink-100 text-pink-800';
+    if (statusLower.includes('v2_active_goals')) return 'bg-teal-100 text-teal-800';
+    if (statusLower.includes('returned_for_activation')) return 'bg-orange-100 text-orange-800';
+    if (statusLower.includes('deferred')) return 'bg-indigo-100 text-indigo-800';
     if (statusLower.includes('completed')) return 'bg-green-100 text-green-800';
     if (statusLower.includes('rejected')) return 'bg-red-100 text-red-800';
     

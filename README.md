@@ -27,6 +27,7 @@ A comprehensive employee performance evaluation system built with .NET 8 and Ang
   - [5. Database Setup](#5-database-setup)
   - [6. Email Configuration](#6-email-configuration)
 - [Running the Application](#running-the-application)
+- [Run with Docker](#run-with-docker)
 - [Database Migrations](#database-migrations)
 - [Configuration Guide](#configuration-guide)
 - [API Documentation](#api-documentation)
@@ -483,6 +484,49 @@ The application will start at: `http://localhost:4200`
 ### Default Credentials
 
 After seeding, you can use test users created by the seeder. Check the `DatabaseSeeder.cs` file for user details or create users through Azure AD sync.
+
+## Run with Docker
+
+This repository includes a full Docker setup for:
+- **SQL Server** database
+- **ASP.NET Core API** backend
+- **Angular frontend** served by Nginx
+
+### 1. Start all services
+
+From the repository root:
+
+```bash
+cp .env.docker.example .env
+docker compose up --build -d
+```
+
+### 2. Open the app
+
+- **Frontend**: http://localhost:4200
+- **Backend API**: http://localhost:8080
+- **Swagger UI**: http://localhost:4200/swagger
+
+### 3. Stop services
+
+```bash
+docker compose down
+```
+
+To also remove SQL Server data volume:
+
+```bash
+docker compose down -v
+```
+
+### Docker environment variables
+
+`docker-compose.yml` provides safe defaults. You can override them in your shell or a `.env` file:
+
+- `MSSQL_SA_PASSWORD`
+- `AZURE_TENANT_ID`
+- `AZURE_API_CLIENT_ID`
+- `AZURE_API_APP_ID_URI`
 
 ## Database Migrations
 

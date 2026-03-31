@@ -14,6 +14,7 @@ public class Evaluation
     /// </summary>
     public Guid? GoalSetId { get; set; }
     
+    public string WorkflowVersion { get; set; } = "v1";
     public string Status { get; set; } = string.Empty;
     public decimal? OverallScore { get; set; }
     public int? PreviousEvaluationId { get; set; }
@@ -29,6 +30,7 @@ public class Evaluation
     public ICollection<Review> Reviews { get; set; } = new List<Review>();
     public ICollection<PeerAssignment> PeerAssignments { get; set; } = new List<PeerAssignment>();
     public ICollection<PromotionCase> PromotionCases { get; set; } = new List<PromotionCase>();
+    public ICollection<PipCase> PipCases { get; set; } = new List<PipCase>();
     public ICollection<TrainingRecommendation> TrainingRecommendations { get; set; } = new List<TrainingRecommendation>();
     public ICollection<Document> Documents { get; set; } = new List<Document>();
 }

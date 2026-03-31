@@ -3,7 +3,6 @@ using Epecps.Application.Exceptions;
 using Epecps.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Identity.Web.Resource;
 
 namespace Epecps.Api.Controllers;
 
@@ -15,7 +14,6 @@ namespace Epecps.Api.Controllers;
 // TODO: Re-enable role check after assigning Admin role in Azure AD
 // [Authorize(Roles = "Admin")]
 [Authorize] // Changed from [Authorize(Roles = "Admin")] to allow testing without role
-[RequiredScope("Epecps.ReadWrite")]
 public class ScoreTemplatesController : ControllerBase
 {
     private readonly IScoreTemplateService _templateService;

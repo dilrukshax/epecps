@@ -34,11 +34,34 @@ export interface DatabaseStatus {
   endpoints: any;
 }
 
+export interface ImportRowError {
+  rowNumber: number;
+  message: string;
+}
+
+export interface UsersProjectsImportResult {
+  totalRows: number;
+  createdUsers: number;
+  updatedUsers: number;
+  createdRoleAssignments: number;
+  removedRoleAssignments: number;
+  createdProjects: number;
+  updatedProjects: number;
+  createdAssignments: number;
+  updatedAssignments: number;
+  createdManagerMappings: number;
+  updatedManagerMappings: number;
+  createdDepartmentHodMappings: number;
+  skippedRows: number;
+  errors: ImportRowError[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class DatabaseAdminService {
   private readonly baseUrl = `${environment.apiUrl}/api/admin/database`;
+  private readonly importBaseUrl = `${environment.apiUrl}/api/v1/admin/import`;
 
   constructor(private http: HttpClient) {}
 
@@ -116,5 +139,15 @@ export class DatabaseAdminService {
       `${this.baseUrl}/users/${userId}/roles/bulk`,
       { roleIds }
     );
+  }
+
+  downloadUsersProjectsTemplate(): Observable<Blob> {
+    return this.http.get(`${this.importBaseUrl}/template`, { responseType: 'blob' });
+  }
+
+  importUsersProjects(file: File): Observable<UsersProjectsImportResult> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<UsersProjectsImportResult>(`${this.importBaseUrl}/users-projects`, form);
   }
 }

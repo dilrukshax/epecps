@@ -65,12 +65,43 @@ public class GoalAssignment
     /// </summary>
     public Guid? PersonalGoalId { get; set; }
 
+    /// <summary>
+    /// Employee's "method of achieving goals" submission for this assigned goal.
+    /// </summary>
+    public string? ActivationMethod { get; set; }
+
+    /// <summary>
+    /// Timestamp when employee submitted the activation plan.
+    /// </summary>
+    public DateTime? ActivationSubmittedAt { get; set; }
+
+    /// <summary>
+    /// Activation lifecycle state: PendingEmployee, PendingTL, Approved, Rejected.
+    /// </summary>
+    public string ActivationStatus { get; set; } = "PendingEmployee";
+
+    /// <summary>
+    /// TL review comment for activation.
+    /// </summary>
+    public string? ActivationTlComment { get; set; }
+
+    /// <summary>
+    /// TL reviewer user id for activation decision.
+    /// </summary>
+    public int? ActivationReviewedByUserId { get; set; }
+
+    /// <summary>
+    /// Timestamp when TL reviewed activation.
+    /// </summary>
+    public DateTime? ActivationReviewedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 
     // Navigation properties
     public User AssignedByUser { get; set; } = null!;
     public User AssignedToUser { get; set; } = null!;
+    public User? ActivationReviewedByUser { get; set; }
     public ScoreItem GoalItem { get; set; } = null!;
     public PersonalGoal? PersonalGoal { get; set; }
 }

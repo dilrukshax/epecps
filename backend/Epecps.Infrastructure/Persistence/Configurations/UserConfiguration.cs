@@ -30,24 +30,28 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.DeptId)
             .IsRequired();
 
+        builder.Property(u => u.PasswordHash)
+            .HasMaxLength(500);
+
+        builder.Property(u => u.PasswordSetAt);
+
+        builder.Property(u => u.LastLoginAt);
+
+        builder.Property(u => u.FailedLoginCount)
+            .IsRequired()
+            .HasDefaultValue(0);
+
+        builder.Property(u => u.LockedUntil);
+
+        builder.Property(u => u.IsActive)
+            .IsRequired()
+            .HasDefaultValue(true);
+
         // Configure Department relationship properly
         builder.HasOne(u => u.Department)
             .WithMany(d => d.Users)
             .HasForeignKey(u => u.DeptId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        // IGNORE navigation properties that are not yet needed or configured
-        builder.Ignore(u => u.UserRoles);
-        builder.Ignore(u => u.EvaluationsAsEmployee);
-        builder.Ignore(u => u.EvaluationsAsReportingManager);
-        builder.Ignore(u => u.EvaluationsAsTeamLead);
-        builder.Ignore(u => u.Reviews);
-        builder.Ignore(u => u.PeerAssignments);
-        builder.Ignore(u => u.PromotionCasesRecommended);
-        builder.Ignore(u => u.PromotionCasesDecided);
-        builder.Ignore(u => u.Notifications);
-        builder.Ignore(u => u.AuditLogs);
-        // PersonalGoals is properly configured in PersonalGoalConfiguration
 
         // Indexes
         builder.HasIndex(u => u.Email).IsUnique();

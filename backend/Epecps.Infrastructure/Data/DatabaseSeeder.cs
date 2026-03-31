@@ -28,6 +28,7 @@ public class DatabaseSeeder
         {
             _logger.LogInformation("Starting database seeding...");
 
+            await SeedDefaultDepartmentAsync();
             await SeedRolesAsync();
             await SeedDefaultCycleAsync();
 
@@ -37,6 +38,21 @@ public class DatabaseSeeder
         {
             _logger.LogError(ex, "An error occurred while seeding the database.");
             throw;
+        }
+    }
+
+    private async Task SeedDefaultDepartmentAsync()
+    {
+        var existingDepartment = await _context.Departments.FirstOrDefaultAsync(d => d.Name == "General");
+        if (existingDepartment == null)
+        {
+            _context.Departments.Add(new Department
+            {
+                Name = "General"
+            });
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Added default department: General");
         }
     }
 
@@ -56,7 +72,8 @@ public class DatabaseSeeder
             new Role { Name = "HOD" },     // Head of Department
             new Role { Name = "GM" },      // General Manager
             new Role { Name = "HR" },      // Human Resources
-            new Role { Name = "Admin" }    // System Administrator
+            new Role { Name = "Admin" },   // System Administrator
+            new Role { Name = "SuperAdmin" } // Platform owner
         };
 
         foreach (var role in roles)

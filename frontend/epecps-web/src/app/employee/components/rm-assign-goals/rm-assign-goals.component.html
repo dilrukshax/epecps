@@ -187,6 +187,7 @@
           <!-- Selected count -->
           <div *ngIf="selectedGoalIds.size > 0" class="mb-4 text-sm text-indigo-600 font-medium">
             {{ selectedGoalIds.size }} goal(s) selected
+            <span class="ml-2 text-xs text-gray-600">(minimum {{ minRequiredGoals }} required)</span>
           </div>
 
           <!-- Goal Library List -->
@@ -232,9 +233,9 @@
             <button (click)="goBack()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
               Back
             </button>
-            <button (click)="proceedToConfiguration()" [disabled]="selectedGoalIds.size === 0"
+            <button (click)="proceedToConfiguration()" [disabled]="selectedGoalIds.size < minRequiredGoals"
               class="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
-              Continue ({{ selectedGoalIds.size }} selected)
+              Continue ({{ selectedGoalIds.size }}/{{ minRequiredGoals }} selected)
             </button>
           </div>
         </div>
@@ -298,7 +299,7 @@
             <button (click)="goBack()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
               Back
             </button>
-            <button (click)="assignGoals()" [disabled]="loading"
+            <button (click)="assignGoals()" [disabled]="loading || selectedGoalIds.size < minRequiredGoals"
               class="px-6 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50">
               <span *ngIf="loading">Assigning...</span>
               <span *ngIf="!loading">Assign {{ selectedGoalIds.size }} Goal(s)</span>

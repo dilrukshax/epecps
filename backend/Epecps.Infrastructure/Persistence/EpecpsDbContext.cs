@@ -17,10 +17,18 @@ public class EpecpsDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<UserProjectAssignment> UserProjectAssignments => Set<UserProjectAssignment>();
+    public DbSet<UserManagerMapping> UserManagerMappings => Set<UserManagerMapping>();
+    public DbSet<DepartmentHodMapping> DepartmentHodMappings => Set<DepartmentHodMapping>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Cycle> Cycles => Set<Cycle>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<WorkflowReviewWeight> WorkflowReviewWeights => Set<WorkflowReviewWeight>();
+    public DbSet<PipCase> PipCases => Set<PipCase>();
+    public DbSet<PipActionItem> PipActionItems => Set<PipActionItem>();
     #endregion
 
     #region Scoring Module DbSets

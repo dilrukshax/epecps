@@ -1,5 +1,12 @@
 import { Component, OnInit } from '@angular/core';
-import { DatabaseAdminService, UserWithRoles, Role } from '../../../services/database-admin.service';
+import {
+  DatabaseAdminService,
+  UserWithRoles,
+  Role,
+  UsersProjectsImportResult
+} from '../../../services/database-admin.service';
+import { EvaluationService } from '../../../services/evaluation.service';
+import { WorkflowReviewWeightDto } from '../../../models/evaluation.models';
 
 @Component({
   selector: 'app-user-management',
@@ -23,13 +30,25 @@ export class UserManagementComponent implements OnInit {
   loadingStats = false;
   seeding = false;
   assigningAllRoles = false;
+  importFile: File | null = null;
+  importing = false;
+  importResult: UsersProjectsImportResult | null = null;
 
-  constructor(private dbAdminService: DatabaseAdminService) {}
+  reviewWeights: WorkflowReviewWeightDto[] = [];
+  loadingReviewWeights = false;
+  savingReviewWeights = false;
+  reviewWeightTotal = 0;
+
+  constructor(
+    private dbAdminService: DatabaseAdminService,
+    private evaluationService: EvaluationService
+  ) {}
 
   ngOnInit(): void {
     this.loadUsers();
     this.loadRoles();
     this.loadDatabaseStatus();
+    this.loadReviewWeights();
   }
 
   loadUsers(): void {
@@ -117,6 +136,120 @@ export class UserManagementComponent implements OnInit {
         this.error = err.error?.error || 'Failed to assign roles';
         this.assigningAllRoles = false;
         console.error('Error assigning roles:', err);
+      }
+    });
+  }
+
+  onImportFileSelected(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    this.importFile = target.files && target.files.length > 0 ? target.files[0] : null;
+  }
+
+  downloadImportTemplate(): void {
+    this.dbAdminService.downloadUsersProjectsTemplate().subscribe({
+      next: (blob: Blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `users-projects-import-template-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.error = 'Failed to download import template.';
+      }
+    });
+  }
+
+  importUsersProjects(): void {
+    if (!this.importFile) {
+      this.error = 'Please select an Excel file first.';
+      return;
+    }
+
+    this.importing = true;
+    this.error = null;
+    this.successMessage = null;
+    this.importResult = null;
+
+    this.dbAdminService.importUsersProjects(this.importFile).subscribe({
+      next: (result) => {
+        this.importResult = result;
+        this.importing = false;
+        this.successMessage = 'Users/projects import completed.';
+        this.loadUsers();
+        this.loadDatabaseStatus();
+      },
+      error: (err) => {
+        this.importing = false;
+        this.error = err.error?.message || 'Users/projects import failed.';
+      }
+    });
+  }
+
+  loadReviewWeights(): void {
+    this.loadingReviewWeights = true;
+
+    this.evaluationService.getReviewWeights().subscribe({
+      next: (weights) => {
+        const sortOrder: { [key: string]: number } = {
+          Self: 1,
+          TL: 2,
+          RM: 3,
+          Peer1: 4,
+          Peer2: 5
+        };
+
+        this.reviewWeights = [...weights].sort((a, b) =>
+          (sortOrder[a.reviewerKey] || 99) - (sortOrder[b.reviewerKey] || 99));
+        this.recalculateReviewWeightTotal();
+        this.loadingReviewWeights = false;
+      },
+      error: (err) => {
+        this.loadingReviewWeights = false;
+        console.error('Error loading workflow review weights:', err);
+      }
+    });
+  }
+
+  recalculateReviewWeightTotal(): void {
+    this.reviewWeightTotal = this.reviewWeights
+      .reduce((sum, weight) => sum + Number(weight.weightPercent || 0), 0);
+  }
+
+  isReviewWeightTotalValid(): boolean {
+    return Math.abs(this.reviewWeightTotal - 100) <= 0.001;
+  }
+
+  saveReviewWeights(): void {
+    this.recalculateReviewWeightTotal();
+
+    if (!this.isReviewWeightTotalValid()) {
+      this.error = 'Review weights must total exactly 100.';
+      return;
+    }
+
+    this.savingReviewWeights = true;
+    this.error = null;
+    this.successMessage = null;
+
+    const payload = {
+      weights: this.reviewWeights.map(w => ({
+        reviewerKey: w.reviewerKey,
+        weightPercent: Number(w.weightPercent || 0)
+      }))
+    };
+
+    this.evaluationService.updateReviewWeights(payload).subscribe({
+      next: (updated) => {
+        this.reviewWeights = updated;
+        this.recalculateReviewWeightTotal();
+        this.savingReviewWeights = false;
+        this.successMessage = 'Workflow review weights updated successfully.';
+      },
+      error: (err) => {
+        this.savingReviewWeights = false;
+        this.error = err.error?.error || err.error?.message || 'Failed to update workflow review weights.';
       }
     });
   }

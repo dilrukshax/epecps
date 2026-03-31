@@ -139,6 +139,15 @@ public class RmGoalAssignmentController : ControllerBase
     /// </summary>
     private async Task<int> GetAuthenticatedUserIdAsync(CancellationToken cancellationToken = default)
     {
+        var userIdClaim = User.FindFirst("userId")?.Value
+            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst("sub")?.Value;
+
+        if (!string.IsNullOrWhiteSpace(userIdClaim) && int.TryParse(userIdClaim, out var parsedUserId))
+        {
+            return parsedUserId;
+        }
+
         var email = User.FindFirst("preferred_username")?.Value
             ?? User.FindFirst("email")?.Value
             ?? User.FindFirst("upn")?.Value

@@ -376,6 +376,19 @@
                 </svg>
               </button>
 
+              <button *ngIf="hasHrRole()" (click)="navigateToHrPipCases()"
+                      class="w-full flex items-center justify-between px-4 py-3 bg-pink-50 hover:bg-pink-100 text-pink-700 rounded-lg transition-colors">
+                <div class="flex items-center">
+                  <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-3-3v6m9 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span class="font-medium">PIP Cases</span>
+                </div>
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+
               <button *ngIf="hasAdminRole()" (click)="navigateToAdminDashboard()" 
                       class="w-full flex items-center justify-between px-4 py-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors">
                 <div class="flex items-center">

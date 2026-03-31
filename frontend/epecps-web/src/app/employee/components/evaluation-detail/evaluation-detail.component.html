@@ -118,6 +118,24 @@
         </div>
       </div>
 
+      <!-- Workflow v2 Parallel Review Progress -->
+      <div *ngIf="shouldShowParallelReviewProgress()" class="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div class="px-6 py-5 border-b border-gray-200">
+          <h2 class="text-xl font-bold text-gray-900">Parallel Review Progress</h2>
+          <p class="mt-1 text-sm text-gray-500">TL, RM, and both peers must complete reviews before HOD routing.</p>
+        </div>
+        <div class="px-6 py-5">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div *ngFor="let reviewRow of getParallelReviewerRows()" class="border border-gray-200 rounded-lg p-4 flex items-center justify-between">
+              <span class="text-sm font-medium text-gray-900">{{ reviewRow.label }}</span>
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" [ngClass]="getReviewStatusClass(reviewRow.status)">
+                {{ reviewRow.status }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Reviews & Ratings Section -->
       <div *ngIf="shouldShowReviewsSection()" class="bg-white shadow-lg rounded-lg overflow-hidden">
         <div class="px-6 py-5 border-b border-gray-200">
@@ -254,8 +272,161 @@
           </p>
         </div>
         <div class="px-6 py-5">
+          <!-- Workflow v2: Employee activation plan submission -->
+          <div *ngIf="isEmployeeActivationStage()" class="space-y-4 mb-6">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 class="text-lg font-semibold text-blue-900">Submit Activation Plan</h3>
+              <p class="text-sm text-blue-700 mt-1">Describe how you will execute each assigned goal. Minimum 5 goals are required.</p>
+            </div>
+
+            <div *ngFor="let goal of evaluation?.goals" class="border border-gray-200 rounded-lg p-4" [class.opacity-60]="!goal.goalAssignmentId">
+              <h4 class="text-sm font-semibold text-gray-900">{{ goal.title }}</h4>
+              <p class="text-xs text-gray-600 mt-1">{{ goal.description }}</p>
+              <div *ngIf="goal.activationTlComment" class="mt-2 text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded p-2">
+                TL feedback: {{ goal.activationTlComment }}
+              </div>
+              <textarea
+                [disabled]="!goal.goalAssignmentId"
+                [ngModel]="getActivationMethod(goal)"
+                (ngModelChange)="setActivationMethod(goal, $event)"
+                rows="3"
+                class="mt-3 w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Describe your activation method for this goal..."></textarea>
+            </div>
+
+            <button
+              (click)="submitActivationPlan()"
+              [disabled]="submittingActivationPlan || !canSubmitActivationPlan()"
+              class="inline-flex items-center px-5 py-2.5 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              <span *ngIf="submittingActivationPlan">Submitting...</span>
+              <span *ngIf="!submittingActivationPlan">Submit Activation Plan</span>
+            </button>
+          </div>
+
+          <!-- Workflow v2: TL activation decision -->
+          <div *ngIf="isTlActivationStage()" class="space-y-4 mb-6">
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <h3 class="text-lg font-semibold text-purple-900">Review Activation Plan</h3>
+              <p class="text-sm text-purple-700 mt-1">Review employee methods and approve or return for resubmission.</p>
+            </div>
+
+            <div *ngFor="let goal of evaluation?.goals" class="border border-gray-200 rounded-lg p-4">
+              <h4 class="text-sm font-semibold text-gray-900">{{ goal.title }}</h4>
+              <p class="text-xs text-gray-600 mt-1">{{ goal.description }}</p>
+              <p class="mt-2 text-sm text-gray-800">{{ goal.activationMethod || 'No activation method submitted.' }}</p>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Comment</label>
+              <textarea
+                [(ngModel)]="activationDecisionComment"
+                rows="3"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Optional for approval, required for return..."></textarea>
+            </div>
+
+            <div class="flex gap-3">
+              <button
+                (click)="processActivationDecision(true)"
+                [disabled]="processingActivationDecision"
+                class="inline-flex items-center px-5 py-2.5 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50">
+                Approve Activation
+              </button>
+              <button
+                (click)="processActivationDecision(false)"
+                [disabled]="processingActivationDecision"
+                class="inline-flex items-center px-5 py-2.5 rounded-md text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50">
+                Return To Employee
+              </button>
+            </div>
+          </div>
+
+          <!-- Workflow v2: Employee self-evaluation + peer selection -->
+          <div *ngIf="isEmployeeSelfEvaluationStage()" class="space-y-4 mb-6">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h3 class="text-lg font-semibold text-green-900">Submit Self-Evaluation</h3>
+              <p class="text-sm text-green-700 mt-1">Provide your self-score and select two peers to start parallel reviews (TL, RM, Peer1, Peer2).</p>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Self Score (0-100)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                [(ngModel)]="selfEvaluationScore"
+                class="w-full md:w-52 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Peer Reviewer 1</label>
+                <select
+                  [(ngModel)]="selfEvaluationPeerUserId1"
+                  [disabled]="loadingSelfEvaluationPeers || submittingSelfEvaluation"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                  <option [ngValue]="null">Select peer reviewer...</option>
+                  <option *ngFor="let peer of getSelfEvaluationPeerOptions()" [ngValue]="peer.userId">{{ peer.name }}</option>
+                </select>
+              </div>
+
+              <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Peer Reviewer 2</label>
+                <select
+                  [(ngModel)]="selfEvaluationPeerUserId2"
+                  [disabled]="loadingSelfEvaluationPeers || submittingSelfEvaluation"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                  <option [ngValue]="null">Select peer reviewer...</option>
+                  <option *ngFor="let peer of getSelfEvaluationPeerOptions()" [ngValue]="peer.userId">{{ peer.name }}</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Comment (Optional)</label>
+              <textarea
+                rows="3"
+                [(ngModel)]="selfEvaluationComment"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Add your self-evaluation summary..."></textarea>
+            </div>
+
+            <button
+              (click)="submitSelfEvaluationV2()"
+              [disabled]="submittingSelfEvaluation || !canSubmitSelfEvaluationV2()"
+              class="inline-flex items-center px-5 py-2.5 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              <span *ngIf="submittingSelfEvaluation">Submitting...</span>
+              <span *ngIf="!submittingSelfEvaluation">Submit Self-Evaluation</span>
+            </button>
+          </div>
+
+          <!-- Workflow v2: HOD finalization (threshold-based routing) -->
+          <div *ngIf="isV2HodFinalizeStage()" class="space-y-4 mb-6">
+            <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <h3 class="text-lg font-semibold text-orange-900">Finalize HOD Decision</h3>
+              <p class="text-sm text-orange-700 mt-1">This will compute weighted final score and route to GM (>=80) or HR low-performer queue (&lt;80).</p>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <label class="block text-sm font-medium text-gray-700 mb-2">HOD Comment (Optional)</label>
+              <textarea
+                [(ngModel)]="hodComment"
+                rows="3"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="Optional final remarks for routing..."></textarea>
+            </div>
+
+            <button
+              (click)="finalizeHodV2()"
+              [disabled]="approving"
+              class="inline-flex items-center px-5 py-2.5 rounded-md text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50">
+              <span *ngIf="approving">Finalizing...</span>
+              <span *ngIf="!approving">Finalize HOD Review</span>
+            </button>
+          </div>
+
           <!-- Scoring Section - Per-Goal (RM / Peer / HOD) - NOT shown during TL Combined Mode -->
-          <div *ngIf="hasPendingScoringRequirement && isPendingReviewItemLevel() && !tlCombinedReviewMode" class="space-y-4 mb-6">
+          <div *ngIf="hasPendingScoringRequirement && isPendingReviewItemLevel() && !tlCombinedReviewMode && !isEmployeeActivationStage() && !isTlActivationStage() && !isEmployeeSelfEvaluationStage() && !isV2HodFinalizeStage()" class="space-y-4 mb-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-semibold text-gray-900">Score Each Goal</h3>
               <span class="text-sm text-gray-500">{{ getScoreSubmissionStatus() }}</span>
@@ -318,7 +489,7 @@
           </div>
 
           <!-- Scoring Section - Overall Score (TL/Peer/HOD/GM) - NON-TL Combined Mode -->
-          <div *ngIf="hasPendingScoringRequirement && !isPendingReviewItemLevel() && !tlCombinedReviewMode" class="space-y-4 mb-6">
+          <div *ngIf="hasPendingScoringRequirement && !isPendingReviewItemLevel() && !tlCombinedReviewMode && !isEmployeeActivationStage() && !isTlActivationStage() && !isEmployeeSelfEvaluationStage() && !isV2HodFinalizeStage()" class="space-y-4 mb-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-semibold text-gray-900">Your Evaluation Score</h3>
               <span class="text-sm text-gray-500">{{ getScoreSubmissionStatus() }}</span>
@@ -530,7 +701,7 @@
           </div>
 
           <!-- Comment Section (for non-scoring actions or additional comments) - Hide for TL Combined Mode -->
-          <div *ngIf="!hasPendingScoringRequirement && !tlCombinedReviewMode" class="mb-6">
+          <div *ngIf="!hasPendingScoringRequirement && !tlCombinedReviewMode && !isEmployeeActivationStage() && !isTlActivationStage() && !isEmployeeSelfEvaluationStage() && !isV2HodFinalizeStage()" class="mb-6">
             <label class="block text-sm font-medium text-gray-700 mb-2">
               Comment <span class="text-gray-500">(Optional for approval, required for rejection)</span>
             </label>
@@ -542,7 +713,7 @@
           </div>
           
           <!-- Action Buttons - Hide for TL Combined Mode -->
-          <div *ngIf="!tlCombinedReviewMode" class="flex gap-4 pt-4 border-t border-gray-200">
+          <div *ngIf="!tlCombinedReviewMode && !isEmployeeActivationStage() && !isTlActivationStage() && !isEmployeeSelfEvaluationStage() && !isV2HodFinalizeStage()" class="flex gap-4 pt-4 border-t border-gray-200">
             <button 
               (click)="approveEvaluation()" 
               [disabled]="approving || rejecting"
@@ -585,6 +756,133 @@
               class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-gray-300 textBase font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed">
               Cancel
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- GM Decision Panel -->
+      <div *ngIf="showGmActions" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-red-200">
+        <div class="px-6 py-5 bg-red-50 border-b border-red-200">
+          <h2 class="text-xl font-bold text-red-900">GM Decision Required</h2>
+          <p class="mt-1 text-sm text-red-700">Finalize promotion decision and confirm vacancy availability.</p>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+          <div class="border border-gray-200 rounded-lg p-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Decision</label>
+            <div class="flex flex-wrap gap-4">
+              <label class="inline-flex items-center gap-2">
+                <input type="radio" name="gmDecision" [value]="true" [(ngModel)]="gmApproveDecision" />
+                <span class="text-sm text-gray-800">Approve</span>
+              </label>
+              <label class="inline-flex items-center gap-2">
+                <input type="radio" name="gmDecision" [value]="false" [(ngModel)]="gmApproveDecision" />
+                <span class="text-sm text-gray-800">Decline</span>
+              </label>
+            </div>
+          </div>
+
+          <div *ngIf="isWorkflowV2() && gmApproveDecision" class="border border-gray-200 rounded-lg p-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Vacancy Availability (Required)</label>
+            <div class="flex flex-wrap gap-4">
+              <label class="inline-flex items-center gap-2">
+                <input type="radio" name="gmVacancy" [checked]="gmVacancySelection === 'yes'" (change)="setGmVacancySelection('yes')" />
+                <span class="text-sm text-gray-800">Yes, vacancy is available</span>
+              </label>
+              <label class="inline-flex items-center gap-2">
+                <input type="radio" name="gmVacancy" [checked]="gmVacancySelection === 'no'" (change)="setGmVacancySelection('no')" />
+                <span class="text-sm text-gray-800">No, defer to next cycle</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Comment (Optional)</label>
+            <textarea
+              [(ngModel)]="gmComment"
+              rows="3"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+              placeholder="Optional decision comment..."></textarea>
+          </div>
+
+          <div class="flex gap-3 pt-2">
+            <button
+              (click)="processGmDecision()"
+              [disabled]="processingGmDecision"
+              class="inline-flex items-center px-5 py-2.5 rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
+              <span *ngIf="processingGmDecision">Submitting...</span>
+              <span *ngIf="!processingGmDecision">Submit GM Decision</span>
+            </button>
+            <button
+              (click)="backToApprovals()"
+              [disabled]="processingGmDecision"
+              class="inline-flex items-center px-5 py-2.5 rounded-md text-gray-700 bg-white border border-gray-300 hover:bg-gray-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HR Processing Panel -->
+      <div *ngIf="showHrActions" class="bg-white shadow-lg rounded-lg overflow-hidden border-2 border-pink-200">
+        <div class="px-6 py-5 bg-pink-50 border-b border-pink-200">
+          <h2 class="text-xl font-bold text-pink-900">HR Action Required</h2>
+          <p class="mt-1 text-sm text-pink-700">
+            <span *ngIf="evaluation.status.toLowerCase().includes('v2_pending_hr_low_performer')">
+              Low-performer case detected. Continue in PIP management to assign training and track actions.
+            </span>
+            <span *ngIf="!evaluation.status.toLowerCase().includes('v2_pending_hr_low_performer')">
+              Process final promotion action.
+            </span>
+          </p>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+          <div *ngIf="evaluation.status.toLowerCase().includes('v2_pending_hr_low_performer')" class="space-y-3">
+            <button
+              (click)="openPipCaseManagement()"
+              class="inline-flex items-center px-5 py-2.5 rounded-md text-white bg-pink-600 hover:bg-pink-700">
+              Open PIP Case Management
+            </button>
+          </div>
+
+          <div *ngIf="!evaluation.status.toLowerCase().includes('v2_pending_hr_low_performer')" class="space-y-4">
+            <div class="border border-gray-200 rounded-lg p-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">HR Decision</label>
+              <div class="flex flex-wrap gap-4">
+                <label class="inline-flex items-center gap-2">
+                  <input type="radio" name="hrDecision" [value]="true" [(ngModel)]="hrProceedDecision" />
+                  <span class="text-sm text-gray-800">Process Promotion</span>
+                </label>
+                <label class="inline-flex items-center gap-2">
+                  <input type="radio" name="hrDecision" [value]="false" [(ngModel)]="hrProceedDecision" />
+                  <span class="text-sm text-gray-800">Do Not Process</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Comment (Optional)</label>
+              <textarea
+                [(ngModel)]="hrComment"
+                rows="3"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                placeholder="Optional HR comment..."></textarea>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button
+                (click)="processHrAction()"
+                [disabled]="processingHrAction"
+                class="inline-flex items-center px-5 py-2.5 rounded-md text-white bg-pink-600 hover:bg-pink-700 disabled:opacity-50">
+                <span *ngIf="processingHrAction">Submitting...</span>
+                <span *ngIf="!processingHrAction">Submit HR Action</span>
+              </button>
+              <button
+                (click)="backToApprovals()"
+                [disabled]="processingHrAction"
+                class="inline-flex items-center px-5 py-2.5 rounded-md text-gray-700 bg-white border border-gray-300 hover:bg-gray-50">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>

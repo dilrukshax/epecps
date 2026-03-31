@@ -31,7 +31,9 @@ public class ReviewScoreConfiguration : IEntityTypeConfiguration<ReviewScore>
         builder.HasOne(rs => rs.Evaluation)
             .WithMany()
             .HasForeignKey(rs => rs.EvaluationId)
-            .OnDelete(DeleteBehavior.Cascade);
+            // SQL Server does not allow multiple cascade paths here because
+            // Reviews already cascade from Evaluations and ReviewScores cascade from Reviews.
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(rs => rs.Review)
             .WithMany(r => r.ReviewScores)

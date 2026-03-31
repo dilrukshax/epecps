@@ -26,7 +26,17 @@ import {
   EvaluationReportFilterDto,
   EvaluationReportDataDto,
   CycleDto,
-  DepartmentDto
+  DepartmentDto,
+  SubmitActivationPlanRequestDto,
+  ActivationPlanDecisionDto,
+  SubmitSelfEvaluationV2Dto,
+  GmV2DecisionDto,
+  WorkflowReviewWeightDto,
+  UpdateWorkflowReviewWeightsDto,
+  PipCaseDto,
+  PipCaseUpdateDto,
+  PipActionItemCreateDto,
+  PipActionItemUpdateDto
 } from '../models/evaluation.models';
 
 @Injectable({
@@ -34,6 +44,7 @@ import {
 })
 export class EvaluationService {
   private apiUrl = environment.apiUrl;
+  private workflowV2BaseUrl = `${environment.apiUrl}/api/v2/workflow`;
 
   constructor(private http: HttpClient) {}
 
@@ -156,6 +167,14 @@ export class EvaluationService {
     const body: PromotionDecisionDto = { approve, comment };
     return this.http.post(
       `${this.apiUrl}/api/evaluations/${evaluationId}/promotion-decision`,
+      body
+    );
+  }
+
+  gmV2Decision(evaluationId: number, approve: boolean, vacancyAvailable: boolean, comment?: string): Observable<any> {
+    const body: GmV2DecisionDto = { approve, vacancyAvailable, comment };
+    return this.http.post(
+      `${this.workflowV2BaseUrl}/evaluations/${evaluationId}/gm/decision`,
       body
     );
   }
@@ -357,6 +376,85 @@ export class EvaluationService {
   getDatabaseStats(): Observable<any> {
     return this.http.get<any>(
       `${this.apiUrl}/api/reports/stats`
+    );
+  }
+
+  // ========== Workflow v2 ==========
+
+  submitActivationPlan(goalSetId: string, payload: SubmitActivationPlanRequestDto): Observable<any> {
+    return this.http.post(
+      `${this.workflowV2BaseUrl}/goal-sets/${goalSetId}/activation`,
+      payload
+    );
+  }
+
+  tlActivationDecision(evaluationId: number, payload: ActivationPlanDecisionDto): Observable<any> {
+    return this.http.post(
+      `${this.workflowV2BaseUrl}/evaluations/${evaluationId}/activation/decision`,
+      payload
+    );
+  }
+
+  submitSelfEvaluationV2(evaluationId: number, payload: SubmitSelfEvaluationV2Dto): Observable<any> {
+    return this.http.post(
+      `${this.workflowV2BaseUrl}/evaluations/${evaluationId}/self-evaluation`,
+      payload
+    );
+  }
+
+  hodFinalizeV2(evaluationId: number, comment?: string): Observable<any> {
+    return this.http.post(
+      `${this.workflowV2BaseUrl}/evaluations/${evaluationId}/hod/finalize`,
+      { comment }
+    );
+  }
+
+  getReviewWeights(): Observable<WorkflowReviewWeightDto[]> {
+    return this.http.get<WorkflowReviewWeightDto[]>(
+      `${this.workflowV2BaseUrl}/review-weights`
+    );
+  }
+
+  updateReviewWeights(payload: UpdateWorkflowReviewWeightsDto): Observable<WorkflowReviewWeightDto[]> {
+    return this.http.put<WorkflowReviewWeightDto[]>(
+      `${this.workflowV2BaseUrl}/review-weights`,
+      payload
+    );
+  }
+
+  getPipCases(assignedHrUserId?: number, status?: string): Observable<PipCaseDto[]> {
+    const query: string[] = [];
+    if (assignedHrUserId !== undefined && assignedHrUserId !== null) {
+      query.push(`assignedHrUserId=${encodeURIComponent(assignedHrUserId)}`);
+    }
+    if (status) {
+      query.push(`status=${encodeURIComponent(status)}`);
+    }
+    const queryPart = query.length > 0 ? `?${query.join('&')}` : '';
+
+    return this.http.get<PipCaseDto[]>(
+      `${this.workflowV2BaseUrl}/pip-cases${queryPart}`
+    );
+  }
+
+  updatePipCase(pipCaseId: number, payload: PipCaseUpdateDto): Observable<PipCaseDto> {
+    return this.http.patch<PipCaseDto>(
+      `${this.workflowV2BaseUrl}/pip-cases/${pipCaseId}`,
+      payload
+    );
+  }
+
+  addPipActionItem(pipCaseId: number, payload: PipActionItemCreateDto): Observable<PipCaseDto> {
+    return this.http.post<PipCaseDto>(
+      `${this.workflowV2BaseUrl}/pip-cases/${pipCaseId}/action-items`,
+      payload
+    );
+  }
+
+  updatePipActionItem(pipActionItemId: number, payload: PipActionItemUpdateDto): Observable<PipCaseDto> {
+    return this.http.patch<PipCaseDto>(
+      `${this.workflowV2BaseUrl}/pip-action-items/${pipActionItemId}`,
+      payload
     );
   }
 }

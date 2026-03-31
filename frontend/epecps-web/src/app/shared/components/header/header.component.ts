@@ -1,9 +1,7 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { MsalService, MsalBroadcastService } from '@azure/msal-angular';
-import { InteractionStatus } from '@azure/msal-browser';
-import { Subject, filter, takeUntil } from 'rxjs';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { GraphService } from '../../../services/graph.service';
+import { Subject, takeUntil } from 'rxjs';
+import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-header',
@@ -12,117 +10,69 @@ import { GraphService } from '../../../services/graph.service';
   standalone: false
 })
 export class HeaderComponent implements OnInit, OnDestroy {
-  private readonly _destroying$ = new Subject<void>();
+  private readonly destroy$ = new Subject<void>();
+
   isUserLoggedIn = false;
   userName = '';
   userEmail = '';
-  userPhotoUrl: string | null = null;
   mobileMenuOpen = false;
-  photoLoadError = false;
   userRoles: string[] = [];
 
   constructor(
-    private authService: MsalService,
-    private msalBroadcastService: MsalBroadcastService,
-    private router: Router,
-    private graphService: GraphService
+    private authService: AuthService,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
-    this.msalBroadcastService.inProgress$
-      .pipe(
-        filter((status: InteractionStatus) => status === InteractionStatus.None),
-        takeUntil(this._destroying$)
-      )
-      .subscribe(() => {
-        this.setLoginDisplay();
+    this.authService.user$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(user => {
+        this.isUserLoggedIn = !!user;
+        this.userName = user?.fullName || '';
+        this.userEmail = user?.email || '';
+        this.userRoles = user?.roles || [];
       });
-    
-    this.setLoginDisplay();
-  }
 
-  setLoginDisplay() {
-    this.isUserLoggedIn = this.authService.instance.getAllAccounts().length > 0;
-    if (this.isUserLoggedIn) {
-      const account = this.authService.instance.getActiveAccount();
-      this.userName = account?.name || '';
-      this.userEmail = account?.username || '';
-      this.userRoles = account?.idTokenClaims?.['roles'] as string[] || [];
-      
-      console.log('User logged in:', this.userName, this.userEmail);
-      console.log('User roles:', this.userRoles);
-      
-      // Fetch user's profile photo
-      this.loadUserPhoto();
+    if (!this.authService.getCurrentUser() && this.authService.isAuthenticated()) {
+      this.authService.getMe().subscribe();
     }
   }
 
-  loadUserPhoto(): void {
-    console.log('Attempting to load user photo from Microsoft Graph...');
-    this.graphService.getUserPhoto()
-      .pipe(takeUntil(this._destroying$))
-      .subscribe({
-        next: (photoUrl) => {
-          if (photoUrl) {
-            console.log('✅ User photo loaded successfully');
-            this.userPhotoUrl = photoUrl;
-            this.photoLoadError = false;
-          } else {
-            console.log('⚠️ No photo URL returned (user may not have a profile photo)');
-            this.userPhotoUrl = null;
-            this.photoLoadError = true;
-          }
-        },
-        error: (err) => {
-          console.error('❌ Error loading user photo:', err);
-          console.error('Error status:', err.status);
-          console.error('Error message:', err.message);
-          
-          if (err.status === 403) {
-            console.error('🔒 Permission denied. Please add "User.Read" permission in Azure AD and grant admin consent.');
-          } else if (err.status === 404) {
-            console.log('ℹ️ User does not have a profile photo set in Microsoft 365.');
-          }
-          
-          this.userPhotoUrl = null;
-          this.photoLoadError = true;
-        }
-      });
+  login(): void {
+    this.router.navigate(['/login']);
   }
 
-  login() {
-    this.authService.loginRedirect();
+  logout(): void {
+    this.authService.logout().subscribe({
+      complete: () => this.router.navigate(['/login']),
+      error: () => this.router.navigate(['/login'])
+    });
   }
 
-  logout() {
-    this.authService.logoutRedirect();
-  }
-
-  toggleMobileMenu() {
+  toggleMobileMenu(): void {
     this.mobileMenuOpen = !this.mobileMenuOpen;
   }
 
-  navigateTo(path: string) {
+  navigateTo(path: string): void {
     this.router.navigate([path]);
     this.mobileMenuOpen = false;
   }
 
   hasHrRole(): boolean {
-    return this.userRoles.includes('HR');
+    return this.userRoles.includes('HR') || this.userRoles.includes('SuperAdmin');
   }
 
   hasAdminRole(): boolean {
-    return this.userRoles.includes('Admin') || this.userRoles.includes('HOD') || this.userRoles.includes('GM');
+    return this.userRoles.includes('Admin') ||
+           this.userRoles.includes('SuperAdmin') ||
+           this.userRoles.includes('HOD') ||
+           this.userRoles.includes('GM');
   }
 
-  ngOnDestroy(): void {
-    this._destroying$.next(undefined);
-    this._destroying$.complete();
+  hasRmRole(): boolean {
+    return this.userRoles.includes('RM') || this.userRoles.includes('SuperAdmin');
   }
 
-  /**
-   * Get user initials for avatar fallback
-   */
   getUserInitials(): string {
     if (!this.userName) return '?';
     const names = this.userName.split(' ');
@@ -130,5 +80,10 @@ export class HeaderComponent implements OnInit, OnDestroy {
       return names[0].charAt(0).toUpperCase() + names[names.length - 1].charAt(0).toUpperCase();
     }
     return this.userName.charAt(0).toUpperCase();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 }

@@ -19,6 +19,17 @@ public class GoalAssignmentConfiguration : IEntityTypeConfiguration<GoalAssignme
         builder.Property(ga => ga.Description)
             .HasMaxLength(2000);
 
+        builder.Property(ga => ga.ActivationMethod)
+            .HasMaxLength(4000);
+
+        builder.Property(ga => ga.ActivationStatus)
+            .IsRequired()
+            .HasMaxLength(32)
+            .HasDefaultValue("PendingEmployee");
+
+        builder.Property(ga => ga.ActivationTlComment)
+            .HasMaxLength(2000);
+
         builder.Property(ga => ga.TargetScore)
             .HasColumnType("decimal(18,2)");
 
@@ -46,8 +57,15 @@ public class GoalAssignmentConfiguration : IEntityTypeConfiguration<GoalAssignme
             .OnDelete(DeleteBehavior.SetNull)
             .IsRequired(false);
 
+        builder.HasOne(ga => ga.ActivationReviewedByUser)
+            .WithMany(u => u.GoalAssignmentsActivationReviewed)
+            .HasForeignKey(ga => ga.ActivationReviewedByUserId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
+
         builder.HasIndex(ga => ga.AssignedToUserId);
         builder.HasIndex(ga => ga.AssignedByUserId);
         builder.HasIndex(ga => ga.GoalSetId);
+        builder.HasIndex(ga => new { ga.GoalSetId, ga.ActivationStatus });
     }
 }
