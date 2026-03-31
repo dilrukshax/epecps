@@ -492,41 +492,170 @@ This repository includes a full Docker setup for:
 - **ASP.NET Core API** backend
 - **Angular frontend** served by Nginx
 
-### 1. Start all services
+### Option A: One-command (recommended)
 
 From the repository root:
 
 ```bash
-cp .env.docker.example .env
-docker compose up --build -d
+./scripts/docker.sh up
 ```
 
-### 2. Open the app
+This command:
+- Creates `.env` from `.env.docker.example` if it does not exist
+- Builds all images
+- Starts all containers in detached mode
+
+Useful companion commands:
+
+```bash
+./scripts/docker.sh ps
+./scripts/docker.sh logs
+./scripts/docker.sh down
+./scripts/docker.sh reset
+./scripts/docker.sh migrate
+```
+
+You can also run these from VS Code/Visual Studio Code via:
+- `Terminal` -> `Run Task` -> `Docker: Start All Services`
+- `Docker: Stop All Services`
+- `Docker: Run Migrator`
+- `Docker: Logs (All)`
+- `Docker: Reset (Delete DB Volume)`
+
+### Option B: Docker Compose commands (direct)
+
+```bash
+cp .env.docker.example .env
+docker compose up --build -d
+docker compose ps
+docker compose logs -f
+docker compose down
+```
+
+### Option C: Manual Docker run (without Compose)
+
+```bash
+# 1) Build images from repo root
+docker build -f backend/Dockerfile -t epecps-backend .
+docker build -f frontend/epecps-web/Dockerfile -t epecps-frontend .
+
+# 2) Create network + volume
+docker network create epecps-net
+docker volume create epecps_sqlserver_data
+
+# 3) Start SQL Server (network alias must be: db)
+docker run -d --name epecps-db \
+  --network epecps-net --network-alias db \
+  -p 1433:1433 \
+  -e ACCEPT_EULA=Y \
+  -e MSSQL_SA_PASSWORD='YourStrong!Passw0rd' \
+  -v epecps_sqlserver_data:/var/opt/mssql \
+  mcr.microsoft.com/mssql/server:2022-latest
+
+# 4) Start backend (network alias must be: backend)
+docker run -d --name epecps-backend \
+  --network epecps-net --network-alias backend \
+  -p 8080:8080 \
+  --env-file .env \
+  -e ASPNETCORE_ENVIRONMENT=Development \
+  -e ASPNETCORE_URLS=http://+:8080 \
+  -e DisableHttpsRedirection=true \
+  -e ConnectionStrings__DefaultConnection='Server=db,1433;Database=EpecpsDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true' \
+  -e Database__AutoMigrate=false \
+  -e Database__AutoSeed=true \
+  -e Database__MigrateOnly=false \
+  -e Database__IgnorePendingModelChangesWarning=true \
+  -e Database__RecreateIfCoreTablesMissing=true \
+  -e Database__StartupRetryCount=15 \
+  -e Database__StartupRetryDelaySeconds=5 \
+  -e EmailSettings__EnableBackgroundProcessing=false \
+  -e EmailSettings__BaseUrl=http://localhost:4200 \
+  epecps-backend
+
+# 5) Start frontend
+docker run -d --name epecps-frontend \
+  --network epecps-net \
+  -p 4200:80 \
+  epecps-frontend
+```
+
+To stop/remove manual containers:
+
+```bash
+docker rm -f epecps-frontend epecps-backend epecps-db
+docker network rm epecps-net
+```
+
+### Open the app
 
 - **Frontend**: http://localhost:4200
 - **Backend API**: http://localhost:8080
 - **Swagger UI**: http://localhost:4200/swagger
-
-### 3. Stop services
-
-```bash
-docker compose down
-```
-
-To also remove SQL Server data volume:
-
-```bash
-docker compose down -v
-```
 
 ### Docker environment variables
 
 `docker-compose.yml` provides safe defaults. You can override them in your shell or a `.env` file:
 
 - `MSSQL_SA_PASSWORD`
-- `AZURE_TENANT_ID`
-- `AZURE_API_CLIENT_ID`
-- `AZURE_API_APP_ID_URI`
+- `JWT_SIGNING_KEY`
+- `SUPER_ADMIN_EMAIL`
+- `SUPER_ADMIN_PASSWORD`
+
+### Local test accounts (copy-friendly)
+
+These are local Docker test users for development/demo only.
+
+| Assignment | Email | Password |
+|---|---|---|
+| SuperAdmin | superadmin@company.com | CHANGE_THIS_SUPERADMIN_PASSWORD |
+| SuperAdmin, Admin, Employee | superman.admin@empovate.test | Superman#2026 |
+| GM, Employee | gm.ceo@empovate.test | GmCeo#2026 |
+| HOD, Employee | hod.engineering@empovate.test | HodEng#2026 |
+| RM, Employee | rm.platform@empovate.test | RmPlat#2026 |
+| TL, Employee | tl.platform@empovate.test | TlPlat#2026 |
+| Peer, Employee | peer.reviewer@empovate.test | PeerRev#2026 |
+| HR, Employee | hr.business@empovate.test | HrBiz#2026 |
+| Admin, Employee | admin.ops@empovate.test | AdminOps#2026 |
+| Employee | employee.one@empovate.test | EmpOne#2026 |
+| Employee | employee.two@empovate.test | EmpTwo#2026 |
+| Accountant, Employee | accountant.test@empovate.test | Account#2026 |
+| Employee | employee.multi@empovate.test | EmpMulti#2026 |
+
+Quick copy (`email,password`):
+
+```txt
+superadmin@company.com,CHANGE_THIS_SUPERADMIN_PASSWORD
+superman.admin@empovate.test,Superman#2026
+gm.ceo@empovate.test,GmCeo#2026
+hod.engineering@empovate.test,HodEng#2026
+rm.platform@empovate.test,RmPlat#2026
+tl.platform@empovate.test,TlPlat#2026
+peer.reviewer@empovate.test,PeerRev#2026
+hr.business@empovate.test,HrBiz#2026
+admin.ops@empovate.test,AdminOps#2026
+employee.one@empovate.test,EmpOne#2026
+employee.two@empovate.test,EmpTwo#2026
+accountant.test@empovate.test,Account#2026
+employee.multi@empovate.test,EmpMulti#2026
+```
+
+Quick copy (`email -> assignment`):
+
+```txt
+superadmin@company.com -> SuperAdmin
+superman.admin@empovate.test -> SuperAdmin, Admin, Employee
+gm.ceo@empovate.test -> GM, Employee
+hod.engineering@empovate.test -> HOD, Employee
+rm.platform@empovate.test -> RM, Employee
+tl.platform@empovate.test -> TL, Employee
+peer.reviewer@empovate.test -> Peer, Employee
+hr.business@empovate.test -> HR, Employee
+admin.ops@empovate.test -> Admin, Employee
+employee.one@empovate.test -> Employee
+employee.two@empovate.test -> Employee
+accountant.test@empovate.test -> Accountant, Employee
+employee.multi@empovate.test -> Employee
+```
 
 ## Database Migrations
 

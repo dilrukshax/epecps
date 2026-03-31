@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Docker: Start All Images",
+      "label": "Docker: Start All Services",
       "type": "shell",
-      "command": "docker compose up -d --build",
+      "command": "./scripts/docker.sh up",
       "group": {
         "kind": "build",
         "isDefault": true
@@ -17,9 +17,42 @@
       "problemMatcher": []
     },
     {
-      "label": "Docker: Stop All Images",
+      "label": "Docker: Stop All Services",
       "type": "shell",
-      "command": "docker compose down",
+      "command": "./scripts/docker.sh down",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker: Run Migrator",
+      "type": "shell",
+      "command": "./scripts/docker.sh migrate",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker: Logs (All)",
+      "type": "shell",
+      "command": "./scripts/docker.sh logs",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker: Reset (Delete DB Volume)",
+      "type": "shell",
+      "command": "./scripts/docker.sh reset",
       "presentation": {
         "reveal": "always",
         "panel": "new",

@@ -1,0 +1,103 @@
+[
+  {
+    "email": "superadmin@company.com",
+    "status": 200,
+    "roles": [
+      "SuperAdmin"
+    ]
+  },
+  {
+    "email": "superman.admin@empovate.test",
+    "status": 200,
+    "roles": [
+      "SuperAdmin",
+      "Employee",
+      "Admin"
+    ]
+  },
+  {
+    "email": "gm.ceo@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee",
+      "GM"
+    ]
+  },
+  {
+    "email": "hod.engineering@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee",
+      "HOD"
+    ]
+  },
+  {
+    "email": "rm.platform@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee",
+      "RM"
+    ]
+  },
+  {
+    "email": "tl.platform@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee",
+      "TL"
+    ]
+  },
+  {
+    "email": "peer.reviewer@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee",
+      "Peer"
+    ]
+  },
+  {
+    "email": "hr.business@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee",
+      "HR"
+    ]
+  },
+  {
+    "email": "admin.ops@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee",
+      "Admin"
+    ]
+  },
+  {
+    "email": "employee.one@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee"
+    ]
+  },
+  {
+    "email": "employee.two@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee"
+    ]
+  },
+  {
+    "email": "accountant.test@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee",
+      "Accountant"
+    ]
+  },
+  {
+    "email": "employee.multi@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee"
+    ]
+  }
+]
