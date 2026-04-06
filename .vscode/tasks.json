@@ -28,9 +28,9 @@
       "problemMatcher": []
     },
     {
-      "label": "Docker: Run Migrator",
+      "label": "Docker: Seed Test Data",
       "type": "shell",
-      "command": "./scripts/docker.sh migrate",
+      "command": "./scripts/docker.sh seed-test-data",
       "presentation": {
         "reveal": "always",
         "panel": "new",

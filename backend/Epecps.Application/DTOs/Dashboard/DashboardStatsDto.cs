@@ -19,9 +19,9 @@ public class DashboardStatsDto
     
     // Score Statistics
     public decimal AverageScore { get; set; }
-    public int HighPerformers { get; set; } // Score >= 80
+    public int HighPerformers { get; set; } // Score >= 85
     public int LowPerformers { get; set; } // Score < 50
-    public int PromotionCandidates { get; set; } // Score >= 80
+    public int PromotionCandidates { get; set; } // Score >= 85
     
     // Role-Specific Statistics
     public RoleSpecificStatsDto? RoleStats { get; set; }
@@ -75,7 +75,7 @@ public class TrendDataPointDto
 /// </summary>
 public class ScoreDistributionDto
 {
-    public string Range { get; set; } = string.Empty; // "0-50", "51-70", "71-80", "81-100"
+    public string Range { get; set; } = string.Empty; // "0-50", "51-70", "71-84", "85-100"
     public int Count { get; set; }
     public decimal Percentage { get; set; }
 }

@@ -12,7 +12,7 @@ public class BulkApprovalCandidateDto
     public string Status { get; set; } = string.Empty;
     public decimal? OverallScore { get; set; }
     public decimal ScorePercentage { get; set; } // Score as percentage (0-100)
-    public bool IsEligibleForPromotion { get; set; } // Score >= 80%
+    public bool IsEligibleForPromotion { get; set; } // Score >= 85%
     public int CycleId { get; set; }
     public string CycleName { get; set; } = string.Empty;
     public DateTime? LastReviewedAt { get; set; }
@@ -60,7 +60,7 @@ public class BulkApprovalStatsDto
 {
     public int PendingGmApproval { get; set; }
     public int PendingHrProcessing { get; set; }
-    public int EligibleForPromotion { get; set; } // Score >= 80%
-    public int NotEligibleForPromotion { get; set; } // Score < 80%
+    public int EligibleForPromotion { get; set; } // Score >= 85%
+    public int NotEligibleForPromotion { get; set; } // Score < 85%
     public decimal AverageScore { get; set; }
 }

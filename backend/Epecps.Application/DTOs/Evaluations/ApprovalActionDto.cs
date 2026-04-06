@@ -18,6 +18,18 @@ public class AssignPeersDto
 }
 
 /// <summary>
+/// Team Lead combined review request:
+/// submit TL overall score and assign both peer reviewers in one action.
+/// </summary>
+public class SubmitTlCombinedReviewDto
+{
+    public decimal OverallScore { get; set; }
+    public string? Comment { get; set; }
+    public int PeerUserId1 { get; set; }
+    public int PeerUserId2 { get; set; }
+}
+
+/// <summary>
 /// Response after submitting a goal set for evaluation
 /// </summary>
 public class SubmitGoalSetResponseDto

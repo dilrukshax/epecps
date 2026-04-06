@@ -28,7 +28,7 @@ A comprehensive employee performance evaluation system built with .NET 8 and Ang
   - [6. Email Configuration](#6-email-configuration)
 - [Running the Application](#running-the-application)
 - [Run with Docker](#run-with-docker)
-- [Run with Cached Dev Script](#run-with-cached-dev-script)
+- [Run with Docker Dev Script](#run-with-docker-dev-script)
 - [Database Migrations](#database-migrations)
 - [Configuration Guide](#configuration-guide)
 - [API Documentation](#api-documentation)
@@ -104,31 +104,31 @@ Before you begin, ensure you have the following installed:
 
 ```
 epecps/
-??? backend/
-?   ??? Epecps.Api/              # ASP.NET Core Web API
-?   ?   ??? Controllers/         # API Controllers
-?   ?   ??? Program.cs           # Application entry point
-?   ?   ??? appsettings.json     # Configuration file
-?   ??? Epecps.Application/      # Application layer (DTOs, Interfaces)
-?   ?   ??? DTOs/                # Data Transfer Objects
-?   ?   ??? Interfaces/          # Service interfaces
-?   ??? Epecps.Domain/           # Domain layer (Entities)
-?   ?   ??? Entities/            # Domain models
-?   ??? Epecps.Infrastructure/   # Infrastructure layer (Data, Services)
-?       ??? Persistence/         # EF Core DbContext
-?       ??? Migrations/          # Database migrations
-?       ??? Services/            # Business logic services
-??? frontend/
-    ??? epecps-web/              # Angular application
-        ??? src/
-        ?   ??? app/             # Application components
-        ?   ?   ??? core/        # Core modules (auth, guards)
-        ?   ?   ??? services/    # API services
-        ?   ?   ??? models/      # TypeScript models
-        ?   ?   ??? employee/    # Employee feature module
-        ?   ?   ??? pages/       # Page components
-        ?   ??? environments/    # Environment configurations
-        ??? package.json         # npm dependencies
+|-- backend/
+|   |-- Epecps.Api/              # ASP.NET Core Web API
+|   |   |-- Controllers/         # API Controllers
+|   |   |-- Program.cs           # Application entry point
+|   |   `-- appsettings.json     # Configuration file
+|   |-- Epecps.Application/      # Application layer (DTOs, Interfaces)
+|   |   |-- DTOs/                # Data Transfer Objects
+|   |   `-- Interfaces/          # Service interfaces
+|   |-- Epecps.Domain/           # Domain layer (Entities)
+|   |   `-- Entities/            # Domain models
+|   `-- Epecps.Infrastructure/   # Infrastructure layer (Data, Services)
+|       |-- Persistence/         # EF Core DbContext
+|       |-- Migrations/          # Database migrations
+|       `-- Services/            # Business logic services
+`-- frontend/
+    `-- epecps-web/            # Angular application
+        |-- src/
+        |   |-- app/           # Application components
+        |   |   |-- core/      # Core modules (auth, guards)
+        |   |   |-- services/  # API services
+        |   |   |-- models/    # TypeScript models
+        |   |   |-- employee/  # Employee feature module
+        |   |   `-- pages/     # Page components
+        |   `-- environments/  # Environment configurations
+        `-- package.json       # npm dependencies
 ```
 
 ## Getting Started
@@ -503,7 +503,12 @@ From the repository root:
 
 This command:
 - Creates `.env` from `.env.docker.example` if it does not exist
-- Builds all images
+- Uses cached local Docker layers (no forced pull)
+- Rebuilds only what changed
+- Ensures `EpecpsDb` exists before backend startup
+- Lets backend run migrations only when pending migrations exist
+- Runs base seeding only when core seed tables are missing
+- Imports Excel test data automatically only when no existing `@empovate.test` users are found
 - Starts all containers in detached mode
 
 Useful companion commands:
@@ -513,13 +518,16 @@ Useful companion commands:
 ./scripts/docker.sh logs
 ./scripts/docker.sh down
 ./scripts/docker.sh reset
-./scripts/docker.sh migrate
+./scripts/docker.sh rebuild
+./scripts/docker.sh refresh-images
+./scripts/docker.sh up-fresh
+./scripts/docker.sh seed-test-data
 ```
 
 You can also run these from VS Code/Visual Studio Code via:
 - `Terminal` -> `Run Task` -> `Docker: Start All Services`
 - `Docker: Stop All Services`
-- `Docker: Run Migrator`
+- `Docker: Seed Test Data`
 - `Docker: Logs (All)`
 - `Docker: Reset (Delete DB Volume)`
 
@@ -527,7 +535,9 @@ You can also run these from VS Code/Visual Studio Code via:
 
 ```bash
 cp .env.docker.example .env
-docker compose up --build -d
+docker compose up -d db
+docker compose exec -T db /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "YourStrong!Passw0rd" -Q "IF DB_ID(N'EpecpsDb') IS NULL CREATE DATABASE [EpecpsDb];"
+docker compose up -d --build backend frontend
 docker compose ps
 docker compose logs -f
 docker compose down
@@ -562,7 +572,7 @@ docker run -d --name epecps-backend \
   -e ASPNETCORE_URLS=http://+:8080 \
   -e DisableHttpsRedirection=true \
   -e ConnectionStrings__DefaultConnection='Server=db,1433;Database=EpecpsDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true' \
-  -e Database__AutoMigrate=false \
+  -e Database__AutoMigrate=true \
   -e Database__AutoSeed=true \
   -e Database__MigrateOnly=false \
   -e Database__IgnorePendingModelChangesWarning=true \
@@ -587,29 +597,32 @@ docker rm -f epecps-frontend epecps-backend epecps-db
 docker network rm epecps-net
 ```
 
-## Run with Cached Dev Script
+## Run with Docker Dev Script
 
-If you want cached dependency/image flow (avoid downloading everything every run):
+Use this for day-to-day development without downloading dependencies every run:
 
 ```bash
-# Warm local npm + NuGet caches
-./scripts/dev-cache.sh prepare
-
-# Start with cached build (pull only missing images)
-./scripts/dev-cache.sh up
-
-# Start without pulling from internet
-./scripts/dev-cache.sh up-offline
+./scripts/docker.sh up
 ```
 
-Full guide:
-- [RUN_PROJECT_WITH_CACHE.md](/Users/dilandilaruksha/Project/epecps/docs/RUN_PROJECT_WITH_CACHE.md)
+When you want a complete refresh:
+
+```bash
+./scripts/docker.sh up-fresh
+```
+
+Full guide (with script code and command reference):
+- [RUN_PROJECT_DOCKER_DEV.md](/Users/dilandilaruksha/Project/epecps/docs/RUN_PROJECT_DOCKER_DEV.md)
+
+Optional:
+- Disable automatic Excel test-data import on startup: `IMPORT_TEST_DATA_ON_UP=false ./scripts/docker.sh up`
+- Use a different Excel file path: `TEST_DATA_FILE=/absolute/path/file.xlsx ./scripts/docker.sh seed-test-data`
 
 ### Open the app
 
 - **Frontend**: http://localhost:4200
 - **Backend API**: http://localhost:8080
-- **Swagger UI**: http://localhost:4200/swagger
+- **Swagger UI**: http://localhost:8080/swagger
 
 ### Docker environment variables
 

@@ -1,5 +1,7 @@
 using System.Text;
 using System.Data;
+using System.Linq;
+using Epecps.Domain.Entities;
 using Epecps.Application.Interfaces;
 using Epecps.Application.Models;
 using Epecps.Infrastructure.Persistence;
@@ -212,7 +214,35 @@ async Task InitializeDatabaseAsync(
             {
                 try
                 {
-                    await db.Database.MigrateAsync();
+                    var usersTableExistsBeforeMigrate = await TableExistsAsync(db, "Users");
+                    var migrationHistoryCount = await GetMigrationHistoryCountAsync(db);
+
+                    var shouldSkipMigrationReplay =
+                        usersTableExistsBeforeMigrate &&
+                        migrationHistoryCount == 0;
+
+                    if (shouldSkipMigrationReplay)
+                    {
+                        webApp.Logger.LogInformation(
+                            "Schema tables exist while migration history is empty; skipping migration replay and using schema sync path.");
+                    }
+                    else
+                    {
+                        var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
+                        if (pendingMigrations.Count > 0)
+                        {
+                            webApp.Logger.LogInformation(
+                                "Applying {PendingCount} pending migration(s): {PendingMigrations}",
+                                pendingMigrations.Count,
+                                string.Join(", ", pendingMigrations));
+
+                            await db.Database.MigrateAsync();
+                        }
+                        else
+                        {
+                            webApp.Logger.LogInformation("No pending migrations found. Skipping migration step.");
+                        }
+                    }
                 }
                 catch (InvalidOperationException ex) when (
                     ignorePendingModelChanges &&
@@ -403,6 +433,29 @@ async Task InitializeDatabaseAsync(
                 END
             ');
         END
+
+        IF OBJECT_ID(N'[PersonalGoals]', N'U') IS NOT NULL
+        BEGIN
+            IF COL_LENGTH('PersonalGoals', 'CompletionEvidenceUrl') IS NULL
+            BEGIN
+                ALTER TABLE [PersonalGoals] ADD [CompletionEvidenceUrl] nvarchar(2000) NULL;
+            END
+
+            IF COL_LENGTH('PersonalGoals', 'CompletionCertificationUrl') IS NULL
+            BEGIN
+                ALTER TABLE [PersonalGoals] ADD [CompletionCertificationUrl] nvarchar(2000) NULL;
+            END
+
+            IF COL_LENGTH('PersonalGoals', 'CompletionSummary') IS NULL
+            BEGIN
+                ALTER TABLE [PersonalGoals] ADD [CompletionSummary] nvarchar(4000) NULL;
+            END
+
+            IF COL_LENGTH('PersonalGoals', 'CompletionComment') IS NULL
+            BEGIN
+                ALTER TABLE [PersonalGoals] ADD [CompletionComment] nvarchar(2000) NULL;
+            END
+        END
     ");
             }
             catch (Exception ex)
@@ -414,8 +467,31 @@ async Task InitializeDatabaseAsync(
             {
                 try
                 {
-                    var seeder = scope.ServiceProvider.GetRequiredService<Epecps.Infrastructure.Data.DatabaseSeeder>();
-                    await seeder.SeedAsync();
+                    bool shouldSeed;
+                    try
+                    {
+                        shouldSeed =
+                            !await db.Roles.AnyAsync() ||
+                            !await db.Departments.AnyAsync() ||
+                            !await db.Set<Cycle>().AnyAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        webApp.Logger.LogWarning(
+                            ex,
+                            "Could not evaluate seed pre-check. Running seeder in safe mode.");
+                        shouldSeed = true;
+                    }
+
+                    if (shouldSeed)
+                    {
+                        var seeder = scope.ServiceProvider.GetRequiredService<Epecps.Infrastructure.Data.DatabaseSeeder>();
+                        await seeder.SeedAsync();
+                    }
+                    else
+                    {
+                        webApp.Logger.LogInformation("Seed data already present. Skipping seed step.");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -472,6 +548,34 @@ async Task<bool> TableExistsAsync(EpecpsDbContext dbContext, string tableName)
     }
 
     return result is not null && Convert.ToInt32(result) == 1;
+}
+
+async Task<int> GetMigrationHistoryCountAsync(EpecpsDbContext dbContext)
+{
+    if (!await TableExistsAsync(dbContext, "__EFMigrationsHistory"))
+    {
+        return -1;
+    }
+
+    var connection = dbContext.Database.GetDbConnection();
+    var shouldClose = false;
+
+    if (connection.State != ConnectionState.Open)
+    {
+        await connection.OpenAsync();
+        shouldClose = true;
+    }
+
+    await using var command = connection.CreateCommand();
+    command.CommandText = "SELECT COUNT(1) FROM [__EFMigrationsHistory]";
+
+    var result = await command.ExecuteScalarAsync();
+    if (shouldClose)
+    {
+        await connection.CloseAsync();
+    }
+
+    return result is null ? 0 : Convert.ToInt32(result);
 }
 
 if (app.Environment.IsDevelopment())

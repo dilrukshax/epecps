@@ -74,7 +74,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getScoreColorClass(score: number): string {
-    if (score >= 80) return 'text-green-600';
+    if (score >= 85) return 'text-green-600';
     if (score >= 70) return 'text-blue-600';
     if (score >= 50) return 'text-yellow-600';
     return 'text-red-600';
@@ -141,13 +141,14 @@ export class DashboardComponent implements OnInit {
   }
 
   hasHrRole(): boolean {
-    return this.userRoles.includes('HR') || this.userRoles.includes('SuperAdmin');
+    return this.authService.hasAnyRole(['HR', 'SuperAdmin', 'Admin']);
+  }
+
+  hasHrPipRole(): boolean {
+    return this.authService.hasAnyRole(['HR', 'SuperAdmin']);
   }
 
   hasAdminRole(): boolean {
-    return this.userRoles.includes('Admin') || 
-           this.userRoles.includes('SuperAdmin') ||
-           this.userRoles.includes('HOD') || 
-           this.userRoles.includes('GM');
+    return this.authService.hasAnyRole(['Admin', 'SuperAdmin']);
   }
 }

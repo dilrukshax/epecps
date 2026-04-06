@@ -91,6 +91,7 @@ public class GoalSetEvaluationInfoDto
     public DateTime SubmittedDate { get; set; }
     public DateTime? CompletedDate { get; set; }
     public List<GoalSetApprovalStepDto> ApprovalSteps { get; set; } = new();
+    public List<GoalSetApprovalHistoryEventDto> ApprovalHistory { get; set; } = new();
 }
 
 /// <summary>
@@ -106,4 +107,20 @@ public class GoalSetApprovalStepDto
     public bool IsCompleted { get; set; }
     public bool IsPending { get; set; }
     public bool IsRejected { get; set; }
+}
+
+/// <summary>
+/// Full chronological approval history event for goal-set evaluation.
+/// </summary>
+public class GoalSetApprovalHistoryEventDto
+{
+    public int Id { get; set; }
+    public int ActorUserId { get; set; }
+    public string ActorName { get; set; } = string.Empty;
+    public string ActorRole { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public string? Comment { get; set; }
+    public string FromStatus { get; set; } = string.Empty;
+    public string ToStatus { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
 }

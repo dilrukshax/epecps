@@ -1,3 +1,88 @@
+# Run Project With Docker Dev Script
+
+This guide runs backend, frontend, and SQL Server with one development-focused script.
+
+## Default Development Flow
+
+`./scripts/docker.sh up` is optimized for daily development:
+
+- Uses only `db`, `backend`, and `frontend` services
+- Does not force image pulls every run
+- Uses cached Docker build layers
+- Builds only changed layers/services
+- Ensures `EpecpsDb` exists, then backend starts
+- Backend runs migrations only when pending migrations exist
+- Backend runs seed only when core seed tables are missing
+- Excel test-data import runs automatically only when no existing `@empovate.test` users are found
+
+## Script Location
+
+- [docker.sh](/Users/dilandilaruksha/Project/epecps/scripts/docker.sh)
+
+## Quick Start
+
+From project root:
+
+```bash
+./scripts/docker.sh up
+```
+
+## Full Refresh (Only When Needed)
+
+Use this only when you explicitly need to refresh all images/build layers:
+
+```bash
+./scripts/docker.sh up-fresh
+```
+
+## Useful Commands
+
+```bash
+# Rebuild all app services with cache
+./scripts/docker.sh rebuild
+
+# Rebuild one service with cache
+./scripts/docker.sh rebuild backend
+./scripts/docker.sh rebuild frontend
+
+# Pull latest image updates + no-cache rebuild (without start)
+./scripts/docker.sh refresh-images
+
+# Import Excel test data manually
+./scripts/docker.sh seed-test-data
+
+# View status
+./scripts/docker.sh ps
+
+# Tail logs
+./scripts/docker.sh logs
+./scripts/docker.sh logs backend
+
+# Stop stack
+./scripts/docker.sh down
+
+# Stop stack and remove DB volume
+./scripts/docker.sh reset
+```
+
+## Access URLs
+
+- Frontend: http://localhost:4200
+- Backend API: http://localhost:8080
+
+## Optional Flags
+
+```bash
+# Disable automatic Excel test-data import during "up"
+IMPORT_TEST_DATA_ON_UP=false ./scripts/docker.sh up
+
+# Use a custom Excel file for manual import
+TEST_DATA_FILE=/absolute/path/file.xlsx ./scripts/docker.sh seed-test-data
+```
+
+## Full Script Code
+
+```bash
 #!/usr/bin/env bash
 
 set -euo pipefail
@@ -57,15 +142,6 @@ get_env_value() {
   return 1
 }
 
-get_sa_password() {
-  local sa_password
-  sa_password="$(get_env_value MSSQL_SA_PASSWORD || true)"
-  if [[ -z "$sa_password" ]]; then
-    sa_password="${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}"
-  fi
-  printf '%s' "$sa_password"
-}
-
 is_true() {
   case "${1:-}" in
     1|true|TRUE|True|yes|YES|Yes|y|Y|on|ON|On)
@@ -111,7 +187,11 @@ rebuild_no_cache() {
 ensure_app_database() {
   local db_name="EpecpsDb"
   local sa_password
-  sa_password="$(get_sa_password)"
+
+  sa_password="$(get_env_value MSSQL_SA_PASSWORD || true)"
+  if [[ -z "$sa_password" ]]; then
+    sa_password="${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}"
+  fi
 
   local sql
   sql="IF DB_ID(N'${db_name}') IS NULL CREATE DATABASE [${db_name}];"
@@ -127,23 +207,6 @@ ensure_app_database() {
 
   warn "Could not ensure database exists (${db_name}) before backend startup."
   return 1
-}
-
-test_data_user_count() {
-  local sa_password
-  local raw
-  local parsed
-
-  sa_password="$(get_sa_password)"
-  raw="$(docker compose exec -T db /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$sa_password" -d EpecpsDb -W -h -1 -Q "SET NOCOUNT ON; IF OBJECT_ID(N'Users', N'U') IS NULL SELECT 0 ELSE SELECT COUNT(1) FROM [Users] WHERE [Email] LIKE '%@empovate.test';" 2>/dev/null || true)"
-  parsed="$(printf '%s' "$raw" | tr -dc '0-9')"
-
-  if [[ -z "$parsed" ]]; then
-    printf '0'
-    return 0
-  fi
-
-  printf '%s' "$parsed"
 }
 
 wait_backend_ready() {
@@ -232,13 +295,7 @@ seed_test_data() {
 seed_test_data_if_enabled() {
   local enabled="${IMPORT_TEST_DATA_ON_UP:-true}"
   if is_true "$enabled"; then
-    local existing_count
-    existing_count="$(test_data_user_count)"
-    if [[ "$existing_count" =~ ^[0-9]+$ ]] && (( existing_count > 0 )); then
-      log "Test data users already exist (${existing_count}). Skipping automatic import."
-    else
-      seed_test_data
-    fi
+    seed_test_data
   else
     log "Skipping automatic test-data import (IMPORT_TEST_DATA_ON_UP=$enabled)"
   fi
@@ -346,3 +403,4 @@ main() {
 }
 
 main "$@"
+```

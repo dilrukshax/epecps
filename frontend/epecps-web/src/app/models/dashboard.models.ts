@@ -15,9 +15,9 @@ export interface DashboardStatsDto {
   
   // Score Statistics
   averageScore: number;
-  highPerformers: number; // Score >= 80
+  highPerformers: number; // Score >= 85
   lowPerformers: number; // Score < 50
-  promotionCandidates: number; // Score >= 80
+  promotionCandidates: number; // Score >= 85
   
   // Role-Specific Statistics
   roleStats?: RoleSpecificStatsDto;
@@ -59,7 +59,7 @@ export interface TrendDataPointDto {
 }
 
 export interface ScoreDistributionDto {
-  range: string; // "0-50", "51-70", "71-80", "81-100"
+  range: string; // "0-50", "51-70", "71-84", "85-100"
   count: number;
   percentage: number;
 }

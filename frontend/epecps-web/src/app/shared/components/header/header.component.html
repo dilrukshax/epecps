@@ -26,11 +26,11 @@
              class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
             Assign Goals
           </a>
-          <a *ngIf="hasHrRole()" routerLink="/employee/hr-reports" routerLinkActive="border-primary-500 text-gray-900"
+          <a *ngIf="hasHrReportsAccess()" routerLink="/employee/hr-reports" routerLinkActive="border-primary-500 text-gray-900"
              class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
             HR Reports
           </a>
-          <a *ngIf="hasHrRole()" routerLink="/employee/hr-pip-cases" routerLinkActive="border-primary-500 text-gray-900"
+          <a *ngIf="hasHrPipCasesAccess()" routerLink="/employee/hr-pip-cases" routerLinkActive="border-primary-500 text-gray-900"
              class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
             PIP Cases
           </a>
@@ -84,8 +84,8 @@
         <a (click)="navigateTo('/employee/goals')" class="block pl-3 pr-4 py-2 text-base font-medium text-gray-600 cursor-pointer">My Goals</a>
         <a (click)="navigateTo('/evaluations/my-approvals')" class="block pl-3 pr-4 py-2 text-base font-medium text-gray-600 cursor-pointer">Evaluations</a>
         <a *ngIf="hasRmRole()" (click)="navigateTo('/employee/rm-assign-goals')" class="block pl-3 pr-4 py-2 text-base font-medium text-gray-600 cursor-pointer">Assign Goals</a>
-        <a *ngIf="hasHrRole()" (click)="navigateTo('/employee/hr-reports')" class="block pl-3 pr-4 py-2 text-base font-medium text-gray-600 cursor-pointer">HR Reports</a>
-        <a *ngIf="hasHrRole()" (click)="navigateTo('/employee/hr-pip-cases')" class="block pl-3 pr-4 py-2 text-base font-medium text-gray-600 cursor-pointer">PIP Cases</a>
+        <a *ngIf="hasHrReportsAccess()" (click)="navigateTo('/employee/hr-reports')" class="block pl-3 pr-4 py-2 text-base font-medium text-gray-600 cursor-pointer">HR Reports</a>
+        <a *ngIf="hasHrPipCasesAccess()" (click)="navigateTo('/employee/hr-pip-cases')" class="block pl-3 pr-4 py-2 text-base font-medium text-gray-600 cursor-pointer">PIP Cases</a>
         <a *ngIf="hasAdminRole()" (click)="navigateTo('/admin/dashboard')" class="block pl-3 pr-4 py-2 text-base font-medium text-gray-600 cursor-pointer">Admin Dashboard</a>
       </div>
 

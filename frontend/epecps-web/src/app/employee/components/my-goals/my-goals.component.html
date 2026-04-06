@@ -279,119 +279,59 @@
           *ngIf="isGoalSetExpanded(goalSet.goalSetId)"
           class="border-t border-gray-200 bg-gray-50 p-6">
           
-          <!-- Evaluation Approval History (if submitted) -->
+          <!-- Evaluation Status + Full History -->
           <div *ngIf="goalSet.evaluationInfo" class="mb-6">
-            <h4 class="text-sm font-medium text-gray-700 mb-4">Evaluation Progress</h4>
-            <div class="bg-white rounded-lg p-6">
-              <!-- Horizontal Timeline -->
-              <div class="flex items-center justify-between relative">
-                <!-- Progress Line -->
-                <div class="absolute top-6 left-0 right-0 h-0.5 bg-gray-200 z-0"></div>
-                <div 
-                  class="absolute top-6 left-0 h-0.5 bg-primary-500 z-0 transition-all duration-500"
-                  [style.width]="getTimelineProgress(goalSet.evaluationInfo) + '%'"></div>
-
-                <!-- Approval Steps -->
-                <div 
-                  *ngFor="let step of goalSet.evaluationInfo.approvalSteps; let i = index"
-                  class="flex flex-col items-center relative z-10 flex-1">
-                  
-                  <!-- Step Circle -->
-                  <div class="mb-2">
-                    <div 
-                      class="w-12 h-12 rounded-full flex items-center justify-center ring-4 ring-white transition-all"
-                      [ngClass]="{
-                        'bg-green-500': step.isCompleted,
-                        'bg-red-500': step.isRejected,
-                        'bg-blue-500': step.isPending,
-                        'bg-gray-300': !step.isCompleted && !step.isPending && !step.isRejected
-                      }">
-                      <!-- Completed Icon -->
-                      <svg *ngIf="step.isCompleted" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                      <!-- Rejected Icon -->
-                      <svg *ngIf="step.isRejected" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      <!-- Pending Icon (Spinner) -->
-                      <svg *ngIf="step.isPending" class="h-6 w-6 text-white animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <!-- Not Started Icon -->
-                      <svg *ngIf="!step.isCompleted && !step.isPending && !step.isRejected" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  <!-- Step Info -->
-                  <div class="text-center max-w-[120px]">
-                    <p 
-                      class="text-xs font-semibold mb-1"
-                      [ngClass]="{
-                        'text-green-600': step.isCompleted,
-                        'text-red-600': step.isRejected,
-                        'text-blue-600': step.isPending,
-                        'text-gray-400': !step.isCompleted && !step.isPending && !step.isRejected
-                      }">
-                      {{ step.role }}
-                    </p>
-                    <p class="text-xs text-gray-600 truncate" [title]="step.actorName">
-                      {{ step.actorName || 'Pending' }}
-                    </p>
-                    <p 
-                      class="text-xs mt-1"
-                      [ngClass]="{
-                        'text-green-600 font-medium': step.isCompleted,
-                        'text-red-600 font-medium': step.isRejected,
-                        'text-blue-600 font-medium': step.isPending,
-                        'text-gray-400': !step.isCompleted && !step.isPending && !step.isRejected
-                      }">
-                      {{ step.action }}
-                    </p>
-                    <p *ngIf="step.actionDate" class="text-xs text-gray-400 mt-0.5">
-                      {{ step.actionDate | date:'MMM d' }}
-                    </p>
-                    <div *ngIf="step.comment" class="mt-2 p-2 bg-gray-50 rounded text-xs text-left">
-                      <p class="text-gray-600 italic">"{{ step.comment }}"</p>
-                    </div>
-                  </div>
+            <div class="bg-white rounded-lg border border-gray-200 p-6">
+              <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p class="text-sm font-medium text-gray-700">Evaluation Status</p>
+                  <p class="text-lg font-semibold" [ngClass]="getEvaluationStatusClass(goalSet.evaluationInfo.status)">
+                    {{ formatEvaluationStatus(goalSet.evaluationInfo.status) }}
+                  </p>
+                </div>
+                <div *ngIf="goalSet.evaluationInfo.overallScore !== undefined && goalSet.evaluationInfo.overallScore !== null" class="md:text-right">
+                  <p class="text-sm font-medium text-gray-700">Overall Score</p>
+                  <p class="text-2xl font-bold text-primary-600">{{ goalSet.evaluationInfo.overallScore | number:'1.0-0' }}%</p>
+                </div>
+                <div class="md:text-right">
+                  <p class="text-sm font-medium text-gray-700">Submitted</p>
+                  <p class="text-sm text-gray-900">{{ goalSet.evaluationInfo.submittedDate | date:'MMM d, yyyy' }}</p>
+                </div>
+                <div *ngIf="goalSet.evaluationInfo.completedDate" class="md:text-right">
+                  <p class="text-sm font-medium text-gray-700">Completed</p>
+                  <p class="text-sm text-gray-900">{{ goalSet.evaluationInfo.completedDate | date:'MMM d, yyyy' }}</p>
                 </div>
               </div>
 
-              <!-- Evaluation Status Summary -->
-              <div class="mt-6 p-4 bg-gray-50 rounded-lg">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="text-sm font-medium text-gray-700">Status</p>
-                    <p class="text-lg font-semibold" [ngClass]="{
-                      'text-green-600': goalSet.evaluationInfo.status.includes('Completed'),
-                      'text-blue-600': goalSet.evaluationInfo.status.includes('Pending'),
-                      'text-red-600': goalSet.evaluationInfo.status.includes('Rejected')
-                    }">
-                      {{ formatEvaluationStatus(goalSet.evaluationInfo.status) }}
-                    </p>
-                  </div>
-                  <div *ngIf="goalSet.evaluationInfo.overallScore" class="text-right">
-                    <p class="text-sm font-medium text-gray-700">Overall Score</p>
-                    <p class="text-3xl font-bold text-primary-600">
-                      {{ goalSet.evaluationInfo.overallScore | number:'1.0-0' }}%
-                    </p>
-                  </div>
-                  <div class="text-right">
-                    <p class="text-sm font-medium text-gray-700">Submitted</p>
-                    <p class="text-sm text-gray-900">
-                      {{ goalSet.evaluationInfo.submittedDate | date:'MMM d, yyyy' }}
-                    </p>
-                  </div>
-                  <div *ngIf="goalSet.evaluationInfo.completedDate" class="text-right">
-                    <p class="text-sm font-medium text-gray-700">Completed</p>
-                    <p class="text-sm text-gray-900">
-                      {{ goalSet.evaluationInfo.completedDate | date:'MMM d, yyyy' }}
-                    </p>
-                  </div>
+              <div class="mt-6 border-t border-gray-200 pt-4">
+                <h5 class="text-sm font-semibold text-gray-800">Full Approval History</h5>
+                <p class="text-xs text-gray-500 mt-1">Chronological events including automatic RM post-completion submission.</p>
+
+                <div *ngIf="getEvaluationHistory(goalSet).length === 0" class="mt-3 rounded border border-dashed border-gray-300 p-3 text-sm text-gray-500">
+                  No approval history available yet.
                 </div>
+
+                <ol *ngIf="getEvaluationHistory(goalSet).length > 0" class="mt-3 space-y-3">
+                  <li *ngFor="let item of getEvaluationHistory(goalSet)" class="rounded border border-gray-200 bg-gray-50 p-3">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p class="text-sm text-gray-700">
+                          <span class="font-semibold text-gray-900">{{ item.actorName || item.actorRole || 'System' }}</span>
+                          <span class="text-gray-500">({{ item.actorRole || 'System' }})</span>
+                        </p>
+                        <p class="text-sm font-medium" [ngClass]="getHistoryActionClass(item.action)">
+                          {{ formatHistoryAction(item.action) }}
+                        </p>
+                      </div>
+                      <span class="text-xs text-gray-500">{{ item.createdAt | date:'medium' }}</span>
+                    </div>
+
+                    <p *ngIf="item.comment" class="mt-2 text-sm text-gray-700 italic">"{{ item.comment }}"</p>
+                    <p *ngIf="item.fromStatus || item.toStatus" class="mt-2 text-xs text-gray-600">
+                      {{ item.fromStatus ? formatEvaluationStatus(item.fromStatus) : 'N/A' }} -> {{ item.toStatus ? formatEvaluationStatus(item.toStatus) : 'N/A' }}
+                    </p>
+                  </li>
+                </ol>
               </div>
             </div>
           </div>
@@ -511,6 +451,19 @@
                     Completed: {{ goal.completedAt | date:'MMM d, yyyy' }}
                   </span>
                 </div>
+
+                <div *ngIf="goal.completionSummary || goal.completionComment || goal.completionEvidenceUrl || goal.completionCertificationUrl" class="mt-2 rounded border border-green-200 bg-green-50 p-2 text-xs text-left space-y-1">
+                  <p *ngIf="goal.completionSummary"><span class="font-semibold text-gray-700">Summary:</span> {{ goal.completionSummary }}</p>
+                  <p *ngIf="goal.completionComment"><span class="font-semibold text-gray-700">Comment:</span> {{ goal.completionComment }}</p>
+                  <p *ngIf="goal.completionEvidenceUrl">
+                    <span class="font-semibold text-gray-700">Evidence:</span>
+                    <a [href]="goal.completionEvidenceUrl" target="_blank" rel="noopener noreferrer" class="text-green-700 hover:text-green-900 underline break-all">{{ goal.completionEvidenceUrl }}</a>
+                  </p>
+                  <p *ngIf="goal.completionCertificationUrl">
+                    <span class="font-semibold text-gray-700">Certification:</span>
+                    <a [href]="goal.completionCertificationUrl" target="_blank" rel="noopener noreferrer" class="text-green-700 hover:text-green-900 underline break-all">{{ goal.completionCertificationUrl }}</a>
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -586,6 +539,31 @@
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="https://...">
                 <p class="text-xs text-gray-500 mt-1">Link to supporting documentation, portfolio, or proof of completion</p>
+              </div>
+
+              <!-- Certification URL Input -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Certification URL <span class="text-gray-500">(optional)</span>
+                </label>
+                <input 
+                  type="url"
+                  [(ngModel)]="completeFormCertificationUrl"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="https://...">
+                <p class="text-xs text-gray-500 mt-1">Link to certificate or compliance proof related to this goal</p>
+              </div>
+
+              <!-- Summary Input -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Completion Summary <span class="text-gray-500">(optional)</span>
+                </label>
+                <textarea 
+                  [(ngModel)]="completeFormSummary"
+                  rows="2"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Summarize what was delivered for this goal..."></textarea>
               </div>
 
               <!-- Comment Input -->

@@ -203,7 +203,7 @@
               </h3>
               <div class="space-y-3">
                 <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">High Performers (≥80%)</span>
+                  <span class="text-sm text-gray-600">High Performers (≥85%)</span>
                   <span class="text-lg font-bold text-green-600">{{ dashboardData.stats.highPerformers }}</span>
                 </div>
                 <div class="flex justify-between items-center">
@@ -376,7 +376,7 @@
                 </svg>
               </button>
 
-              <button *ngIf="hasHrRole()" (click)="navigateToHrPipCases()"
+              <button *ngIf="hasHrPipRole()" (click)="navigateToHrPipCases()"
                       class="w-full flex items-center justify-between px-4 py-3 bg-pink-50 hover:bg-pink-100 text-pink-700 rounded-lg transition-colors">
                 <div class="flex items-center">
                   <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">

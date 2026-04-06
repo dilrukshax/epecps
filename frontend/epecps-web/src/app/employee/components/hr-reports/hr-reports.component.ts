@@ -179,7 +179,7 @@ export class HrReportsComponent implements OnInit {
 
   getScoreColor(score: number | null | undefined): string {
     if (score === null || score === undefined) return 'text-gray-400';
-    if (score >= 80) return 'text-green-600 font-bold';
+    if (score >= 85) return 'text-green-600 font-bold';
     if (score >= 60) return 'text-yellow-600';
     return 'text-red-600';
   }

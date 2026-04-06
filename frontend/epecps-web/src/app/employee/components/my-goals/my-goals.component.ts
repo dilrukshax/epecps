@@ -2,7 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { EmployeeGoalsService } from '../../../services/employee-goals.service';
 import { EvaluationService } from '../../../services/evaluation.service';
-import { PersonalGoalSetDto, PersonalGoalStatus, PersonalGoalListDto } from '../../../models/employee-goals.models';
+import {
+  PersonalGoalSetDto,
+  PersonalGoalStatus,
+  PersonalGoalListDto,
+  GoalSetApprovalHistoryEventDto
+} from '../../../models/employee-goals.models';
 import { CompleteGoalRequestDto } from '../../../models/evaluation.models';
 
 /**
@@ -40,6 +45,8 @@ export class MyGoalsComponent implements OnInit {
   completeModalGoal: PersonalGoalListDto | null = null;
   completeModalGoalSetId: string | null = null;
   completeFormEvidenceUrl = '';
+  completeFormCertificationUrl = '';
+  completeFormSummary = '';
   completeFormComment = '';
   completeFormCurrentScore: number | null = null;
 
@@ -247,6 +254,63 @@ export class MyGoalsComponent implements OnInit {
       .replace(/\b\w/g, (l: string) => l.toUpperCase());
   }
 
+  getEvaluationStatusClass(status: string): string {
+    const normalizedStatus = (status || '').toLowerCase();
+    if (normalizedStatus.includes('completed')) return 'text-green-600';
+    if (normalizedStatus.includes('reject') || normalizedStatus.includes('return')) return 'text-red-600';
+    if (normalizedStatus.includes('pending')) return 'text-blue-600';
+    return 'text-gray-700';
+  }
+
+  getEvaluationHistory(goalSet: PersonalGoalSetDto): GoalSetApprovalHistoryEventDto[] {
+    if (!goalSet.evaluationInfo) return [];
+
+    const chronologicalHistory = goalSet.evaluationInfo.approvalHistory || [];
+    if (chronologicalHistory.length > 0) {
+      return [...chronologicalHistory].sort((a, b) => {
+        const dateDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (dateDiff !== 0) return dateDiff;
+        return (a.id || 0) - (b.id || 0);
+      });
+    }
+
+    // Backward-compatible fallback for older payloads where only approvalSteps exist.
+    return (goalSet.evaluationInfo.approvalSteps || []).map((step, index) => ({
+      id: index + 1,
+      actorUserId: 0,
+      actorName: step.actorName || step.role || 'System',
+      actorRole: step.role || 'System',
+      action: step.action || 'Updated',
+      comment: step.comment,
+      fromStatus: '',
+      toStatus: '',
+      createdAt: step.actionDate || goalSet.evaluationInfo!.submittedDate
+    }));
+  }
+
+  formatHistoryAction(action: string): string {
+    if (!action) return 'Updated';
+
+    const normalized = action.toLowerCase();
+    if (normalized.includes('employeecompletedallgoals') || normalized.includes('workflowcontinued')) {
+      return 'All goals completed and auto-submitted to RM';
+    }
+
+    return action
+      .replace(/;/g, ' -> ')
+      .replace(/_/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, (l: string) => l.toUpperCase());
+  }
+
+  getHistoryActionClass(action: string): string {
+    const normalized = (action || '').toLowerCase();
+    if (normalized.includes('reject') || normalized.includes('return')) return 'text-red-600';
+    if (normalized.includes('approve') || normalized.includes('complete') || normalized.includes('process')) return 'text-green-600';
+    if (normalized.includes('submit') || normalized.includes('assign') || normalized.includes('workflowcontinued')) return 'text-blue-600';
+    return 'text-gray-700';
+  }
+
   deleteGoalSet(goalSet: PersonalGoalSetDto, event: Event): void {
     event.stopPropagation();
     
@@ -337,8 +401,17 @@ export class MyGoalsComponent implements OnInit {
    * Get the RM rejection comment if available
    */
   getReturnedComment(goalSet: PersonalGoalSetDto): string | null {
-    if (!goalSet.evaluationInfo?.approvalSteps) return null;
-    const rejectedStep = goalSet.evaluationInfo.approvalSteps.find(
+    if (!goalSet.evaluationInfo) return null;
+
+    const fullHistory = this.getEvaluationHistory(goalSet);
+    const rejectedEvent = [...fullHistory].reverse().find(
+      event => event.comment && event.action?.toLowerCase().includes('reject')
+    );
+    if (rejectedEvent?.comment) {
+      return rejectedEvent.comment;
+    }
+
+    const rejectedStep = goalSet.evaluationInfo.approvalSteps?.find(
       step => step.isRejected && step.comment
     );
     return rejectedStep?.comment || null;
@@ -396,8 +469,10 @@ export class MyGoalsComponent implements OnInit {
 
     this.completeModalGoal = goal;
     this.completeModalGoalSetId = goalSetId;
-    this.completeFormEvidenceUrl = '';
-    this.completeFormComment = '';
+    this.completeFormEvidenceUrl = goal.completionEvidenceUrl || '';
+    this.completeFormCertificationUrl = goal.completionCertificationUrl || '';
+    this.completeFormSummary = goal.completionSummary || '';
+    this.completeFormComment = goal.completionComment || '';
     this.completeFormCurrentScore = goal.targetScore; // Default to target score
     this.showCompleteModal = true;
   }
@@ -410,6 +485,8 @@ export class MyGoalsComponent implements OnInit {
     this.completeModalGoal = null;
     this.completeModalGoalSetId = null;
     this.completeFormEvidenceUrl = '';
+    this.completeFormCertificationUrl = '';
+    this.completeFormSummary = '';
     this.completeFormComment = '';
     this.completeFormCurrentScore = null;
   }
@@ -424,6 +501,12 @@ export class MyGoalsComponent implements OnInit {
     
     if (this.completeFormEvidenceUrl.trim()) {
       payload.evidenceUrl = this.completeFormEvidenceUrl.trim();
+    }
+    if (this.completeFormCertificationUrl.trim()) {
+      payload.certificationUrl = this.completeFormCertificationUrl.trim();
+    }
+    if (this.completeFormSummary.trim()) {
+      payload.summary = this.completeFormSummary.trim();
     }
     if (this.completeFormComment.trim()) {
       payload.comment = this.completeFormComment.trim();
@@ -440,7 +523,7 @@ export class MyGoalsComponent implements OnInit {
         
         // If workflow continued, show special message
         if (response.workflowContinued) {
-          message = 'Goal completed! All goals are now complete. The evaluation has been forwarded for further review.';
+          message = 'Goal completed! All goals are now complete. The evaluation has been forwarded to RM post-completion review.';
         }
         
         this.showToast('success', message);

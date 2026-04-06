@@ -95,9 +95,9 @@ public class DashboardService : IDashboardService
         // Score statistics
         var evaluationsWithScores = visibleEvaluations.Where(e => e.OverallScore.HasValue && e.OverallScore.Value > 0).ToList();
         var avgScore = evaluationsWithScores.Any() ? evaluationsWithScores.Average(e => e.OverallScore!.Value) : 0;
-        var highPerformers = evaluationsWithScores.Count(e => e.OverallScore >= 80);
+        var highPerformers = evaluationsWithScores.Count(e => e.OverallScore >= 85);
         var lowPerformers = evaluationsWithScores.Count(e => e.OverallScore < 50);
-        var promotionCandidates = evaluationsWithScores.Count(e => e.OverallScore >= 80);
+        var promotionCandidates = evaluationsWithScores.Count(e => e.OverallScore >= 85);
         
         // Trend data (last 7 days)
         var approvalTrend = await GetApprovalTrendDataAsync(userId, userRoles, 7, cancellationToken);
@@ -388,8 +388,8 @@ public class DashboardService : IDashboardService
         {
             ("0-50", 0, 50),
             ("51-70", 51, 70),
-            ("71-80", 71, 80),
-            ("81-100", 81, 100)
+            ("71-84", 71, 84),
+            ("85-100", 85, 100)
         };
         
         return ranges.Select(r => new ScoreDistributionDto

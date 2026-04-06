@@ -32,7 +32,7 @@ const routes: Routes = [
     path: 'rm-assign-goals',
     component: RmAssignGoalsComponent,
     canActivate: [AuthGuard, RoleGuard],
-    data: { roles: ['RM', 'SuperAdmin'] }
+    data: { roles: ['RM', 'Admin', 'SuperAdmin'] }
   },
   {
     path: 'hr-reports',

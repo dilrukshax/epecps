@@ -236,21 +236,14 @@ public class WorkflowV2Service : IWorkflowV2Service
                 $"Self-evaluation can only be submitted on or after cycle end date ({evaluation.Cycle.EndDate:yyyy-MM-dd}).");
         }
 
-        var assignedPeerIds = evaluation.PeerAssignments
-            .Select(pa => pa.PeerUserId)
-            .Distinct()
-            .ToList();
-
-        if (assignedPeerIds.Count != 2)
-        {
-            throw new BusinessRuleException("Team Lead must assign exactly 2 peer reviewers before employee self-evaluation.");
-        }
-
-        var evaluationGoalIds = await _context.EmployeeGoals
+        var employeeGoals = await _context.EmployeeGoals
             .Where(eg => eg.EvaluationId == evaluation.EvaluationId && eg.PersonalGoalId.HasValue)
+            .ToListAsync(cancellationToken);
+
+        var evaluationGoalIds = employeeGoals
             .Select(eg => eg.PersonalGoalId!.Value)
             .Distinct()
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         if (evaluationGoalIds.Count < 5)
         {
@@ -273,6 +266,15 @@ public class WorkflowV2Service : IWorkflowV2Service
         }
 
         var expectedGoalIds = evaluationGoalIds.ToHashSet();
+        var personalGoals = await _context.PersonalGoals
+            .Where(pg => pg.UserId == employeeUserId && expectedGoalIds.Contains(pg.Id))
+            .ToDictionaryAsync(pg => pg.Id, cancellationToken);
+
+        if (personalGoals.Count != expectedGoalIds.Count)
+        {
+            throw new BusinessRuleException("One or more evaluation goals could not be resolved.");
+        }
+
         foreach (var goal in goalPayload)
         {
             if (!expectedGoalIds.Contains(goal.PersonalGoalId))
@@ -327,11 +329,33 @@ public class WorkflowV2Service : IWorkflowV2Service
 
         foreach (var goal in goalPayload)
         {
+            var summary = goal.Summary.Trim();
+            var evidenceUrl = goal.EvidenceUrl.Trim();
+            var certificationUrl = string.IsNullOrWhiteSpace(goal.CertificationUrl) ? null : goal.CertificationUrl.Trim();
+            var comment = string.IsNullOrWhiteSpace(goal.Comment) ? null : goal.Comment.Trim();
+
+            var personalGoal = personalGoals[goal.PersonalGoalId];
+            personalGoal.Status = PersonalGoalStatus.UnderEvaluation;
+            personalGoal.CurrentScore = Math.Min(goal.Score, personalGoal.TargetScore);
+            personalGoal.CompletedAt ??= DateTime.UtcNow;
+            personalGoal.CompletionSummary = summary;
+            personalGoal.CompletionEvidenceUrl = evidenceUrl;
+            personalGoal.CompletionCertificationUrl = certificationUrl;
+            personalGoal.CompletionComment = comment;
+            personalGoal.UpdatedAt = DateTime.UtcNow;
+
+            var employeeGoal = employeeGoals.FirstOrDefault(eg => eg.PersonalGoalId == goal.PersonalGoalId);
+            if (employeeGoal != null)
+            {
+                employeeGoal.EvidenceUri = evidenceUrl;
+            }
+
             var structuredComment = System.Text.Json.JsonSerializer.Serialize(new
             {
-                summary = goal.Summary.Trim(),
-                evidenceUrl = goal.EvidenceUrl.Trim(),
-                comment = string.IsNullOrWhiteSpace(goal.Comment) ? null : goal.Comment.Trim()
+                summary,
+                evidenceUrl,
+                certificationUrl,
+                comment
             });
 
             _context.Set<ReviewScore>().Add(new ReviewScore
@@ -347,35 +371,32 @@ public class WorkflowV2Service : IWorkflowV2Service
         }
 
         await EnsurePendingReviewAsync(evaluation.EvaluationId, evaluation.ReportingManagerId, ReviewerRole.RM, cancellationToken);
-        await EnsurePendingReviewAsync(evaluation.EvaluationId, evaluation.TeamLeadId, ReviewerRole.TL, cancellationToken);
 
-        var existingPeerReviews = await _context.Reviews
-            .Where(r => r.EvaluationId == evaluation.EvaluationId && r.ReviewerRole == ReviewerRole.Peer)
-            .ToListAsync(cancellationToken);
-
-        var orphanPeerReviews = existingPeerReviews
-            .Where(r => !assignedPeerIds.Contains(r.ReviewerUserId))
+        // Clean up stale pending TL/Peer reviews and prior peer assignments for the new RM-first stage.
+        var staleReviews = evaluation.Reviews
+            .Where(r =>
+                (r.ReviewerRole == ReviewerRole.TL || r.ReviewerRole == ReviewerRole.Peer) &&
+                r.Status == "Pending")
             .ToList();
-
-        if (orphanPeerReviews.Count > 0)
+        if (staleReviews.Count > 0)
         {
-            _context.Reviews.RemoveRange(orphanPeerReviews);
+            _context.Reviews.RemoveRange(staleReviews);
         }
 
-        foreach (var peerUserId in assignedPeerIds)
+        if (evaluation.PeerAssignments.Count > 0)
         {
-            await EnsurePendingReviewAsync(evaluation.EvaluationId, peerUserId, ReviewerRole.Peer, cancellationToken);
+            _context.PeerAssignments.RemoveRange(evaluation.PeerAssignments);
         }
 
         var fromStatus = evaluation.Status;
-        evaluation.Status = "V2_PENDING_PARALLEL_REVIEWS";
+        evaluation.Status = "Pending_RM_Review_PostCompletion";
 
         _context.ApprovalHistories.Add(new ApprovalHistory
         {
             EvaluationId = evaluation.EvaluationId,
             ActorUserId = employeeUserId,
             ActorRole = "Employee",
-            Action = "SubmittedSelfEvaluationAndStartedParallelReviews",
+            Action = "SubmittedSelfEvaluationAwaitingRMPostCompletion",
             Comment = request.OverallComment,
             FromStatus = fromStatus,
             ToStatus = evaluation.Status,
@@ -384,29 +405,11 @@ public class WorkflowV2Service : IWorkflowV2Service
 
         _context.Notifications.Add(new Notification
         {
-            UserId = evaluation.TeamLeadId,
-            Subject = "Parallel review requested: TL",
-            Channel = "Email",
-            SentAt = DateTime.UtcNow
-        });
-        _context.Notifications.Add(new Notification
-        {
             UserId = evaluation.ReportingManagerId,
-            Subject = "Parallel review requested: RM",
+            Subject = "Self-evaluation submitted - RM review required",
             Channel = "Email",
             SentAt = DateTime.UtcNow
         });
-
-        foreach (var peerUserId in assignedPeerIds)
-        {
-            _context.Notifications.Add(new Notification
-            {
-                UserId = peerUserId,
-                Subject = "Parallel review requested: Peer",
-                Channel = "Email",
-                SentAt = DateTime.UtcNow
-            });
-        }
 
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -547,7 +550,7 @@ public class WorkflowV2Service : IWorkflowV2Service
 
         var fromStatus = evaluation.Status;
 
-        if (finalScore >= 80m)
+        if (finalScore >= 85m)
         {
             evaluation.Status = "V2_PENDING_GM_DECISION";
 
@@ -918,23 +921,39 @@ public class WorkflowV2Service : IWorkflowV2Service
         ReviewerRole reviewerRole,
         CancellationToken cancellationToken)
     {
-        var existing = await _context.Reviews
-            .FirstOrDefaultAsync(
+        var latest = await _context.Reviews
+            .Where(
                 r => r.EvaluationId == evaluationId &&
                      r.ReviewerUserId == reviewerUserId &&
-                     r.ReviewerRole == reviewerRole,
-                cancellationToken);
+                     r.ReviewerRole == reviewerRole)
+            .OrderByDescending(r => r.ReviewId)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        if (existing != null)
+        if (latest == null)
         {
-            if (existing.Status != "Completed" && existing.Status != "Approved")
+            _context.Reviews.Add(new Review
             {
-                existing.Status = "Pending";
-                existing.SubmittedAt = null;
-            }
+                EvaluationId = evaluationId,
+                ReviewerUserId = reviewerUserId,
+                ReviewerRole = reviewerRole,
+                Status = "Pending"
+            });
             return;
         }
 
+        if (latest.Status == "Pending")
+        {
+            return;
+        }
+
+        if (latest.Status != "Completed" && latest.Status != "Approved")
+        {
+            latest.Status = "Pending";
+            latest.SubmittedAt = null;
+            return;
+        }
+
+        // Keep historical completed/approved reviews and create a fresh pending stage record.
         _context.Reviews.Add(new Review
         {
             EvaluationId = evaluationId,
@@ -1008,7 +1027,7 @@ public class WorkflowV2Service : IWorkflowV2Service
                 EmployeeUserId = evaluation.EmployeeId,
                 AssignedHrUserId = assignedHrUserId,
                 Status = "Open",
-                Reason = comment ?? "Score below threshold (80).",
+                Reason = comment ?? "Score below threshold (85).",
                 CreatedAt = DateTime.UtcNow,
                 DueDate = DateTime.UtcNow.AddMonths(1)
             };

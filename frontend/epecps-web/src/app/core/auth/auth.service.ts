@@ -101,8 +101,12 @@ export class AuthService {
   getMe(): Observable<AuthUser> {
     return this.http.get<AuthUser>(`${this.baseUrl}/me`).pipe(
       tap(user => {
-        this.userSubject.next(user);
-        localStorage.setItem(this.userKey, JSON.stringify(user));
+        const normalizedUser: AuthUser = {
+          ...user,
+          roles: this.normalizeRoles(user?.roles)
+        };
+        this.userSubject.next(normalizedUser);
+        localStorage.setItem(this.userKey, JSON.stringify(normalizedUser));
       })
     );
   }
@@ -150,12 +154,23 @@ export class AuthService {
   }
 
   hasRole(role: string): boolean {
-    return !!this.userSubject.value?.roles?.includes(role);
+    const normalizedTarget = role?.trim().toUpperCase();
+    if (!normalizedTarget) {
+      return false;
+    }
+
+    const userRoles = this.normalizeRoles(this.userSubject.value?.roles);
+    return userRoles.includes(normalizedTarget);
   }
 
   hasAnyRole(roles: string[]): boolean {
-    const userRoles = this.userSubject.value?.roles ?? [];
-    return roles.some(role => userRoles.includes(role));
+    const normalizedTargets = this.normalizeRoles(roles);
+    if (normalizedTargets.length === 0) {
+      return false;
+    }
+
+    const userRoles = this.normalizeRoles(this.userSubject.value?.roles);
+    return normalizedTargets.some(role => userRoles.includes(role));
   }
 
   getCurrentUser(): AuthUser | null {
@@ -163,12 +178,17 @@ export class AuthService {
   }
 
   private applySession(response: AuthResponse): void {
+    const normalizedUser: AuthUser = {
+      ...response.user,
+      roles: this.normalizeRoles(response.user?.roles)
+    };
+
     localStorage.setItem(this.accessTokenKey, response.accessToken);
     localStorage.setItem(this.accessExpiryKey, response.accessTokenExpiresAtUtc);
     localStorage.setItem(this.refreshTokenKey, response.refreshToken);
     localStorage.setItem(this.refreshExpiryKey, response.refreshTokenExpiresAtUtc);
-    localStorage.setItem(this.userKey, JSON.stringify(response.user));
-    this.userSubject.next(response.user);
+    localStorage.setItem(this.userKey, JSON.stringify(normalizedUser));
+    this.userSubject.next(normalizedUser);
   }
 
   private clearSession(): void {
@@ -187,10 +207,48 @@ export class AuthService {
         return null;
       }
 
-      return JSON.parse(raw) as AuthUser;
+      const parsed = JSON.parse(raw) as Partial<AuthUser> | null;
+      if (!parsed) {
+        return null;
+      }
+
+      return {
+        userId: parsed.userId ?? 0,
+        fullName: parsed.fullName ?? '',
+        email: parsed.email ?? '',
+        status: parsed.status ?? '',
+        isActive: parsed.isActive ?? true,
+        departmentId: parsed.departmentId ?? 0,
+        departmentName: parsed.departmentName ?? '',
+        roles: this.normalizeRoles(parsed.roles)
+      };
     } catch {
       return null;
     }
+  }
+
+  private normalizeRoles(roles: unknown): string[] {
+    if (!Array.isArray(roles)) {
+      return [];
+    }
+
+    return roles
+      .map(role => {
+        if (typeof role === 'string') {
+          return role.trim().toUpperCase();
+        }
+
+        if (role && typeof role === 'object') {
+          const candidate = (role as { name?: unknown; roleName?: unknown }).name
+            ?? (role as { name?: unknown; roleName?: unknown }).roleName;
+          if (typeof candidate === 'string') {
+            return candidate.trim().toUpperCase();
+          }
+        }
+
+        return '';
+      })
+      .filter(role => role.length > 0);
   }
 
   private isAccessTokenExpired(): boolean {

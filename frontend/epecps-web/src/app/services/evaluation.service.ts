@@ -36,7 +36,8 @@ import {
   PipCaseDto,
   PipCaseUpdateDto,
   PipActionItemCreateDto,
-  PipActionItemUpdateDto
+  PipActionItemUpdateDto,
+  SubmitTlCombinedReviewDto
 } from '../models/evaluation.models';
 
 @Injectable({
@@ -124,6 +125,13 @@ export class EvaluationService {
     return this.http.post(
       `${this.apiUrl}/api/evaluations/${evaluationId}/assign-peers`,
       body
+    );
+  }
+
+  submitTlCombinedReview(evaluationId: number, payload: SubmitTlCombinedReviewDto): Observable<any> {
+    return this.http.post(
+      `${this.apiUrl}/api/evaluations/${evaluationId}/tl/combined-submit`,
+      payload
     );
   }
 
@@ -319,8 +327,8 @@ export class EvaluationService {
 
   /**
    * HOD submits overall score for an evaluation
-   * If score >= 8 (80%), auto-recommends to GM
-   * If score < 8 (80%), directly completes without promotion
+   * If score >= 8.5 (85%), routes to GM
+   * If score < 8.5 (85%), routes directly to HR
    */
   hodSubmitScore(evaluationId: number, payload: HodScoreSubmissionDto): Observable<HodScoreSubmissionResponseDto> {
     return this.http.post<HodScoreSubmissionResponseDto>(

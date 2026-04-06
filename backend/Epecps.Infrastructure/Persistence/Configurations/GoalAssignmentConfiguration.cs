@@ -60,7 +60,7 @@ public class GoalAssignmentConfiguration : IEntityTypeConfiguration<GoalAssignme
         builder.HasOne(ga => ga.ActivationReviewedByUser)
             .WithMany(u => u.GoalAssignmentsActivationReviewed)
             .HasForeignKey(ga => ga.ActivationReviewedByUserId)
-            .OnDelete(DeleteBehavior.SetNull)
+            .OnDelete(DeleteBehavior.NoAction)
             .IsRequired(false);
 
         builder.HasIndex(ga => ga.AssignedToUserId);

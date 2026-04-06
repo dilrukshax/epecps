@@ -33,8 +33,12 @@ export class HeaderComponent implements OnInit, OnDestroy {
         this.userRoles = user?.roles || [];
       });
 
-    if (!this.authService.getCurrentUser() && this.authService.isAuthenticated()) {
-      this.authService.getMe().subscribe();
+    if (this.authService.isAuthenticated()) {
+      this.authService.getMe().subscribe({
+        error: () => {
+          // Keep existing session state if profile refresh fails transiently.
+        }
+      });
     }
   }
 
@@ -58,19 +62,20 @@ export class HeaderComponent implements OnInit, OnDestroy {
     this.mobileMenuOpen = false;
   }
 
-  hasHrRole(): boolean {
-    return this.userRoles.includes('HR') || this.userRoles.includes('SuperAdmin');
+  hasHrReportsAccess(): boolean {
+    return this.authService.hasAnyRole(['HR', 'SuperAdmin', 'Admin']);
+  }
+
+  hasHrPipCasesAccess(): boolean {
+    return this.authService.hasAnyRole(['HR', 'SuperAdmin']);
   }
 
   hasAdminRole(): boolean {
-    return this.userRoles.includes('Admin') ||
-           this.userRoles.includes('SuperAdmin') ||
-           this.userRoles.includes('HOD') ||
-           this.userRoles.includes('GM');
+    return this.authService.hasAnyRole(['Admin', 'SuperAdmin']);
   }
 
   hasRmRole(): boolean {
-    return this.userRoles.includes('RM') || this.userRoles.includes('SuperAdmin');
+    return this.authService.hasAnyRole(['RM', 'SuperAdmin', 'Admin']);
   }
 
   getUserInitials(): string {

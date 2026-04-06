@@ -53,7 +53,18 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
     private const string REVIEW_STATUS_COMPLETED = "Completed";
 
     // Score threshold for promotion
-    private const decimal PROMOTION_THRESHOLD = 80.0m;
+    private const decimal PROMOTION_THRESHOLD = 85.0m;
+
+    private static readonly HashSet<string> RestrictedPeerRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "RM",
+        "TL",
+        "HOD",
+        "GM",
+        "HR",
+        "Admin",
+        "SuperAdmin"
+    };
 
     public EvaluationWorkflowService(
         EpecpsDbContext context,
@@ -315,11 +326,17 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 if (actorUserId != evaluation.ReportingManagerId)
                     throw new BusinessRuleException("Only the Reporting Manager can approve at this stage.");
                 
-                // Find the post-completion RM review (the most recent pending one)
+                // Find the post-completion RM review (latest RM review entry)
                 currentReview = evaluation.Reviews
-                    .Where(r => r.ReviewerRole == ReviewerRole.RM && r.Status == REVIEW_STATUS_PENDING)
+                    .Where(r => r.ReviewerRole == ReviewerRole.RM)
                     .OrderByDescending(r => r.ReviewId)
                     .FirstOrDefault();
+
+                if (currentReview == null)
+                    throw new BusinessRuleException("Post-completion RM review record not found.");
+
+                if (currentReview.Status != REVIEW_STATUS_COMPLETED && currentReview.Status != REVIEW_STATUS_APPROVED)
+                    throw new BusinessRuleException("RM must submit per-goal scores before approving this stage.");
                 
                 actorRole = "RM";
                 action = "RMApproved";
@@ -362,7 +379,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                         employee.FullName,
                         rm?.FullName ?? "RM",
                         "RM",
-                        "Employee has completed all goals and RM has approved. Please review the evaluation and assign peer reviewers.",
+                        "Employee has completed all goals and RM has approved. Please submit TL overall score and assign peer reviewers.",
                         evaluationId,
                         cancellationToken);
                 }
@@ -371,12 +388,9 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             case STATUS_PENDING_TL_REVIEW:
                 if (actorUserId != evaluation.TeamLeadId)
                     throw new BusinessRuleException("Only the Team Lead can approve at this stage.");
-                
-                currentReview = evaluation.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.TL);
-                actorRole = "TL";
-                // After TL approval, they must assign peers
-                evaluation.Status = STATUS_PENDING_PEER_ASSIGNMENT;
-                break;
+
+                throw new BusinessRuleException(
+                    "TL approval in this stage must be submitted using the combined TL endpoint (overall score + two peer assignments).");
 
             case STATUS_PENDING_PEER_REVIEWS:
                 // Check if actor is one of the assigned peers
@@ -667,6 +681,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
     {
         var evaluation = await _context.Set<Evaluation>()
             .Include(e => e.Reviews)
+            .Include(e => e.PeerAssignments)
             .Include(e => e.Employee)
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
 
@@ -674,23 +689,47 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             throw new NotFoundException(nameof(Evaluation), evaluationId);
 
         // Validate that evaluation is in the correct status
-        if (evaluation.Status != STATUS_APPROVED_BY_RM && evaluation.Status != STATUS_PENDING_EMPLOYEE_COMPLETION)
+        if (evaluation.Status != STATUS_APPROVED_BY_RM &&
+            evaluation.Status != STATUS_PENDING_EMPLOYEE_COMPLETION &&
+            evaluation.Status != STATUS_V2_ACTIVE_GOALS)
             throw new BusinessRuleException($"Workflow can only continue when employee has completed all goals. Current status: {evaluation.Status}");
 
         var oldStatus = evaluation.Status;
 
-        // Create a second RM review (for post-completion approval)
-        var rmReviewPostCompletion = new Review
+        if (string.Equals(evaluation.WorkflowVersion, "v2", StringComparison.OrdinalIgnoreCase) ||
+            evaluation.Status == STATUS_V2_ACTIVE_GOALS)
         {
-            EvaluationId = evaluation.EvaluationId,
-            ReviewerUserId = evaluation.ReportingManagerId,
-            ReviewerRole = ReviewerRole.RM,
-            Status = REVIEW_STATUS_PENDING,
-            OverallComment = null,
-            SubmittedAt = null
-        };
+            await CreateOrUpdateAutoSelfReviewFromCompletedGoalsAsync(evaluation, cancellationToken);
+        }
 
-        _context.Set<Review>().Add(rmReviewPostCompletion);
+        // Create/ensure RM review for post-completion approval
+        var rmReviewPostCompletion = evaluation.Reviews
+            .Where(r => r.ReviewerRole == ReviewerRole.RM && r.ReviewerUserId == evaluation.ReportingManagerId)
+            .OrderByDescending(r => r.ReviewId)
+            .FirstOrDefault();
+
+        if (rmReviewPostCompletion == null ||
+            rmReviewPostCompletion.Status == REVIEW_STATUS_COMPLETED ||
+            rmReviewPostCompletion.Status == REVIEW_STATUS_APPROVED ||
+            rmReviewPostCompletion.Status == REVIEW_STATUS_REJECTED)
+        {
+            rmReviewPostCompletion = new Review
+            {
+                EvaluationId = evaluation.EvaluationId,
+                ReviewerUserId = evaluation.ReportingManagerId,
+                ReviewerRole = ReviewerRole.RM,
+                Status = REVIEW_STATUS_PENDING,
+                OverallComment = null,
+                SubmittedAt = null
+            };
+
+            _context.Set<Review>().Add(rmReviewPostCompletion);
+        }
+        else
+        {
+            rmReviewPostCompletion.Status = REVIEW_STATUS_PENDING;
+            rmReviewPostCompletion.SubmittedAt = null;
+        }
 
         // Update evaluation status to pending RM review (for the second approval after completion)
         evaluation.Status = "Pending_RM_Review_PostCompletion";
@@ -756,6 +795,137 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         }
 
         return evaluation;
+    }
+
+    private async Task CreateOrUpdateAutoSelfReviewFromCompletedGoalsAsync(Evaluation evaluation, CancellationToken cancellationToken)
+    {
+        var personalGoals = await _context.PersonalGoals
+            .Where(pg => pg.GoalSetId == evaluation.GoalSetId && pg.UserId == evaluation.EmployeeId)
+            .ToListAsync(cancellationToken);
+
+        if (!personalGoals.Any())
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        var selfReview = evaluation.Reviews
+            .Where(r => r.ReviewerRole == ReviewerRole.Self && r.ReviewerUserId == evaluation.EmployeeId)
+            .OrderByDescending(r => r.ReviewId)
+            .FirstOrDefault();
+
+        if (selfReview == null)
+        {
+            selfReview = new Review
+            {
+                EvaluationId = evaluation.EvaluationId,
+                ReviewerUserId = evaluation.EmployeeId,
+                ReviewerRole = ReviewerRole.Self
+            };
+            _context.Set<Review>().Add(selfReview);
+            evaluation.Reviews.Add(selfReview);
+        }
+
+        var goalScores = personalGoals
+            .Select(pg =>
+            {
+                var normalized = pg.TargetScore > 0
+                    ? (pg.CurrentScore / pg.TargetScore) * 100m
+                    : pg.CurrentScore;
+                normalized = Math.Min(100m, Math.Max(0m, normalized));
+                return Math.Round(normalized, 2);
+            })
+            .ToList();
+
+        var overallSelfScore = goalScores.Count > 0
+            ? Math.Round(goalScores.Average(), 2)
+            : 0m;
+
+        selfReview.Status = REVIEW_STATUS_COMPLETED;
+        selfReview.OverallScore = overallSelfScore;
+        selfReview.OverallComment = "Auto-submitted from completed goals.";
+        selfReview.SubmittedAt = now;
+
+        if (selfReview.ReviewId > 0)
+        {
+            var existingSelfScores = await _context.Set<ReviewScore>()
+                .Where(rs => rs.ReviewId == selfReview.ReviewId)
+                .ToListAsync(cancellationToken);
+            if (existingSelfScores.Count > 0)
+            {
+                _context.Set<ReviewScore>().RemoveRange(existingSelfScores);
+            }
+        }
+
+        foreach (var personalGoal in personalGoals)
+        {
+            var normalized = personalGoal.TargetScore > 0
+                ? (personalGoal.CurrentScore / personalGoal.TargetScore) * 100m
+                : personalGoal.CurrentScore;
+            normalized = Math.Min(100m, Math.Max(0m, normalized));
+            var scoreValue = Math.Round(normalized, 2);
+
+            var summary = string.IsNullOrWhiteSpace(personalGoal.CompletionSummary)
+                ? $"Completed goal: {personalGoal.Title}"
+                : personalGoal.CompletionSummary.Trim();
+            var evidenceUrl = string.IsNullOrWhiteSpace(personalGoal.CompletionEvidenceUrl)
+                ? null
+                : personalGoal.CompletionEvidenceUrl.Trim();
+            var certificationUrl = string.IsNullOrWhiteSpace(personalGoal.CompletionCertificationUrl)
+                ? null
+                : personalGoal.CompletionCertificationUrl.Trim();
+            var comment = string.IsNullOrWhiteSpace(personalGoal.CompletionComment)
+                ? null
+                : personalGoal.CompletionComment.Trim();
+
+            var structuredComment = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                summary,
+                evidenceUrl,
+                certificationUrl,
+                comment,
+                source = "AutoFromGoalCompletion"
+            });
+
+            _context.Set<ReviewScore>().Add(new ReviewScore
+            {
+                EvaluationId = evaluation.EvaluationId,
+                Review = selfReview,
+                ReviewerId = evaluation.EmployeeId,
+                PersonalGoalId = personalGoal.Id,
+                ScoreValue = scoreValue,
+                Comment = structuredComment,
+                CreatedAt = now
+            });
+        }
+
+        var employeeGoals = await _context.Set<EmployeeGoal>()
+            .Where(eg => eg.EvaluationId == evaluation.EvaluationId && eg.PersonalGoalId.HasValue)
+            .ToListAsync(cancellationToken);
+
+        foreach (var employeeGoal in employeeGoals)
+        {
+            var personalGoal = personalGoals.FirstOrDefault(pg => pg.Id == employeeGoal.PersonalGoalId!.Value);
+            if (personalGoal != null && !string.IsNullOrWhiteSpace(personalGoal.CompletionEvidenceUrl))
+            {
+                employeeGoal.EvidenceUri = personalGoal.CompletionEvidenceUrl!.Trim();
+            }
+        }
+
+        var stalePendingReviews = evaluation.Reviews
+            .Where(r =>
+                (r.ReviewerRole == ReviewerRole.TL || r.ReviewerRole == ReviewerRole.Peer) &&
+                r.Status == REVIEW_STATUS_PENDING)
+            .ToList();
+        if (stalePendingReviews.Count > 0)
+        {
+            _context.Set<Review>().RemoveRange(stalePendingReviews);
+        }
+
+        if (evaluation.PeerAssignments.Count > 0)
+        {
+            _context.Set<PeerAssignment>().RemoveRange(evaluation.PeerAssignments);
+        }
     }
 
     private async Task<int> GetReportingManagerIdAsync(int employeeId, CancellationToken cancellationToken)
@@ -983,8 +1153,8 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             }
         }
 
-        // Check if score > 80 for promotion
-        if (evaluation.OverallScore.HasValue && evaluation.OverallScore.Value > PROMOTION_THRESHOLD)
+        // Route to GM only when score is at or above threshold
+        if (evaluation.OverallScore.HasValue && evaluation.OverallScore.Value >= PROMOTION_THRESHOLD)
         {
             // Create promotion case
             var promotionCase = new PromotionCase
@@ -1028,21 +1198,26 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         }
         else
         {
-            // No promotion, mark as completed
-            evaluation.Status = STATUS_COMPLETED_NO_PROMOTION;
+            // Score below threshold: route directly to HR.
+            evaluation.Status = STATUS_PENDING_HR_PROCESSING;
 
-            // Notify employee with motivational message
-            var notification = new Notification
+            var hrUserIds = await _context.Set<UserRole>()
+                .Include(ur => ur.Role)
+                .Where(ur => ur.Role.Name == "HR")
+                .Select(ur => ur.UserId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            foreach (var hrUserId in hrUserIds)
             {
-                UserId = evaluation.EmployeeId,
-                Subject = "Evaluation Complete - Great Work!",
-                Channel = "Email",
-                SentAt = DateTime.UtcNow
-            };
-
-            _context.Set<Notification>().Add(notification);
-
-            // TODO: Generate training recommendations and report
+                _context.Set<Notification>().Add(new Notification
+                {
+                    UserId = hrUserId,
+                    Subject = $"Evaluation Pending HR Processing: {evaluation.Employee?.FullName ?? "Employee"}",
+                    Channel = "Email",
+                    SentAt = DateTime.UtcNow
+                });
+            }
         }
 
         await Task.CompletedTask;
@@ -1126,21 +1301,79 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         if (evaluation == null)
             throw new NotFoundException(nameof(Evaluation), evaluationId);
 
-        // Get all users from the database (including the employee for testing with single user)
-        // In production, you may want to exclude: u.UserId != evaluation.EmployeeId
-        var availablePeers = await _context.Users
+        var peerCandidates = await _context.Users
             .Include(u => u.Department)
-            .OrderBy(u => u.FullName)
-            .Select(u => new AvailablePeerDto
-            {
-                UserId = u.UserId,
-                FullName = u.FullName,
-                Email = u.Email,
-                Department = u.Department != null ? u.Department.Name : "No Department"
-            })
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .Where(u => u.IsActive)
+            .Where(u =>
+                u.UserId != evaluation.EmployeeId &&
+                u.UserId != evaluation.ReportingManagerId &&
+                u.UserId != evaluation.TeamLeadId)
             .ToListAsync(cancellationToken);
 
+        var availablePeers = peerCandidates
+            .Where(candidate => IsEligiblePeerCandidate(candidate, evaluation))
+            .OrderBy(candidate => candidate.FullName)
+            .Select(candidate => new AvailablePeerDto
+            {
+                UserId = candidate.UserId,
+                FullName = candidate.FullName,
+                Email = candidate.Email,
+                Department = candidate.Department != null ? candidate.Department.Name : "No Department"
+            })
+            .ToList();
+
         return availablePeers;
+    }
+
+    private bool IsEligiblePeerCandidate(User candidate, Evaluation evaluation)
+    {
+        if (!candidate.IsActive)
+            return false;
+
+        if (candidate.UserId == evaluation.EmployeeId ||
+            candidate.UserId == evaluation.ReportingManagerId ||
+            candidate.UserId == evaluation.TeamLeadId)
+            return false;
+
+        return !candidate.UserRoles.Any(ur => RestrictedPeerRoles.Contains(ur.Role.Name));
+    }
+
+    private async Task<Dictionary<int, User>> LoadAndValidatePeerCandidatesAsync(
+        Evaluation evaluation,
+        IEnumerable<int> peerUserIds,
+        CancellationToken cancellationToken)
+    {
+        var distinctPeerIds = peerUserIds.Distinct().ToList();
+        var peers = await _context.Users
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .Where(u => distinctPeerIds.Contains(u.UserId))
+            .ToListAsync(cancellationToken);
+
+        if (peers.Count != distinctPeerIds.Count)
+            throw new NotFoundException("One or both peer reviewers were not found.");
+
+        var ineligiblePeer = peers.FirstOrDefault(candidate => !IsEligiblePeerCandidate(candidate, evaluation));
+        if (ineligiblePeer != null)
+        {
+            throw new BusinessRuleException(
+                $"User '{ineligiblePeer.FullName}' cannot be assigned as a peer reviewer. Team Leads can only assign active non-manager employees.");
+        }
+
+        return peers.ToDictionary(peer => peer.UserId);
+    }
+
+    private static string ResolveApprovalActorName(User? actorUser, string? actorRole, int actorUserId)
+    {
+        if (!string.IsNullOrWhiteSpace(actorUser?.FullName))
+            return actorUser.FullName;
+
+        if (!string.IsNullOrWhiteSpace(actorRole))
+            return actorRole;
+
+        return actorUserId > 0 ? $"User {actorUserId}" : "System";
     }
 
     public async Task<IEnumerable<MyEvaluationDto>> GetMyEvaluationsAsync(int userId, CancellationToken cancellationToken = default)
@@ -1340,6 +1573,19 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .Select(m => m.EmployeeUserId)
             .Distinct()
             .ToListAsync(cancellationToken);
+
+        // Auto-heal evaluations that are still in V2_ACTIVE_GOALS even though all goals were completed.
+        // This handles records created before the auto-transition fix and ensures RM sees the next stage.
+        var v2ActiveCandidateIds = await _context.Set<Evaluation>()
+            .Where(e =>
+                e.Status == STATUS_V2_ACTIVE_GOALS &&
+                (e.EmployeeId == userId ||
+                 e.ReportingManagerId == userId ||
+                 e.TeamLeadId == userId ||
+                 managedEmployeeIds.Contains(e.EmployeeId)))
+            .Select(e => e.EvaluationId)
+            .ToListAsync(cancellationToken);
+        await AutoAdvanceCompletedV2GoalEvaluationsAsync(v2ActiveCandidateIds, cancellationToken);
 
         // Workflow-v2 employee actions (activation + self-evaluation)
         var employeeV2Actions = await _context.Set<Evaluation>()
@@ -1689,7 +1935,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .CountAsync(cancellationToken);
 
         var pendingHrCount = await _context.Set<Evaluation>()
-            .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING || e.Status == STATUS_V2_PENDING_HR_PROMOTION)
+            .Where(e =>
+                e.Status == STATUS_PENDING_HR_PROCESSING ||
+                e.Status == STATUS_V2_PENDING_HR_PROMOTION ||
+                e.Status == STATUS_V2_PENDING_HR_LOW_PERFORMER)
             .CountAsync(cancellationToken);
 
         // Get evaluations with their reviews to calculate scores
@@ -1702,7 +1951,8 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 e.Status == STATUS_PENDING_GM_DECISION ||
                 e.Status == STATUS_PENDING_HR_PROCESSING ||
                 e.Status == STATUS_V2_PENDING_GM_DECISION ||
-                e.Status == STATUS_V2_PENDING_HR_PROMOTION)
+                e.Status == STATUS_V2_PENDING_HR_PROMOTION ||
+                e.Status == STATUS_V2_PENDING_HR_LOW_PERFORMER)
             .ToListAsync(cancellationToken);
 
         // Calculate scores for each evaluation
@@ -1848,7 +2098,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .ThenInclude(r => r.ReviewScores)
             .Include(e => e.Reviews)
                 .ThenInclude(r => r.ReviewItems)
-            .Where(e => e.Status == STATUS_PENDING_HR_PROCESSING || e.Status == STATUS_V2_PENDING_HR_PROMOTION)
+            .Where(e =>
+                e.Status == STATUS_PENDING_HR_PROCESSING ||
+                e.Status == STATUS_V2_PENDING_HR_PROMOTION ||
+                e.Status == STATUS_V2_PENDING_HR_LOW_PERFORMER)
             .OrderByDescending(e => e.OverallScore)
             .ToListAsync(cancellationToken);
 
@@ -2133,9 +2386,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             evaluation.Status = STATUS_PENDING_GM_DECISION;
 
             // Notify GM for second approval
+            var gmUserId = await GetGmUserIdAsync(cancellationToken);
             var gmNotification = new Notification
             {
-                UserId = evaluation.ReportingManagerId,
+                UserId = gmUserId,
                 Subject = $"Goals Completed - Final Review Required: {evaluation.Employee?.FullName ?? "Employee"}",
                 Channel = "Email",
                 SentAt = DateTime.UtcNow
@@ -2145,10 +2399,240 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         }
         else
         {
-            evaluation.Status = STATUS_COMPLETED_NO_PROMOTION;
+            evaluation.Status = STATUS_PENDING_HR_PROCESSING;
+
+            var hrUserIds = await _context.Set<UserRole>()
+                .Include(ur => ur.Role)
+                .Where(ur => ur.Role.Name == "HR")
+                .Select(ur => ur.UserId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            foreach (var hrUserId in hrUserIds)
+            {
+                _context.Set<Notification>().Add(new Notification
+                {
+                    UserId = hrUserId,
+                    Subject = $"Evaluation Pending HR Processing: {evaluation.Employee?.FullName ?? "Employee"}",
+                    Channel = "Email",
+                    SentAt = DateTime.UtcNow
+                });
+            }
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task SubmitTlOverallAndAssignPeersAsync(
+        int evaluationId,
+        int teamLeadUserId,
+        decimal overallScore,
+        string? comment,
+        int peerUserId1,
+        int peerUserId2,
+        CancellationToken cancellationToken = default)
+    {
+        if (overallScore < 1 || overallScore > 10)
+            throw new BusinessRuleException("Overall score must be between 1 and 10.");
+
+        if (peerUserId1 == peerUserId2)
+            throw new BusinessRuleException("Two different peer reviewers are required.");
+
+        var evaluation = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.PeerAssignments)
+            .Include(e => e.Reviews)
+            .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+
+        if (evaluation == null)
+            throw new NotFoundException(nameof(Evaluation), evaluationId);
+
+        if (evaluation.TeamLeadId != teamLeadUserId)
+            throw new BusinessRuleException("Only the assigned Team Lead can submit this action.");
+
+        if (evaluation.Status != STATUS_PENDING_TL_REVIEW)
+            throw new BusinessRuleException($"TL combined submission is only allowed in {STATUS_PENDING_TL_REVIEW}. Current status: {evaluation.Status}");
+
+        if (peerUserId1 == evaluation.EmployeeId || peerUserId2 == evaluation.EmployeeId)
+            throw new BusinessRuleException("Employee cannot be assigned as a peer reviewer.");
+
+        if (peerUserId1 == evaluation.ReportingManagerId || peerUserId2 == evaluation.ReportingManagerId)
+            throw new BusinessRuleException("Reporting Manager cannot be assigned as a peer reviewer.");
+
+        if (peerUserId1 == evaluation.TeamLeadId || peerUserId2 == evaluation.TeamLeadId)
+            throw new BusinessRuleException("Team Lead cannot be assigned as a peer reviewer.");
+
+        var validatedPeers = await LoadAndValidatePeerCandidatesAsync(
+            evaluation,
+            new[] { peerUserId1, peerUserId2 },
+            cancellationToken);
+
+        var peer1 = validatedPeers[peerUserId1];
+        var peer2 = validatedPeers[peerUserId2];
+
+        var tlReview = evaluation.Reviews
+            .Where(r => r.ReviewerRole == ReviewerRole.TL && r.ReviewerUserId == teamLeadUserId)
+            .OrderByDescending(r => r.ReviewId)
+            .FirstOrDefault();
+
+        if (tlReview == null)
+            throw new BusinessRuleException("Pending TL review was not found for this evaluation.");
+
+        if (tlReview.Status == REVIEW_STATUS_APPROVED)
+            throw new BusinessRuleException("TL review has already been approved.");
+
+        var normalizedComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        var now = DateTime.UtcNow;
+        var oldStatus = evaluation.Status;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var existingTlScores = await _context.Set<ReviewScore>()
+                .Where(rs => rs.ReviewId == tlReview.ReviewId)
+                .ToListAsync(cancellationToken);
+            if (existingTlScores.Count > 0)
+            {
+                _context.Set<ReviewScore>().RemoveRange(existingTlScores);
+            }
+
+            _context.Set<ReviewScore>().Add(new ReviewScore
+            {
+                EvaluationId = evaluation.EvaluationId,
+                ReviewId = tlReview.ReviewId,
+                ReviewerId = teamLeadUserId,
+                PersonalGoalId = null,
+                ScoreValue = overallScore,
+                Comment = normalizedComment,
+                CreatedAt = now
+            });
+
+            tlReview.Status = REVIEW_STATUS_COMPLETED;
+            tlReview.OverallScore = overallScore;
+            tlReview.OverallComment = normalizedComment;
+            tlReview.SubmittedAt = now;
+
+            if (evaluation.PeerAssignments.Count > 0)
+            {
+                _context.Set<PeerAssignment>().RemoveRange(evaluation.PeerAssignments);
+            }
+
+            var existingPeerReviews = evaluation.Reviews
+                .Where(r => r.ReviewerRole == ReviewerRole.Peer)
+                .ToList();
+            if (existingPeerReviews.Count > 0)
+            {
+                _context.Set<Review>().RemoveRange(existingPeerReviews);
+            }
+
+            _context.Set<PeerAssignment>().Add(new PeerAssignment
+            {
+                EvaluationId = evaluation.EvaluationId,
+                PeerUserId = peerUserId1
+            });
+            _context.Set<PeerAssignment>().Add(new PeerAssignment
+            {
+                EvaluationId = evaluation.EvaluationId,
+                PeerUserId = peerUserId2
+            });
+
+            _context.Set<Review>().Add(new Review
+            {
+                EvaluationId = evaluation.EvaluationId,
+                ReviewerUserId = peerUserId1,
+                ReviewerRole = ReviewerRole.Peer,
+                Status = REVIEW_STATUS_PENDING
+            });
+            _context.Set<Review>().Add(new Review
+            {
+                EvaluationId = evaluation.EvaluationId,
+                ReviewerUserId = peerUserId2,
+                ReviewerRole = ReviewerRole.Peer,
+                Status = REVIEW_STATUS_PENDING
+            });
+
+            evaluation.Status = STATUS_PENDING_PEER_REVIEWS;
+
+            _context.Set<ApprovalHistory>().Add(new ApprovalHistory
+            {
+                EvaluationId = evaluation.EvaluationId,
+                ReviewId = tlReview.ReviewId,
+                ActorUserId = teamLeadUserId,
+                ActorRole = "TL",
+                Action = "TlSubmittedOverallAndAssignedPeers",
+                Comment = normalizedComment,
+                FromStatus = oldStatus,
+                ToStatus = evaluation.Status,
+                CreatedAt = now
+            });
+
+            _context.Set<AuditLog>().Add(new AuditLog
+            {
+                ActorUserId = teamLeadUserId,
+                EntityType = "Evaluation",
+                EntityId = evaluation.EvaluationId,
+                Action = "TL_COMBINED_SUBMISSION",
+                BeforeJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    Status = oldStatus
+                }),
+                AfterJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    Status = evaluation.Status,
+                    OverallScore = overallScore,
+                    PeerUserId1 = peerUserId1,
+                    PeerUserId2 = peerUserId2
+                }),
+                CreatedAt = now
+            });
+
+            _context.Set<Notification>().Add(new Notification
+            {
+                UserId = peerUserId1,
+                Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}",
+                Channel = "Email",
+                SentAt = now
+            });
+            _context.Set<Notification>().Add(new Notification
+            {
+                UserId = peerUserId2,
+                Subject = $"Peer Review Request: {evaluation.Employee?.FullName ?? "Employee"}",
+                Channel = "Email",
+                SentAt = now
+            });
+
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+
+        var employee = evaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
+        if (employee != null)
+        {
+            await _emailService.SendEvaluationNotificationAsync(
+                peer1.Email,
+                peer1.FullName,
+                employee.FullName,
+                "Assigned",
+                "Peer Reviewer",
+                "You have been assigned as a peer reviewer.",
+                evaluationId,
+                cancellationToken);
+
+            await _emailService.SendEvaluationNotificationAsync(
+                peer2.Email,
+                peer2.FullName,
+                employee.FullName,
+                "Assigned",
+                "Peer Reviewer",
+                "You have been assigned as a peer reviewer.",
+                evaluationId,
+                cancellationToken);
+        }
     }
 
     public async Task AssignPeerReviewersAsync(int evaluationId, int teamLeadUserId, int peerUserId1, int peerUserId2, CancellationToken cancellationToken = default)
@@ -2183,12 +2667,14 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         {
             var allowedV2Statuses = new[]
             {
+                STATUS_PENDING_TL_REVIEW,
+                STATUS_PENDING_PEER_ASSIGNMENT,
                 STATUS_V2_ACTIVE_GOALS,
                 STATUS_V2_PENDING_PARALLEL_REVIEWS
             };
 
             if (!allowedV2Statuses.Contains(evaluation.Status))
-                throw new BusinessRuleException("In workflow v2, peer reviewers can only be assigned while goals are active or parallel reviews are pending.");
+                throw new BusinessRuleException("In workflow v2, peer reviewers can only be assigned during TL/peer assignment stages, active goals, or parallel reviews.");
         }
         else
         {
@@ -2196,12 +2682,12 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 throw new BusinessRuleException("Peer reviewers can only be assigned after Team Lead approval.");
         }
 
-        // Verify peer users exist
-        var peer1 = await _context.Users.FindAsync(new object[] { peerUserId1 }, cancellationToken);
-        var peer2 = await _context.Users.FindAsync(new object[] { peerUserId2 }, cancellationToken);
-
-        if (peer1 == null || peer2 == null)
-            throw new NotFoundException("One or both peer reviewers not found.");
+        var validatedPeers = await LoadAndValidatePeerCandidatesAsync(
+            evaluation,
+            new[] { peerUserId1, peerUserId2 },
+            cancellationToken);
+        var peer1 = validatedPeers[peerUserId1];
+        var peer2 = validatedPeers[peerUserId2];
 
         if (isWorkflowV2)
         {
@@ -2299,9 +2785,63 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         }
     }
 
-    public async Task<EvaluationDetailDto> GetEvaluationDetailsAsync(int evaluationId, int userId, CancellationToken cancellationToken = default)
+    private async Task<bool> AutoAdvanceCompletedV2GoalEvaluationsAsync(IEnumerable<int> evaluationIds, CancellationToken cancellationToken)
     {
-        var evaluation = await _context.Set<Evaluation>()
+        var candidateIds = evaluationIds
+            .Distinct()
+            .ToList();
+
+        if (candidateIds.Count == 0)
+        {
+            return false;
+        }
+
+        var candidates = await _context.Set<Evaluation>()
+            .Where(e =>
+                candidateIds.Contains(e.EvaluationId) &&
+                e.Status == STATUS_V2_ACTIVE_GOALS &&
+                e.GoalSetId.HasValue)
+            .Select(e => new
+            {
+                e.EvaluationId,
+                e.EmployeeId,
+                GoalSetId = e.GoalSetId!.Value
+            })
+            .ToListAsync(cancellationToken);
+
+        var advancedAny = false;
+
+        foreach (var candidate in candidates)
+        {
+            var goalStatuses = await _context.PersonalGoals
+                .Where(pg => pg.GoalSetId == candidate.GoalSetId && pg.UserId == candidate.EmployeeId)
+                .Select(pg => pg.Status)
+                .ToListAsync(cancellationToken);
+
+            if (goalStatuses.Count == 0)
+            {
+                continue;
+            }
+
+            var allCompleted = goalStatuses.All(status =>
+                status == PersonalGoalStatus.Completed ||
+                status == PersonalGoalStatus.UnderEvaluation);
+
+            if (!allCompleted)
+            {
+                continue;
+            }
+
+            await ContinueWorkflowAfterEmployeeCompletionAsync(candidate.EvaluationId, cancellationToken);
+            advancedAny = true;
+        }
+
+        return advancedAny;
+    }
+
+    private Task<Evaluation?> LoadEvaluationGraphAsync(int evaluationId, CancellationToken cancellationToken)
+    {
+        return _context.Set<Evaluation>()
             .Include(e => e.Employee).Include(e => e.ReportingManager).Include(e => e.TeamLead).Include(e => e.Cycle)
             .Include(e => e.Reviews).ThenInclude(r => r.Reviewer)
             .Include(e => e.Reviews).ThenInclude(r => r.ReviewScores).ThenInclude(rs => rs.PersonalGoal)
@@ -2311,6 +2851,11 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .Include(e => e.PromotionCases).ThenInclude(pc => pc.RecommendedByHod)
             .Include(e => e.PromotionCases).ThenInclude(pc => pc.GmDecidedBy)
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
+    }
+
+    public async Task<EvaluationDetailDto> GetEvaluationDetailsAsync(int evaluationId, int userId, CancellationToken cancellationToken = default)
+    {
+        var evaluation = await LoadEvaluationGraphAsync(evaluationId, cancellationToken);
 
         if (evaluation == null)
             throw new NotFoundException(nameof(Evaluation), evaluationId);
@@ -2340,10 +2885,42 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         if (!isAuthorized)
             throw new BusinessRuleException("You do not have permission to view this evaluation.");
 
-        var approvalHistory = await _context.Set<ApprovalHistory>()
-            .Include(ah => ah.ActorUser).Where(ah => ah.EvaluationId == evaluationId).OrderBy(ah => ah.CreatedAt)
-            .Select(ah => new ApprovalHistoryItemDto { Id = ah.Id, ActorUserId = ah.ActorUserId, ActorName = ah.ActorUser != null ? ah.ActorUser.FullName : "Unknown", ActorRole = ah.ActorRole, Action = ah.Action, Comment = ah.Comment, FromStatus = ah.FromStatus, ToStatus = ah.ToStatus, CreatedAt = ah.CreatedAt })
+        var autoAdvanced = await AutoAdvanceCompletedV2GoalEvaluationsAsync(new[] { evaluationId }, cancellationToken);
+        if (autoAdvanced)
+        {
+            evaluation = await LoadEvaluationGraphAsync(evaluationId, cancellationToken);
+            if (evaluation == null)
+            {
+                throw new NotFoundException(nameof(Evaluation), evaluationId);
+            }
+        }
+
+        var approvalHistoryRows = await _context.Set<ApprovalHistory>()
+            .Include(ah => ah.ActorUser)
+            .Where(ah => ah.EvaluationId == evaluationId)
+            .OrderBy(ah => ah.CreatedAt)
+            .ThenBy(ah => ah.Id)
             .ToListAsync(cancellationToken);
+
+        var approvalHistory = approvalHistoryRows
+            .Select(ah =>
+            {
+                var actorRole = string.IsNullOrWhiteSpace(ah.ActorRole) ? "System" : ah.ActorRole;
+
+                return new ApprovalHistoryItemDto
+                {
+                    Id = ah.Id,
+                    ActorUserId = ah.ActorUserId,
+                    ActorName = ResolveApprovalActorName(ah.ActorUser, actorRole, ah.ActorUserId),
+                    ActorRole = actorRole,
+                    Action = ah.Action,
+                    Comment = ah.Comment,
+                    FromStatus = ah.FromStatus,
+                    ToStatus = ah.ToStatus,
+                    CreatedAt = ah.CreatedAt
+                };
+            })
+            .ToList();
 
         // Get personal goal IDs from employee goals
         var personalGoalIds = evaluation.EmployeeGoals
@@ -2426,6 +3003,10 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 DueDate = personalGoal?.DueDate,
                 StartedAt = personalGoal?.StartedAt,
                 CompletedAt = personalGoal?.CompletedAt,
+                CompletionEvidenceUrl = personalGoal?.CompletionEvidenceUrl,
+                CompletionCertificationUrl = personalGoal?.CompletionCertificationUrl,
+                CompletionSummary = personalGoal?.CompletionSummary,
+                CompletionComment = personalGoal?.CompletionComment,
                 // Framework metadata: GoalItem is a ScoreItem, Category is ScoreCategory
                 CategoryName = personalGoal?.GoalItem?.Category?.Name,
                 ItemName = personalGoal?.GoalItem?.Name,
@@ -2605,16 +3186,62 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, cancellationToken);
 
         if (evaluation == null) throw new NotFoundException(nameof(Evaluation), evaluationId);
-        if (evaluation.Status != STATUS_PENDING_HR_PROCESSING && evaluation.Status != STATUS_V2_PENDING_HR_PROMOTION)
-            throw new BusinessRuleException("HR can only process promotion when it's pending HR processing.");
+        if (evaluation.Status != STATUS_PENDING_HR_PROCESSING &&
+            evaluation.Status != STATUS_V2_PENDING_HR_PROMOTION &&
+            evaluation.Status != STATUS_V2_PENDING_HR_LOW_PERFORMER)
+            throw new BusinessRuleException("HR can only process evaluations when they are in an HR pending state.");
 
         var userRoles = await GetUserRolesAsync(hrUserId, cancellationToken);
         if (!userRoles.Contains("HR")) throw new BusinessRuleException("Only HR can process promotions.");
 
         var promotionCase = evaluation.PromotionCases.FirstOrDefault();
-        if (promotionCase == null || promotionCase.GmDecision != PromotionDecision.Approved) throw new BusinessRuleException("Promotion case must be approved by GM before HR processing.");
+        var hasApprovedPromotionCase = promotionCase != null && promotionCase.GmDecision == PromotionDecision.Approved;
+        var isLowPerformerPath =
+            evaluation.Status == STATUS_V2_PENDING_HR_LOW_PERFORMER ||
+            (evaluation.Status == STATUS_PENDING_HR_PROCESSING && !hasApprovedPromotionCase);
 
         var oldStatus = evaluation.Status;
+
+        if (isLowPerformerPath)
+        {
+            evaluation.Status = evaluation.WorkflowVersion == "v2"
+                ? STATUS_V2_COMPLETED_NO_PROMOTION
+                : STATUS_COMPLETED_NO_PROMOTION;
+
+            _context.Set<ApprovalHistory>().Add(new ApprovalHistory
+            {
+                EvaluationId = evaluationId,
+                ActorUserId = hrUserId,
+                ActorRole = "HR",
+                Action = "HrProcessedLowPerformer",
+                Comment = comment,
+                FromStatus = oldStatus,
+                ToStatus = evaluation.Status,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            _context.Set<Notification>().Add(new Notification
+            {
+                UserId = evaluation.EmployeeId,
+                Subject = "Evaluation Complete",
+                Channel = "Email",
+                SentAt = DateTime.UtcNow
+            });
+
+            await _emailService.SendPromotionNotificationAsync(
+                evaluation.Employee.Email,
+                evaluation.Employee.FullName,
+                evaluation.Employee.FullName,
+                false,
+                comment,
+                cancellationToken);
+
+            await _context.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        if (!hasApprovedPromotionCase)
+            throw new BusinessRuleException("Promotion case must be approved by GM before HR processing.");
 
         if (proceed)
         {

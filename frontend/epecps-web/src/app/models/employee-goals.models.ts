@@ -99,6 +99,8 @@ export interface PersonalGoalListDto {
   completedAt?: Date | string;
   completionComment?: string;
   completionEvidenceUrl?: string;
+  completionCertificationUrl?: string;
+  completionSummary?: string;
   canStart?: boolean;
   canComplete?: boolean;
 }
@@ -189,6 +191,7 @@ export interface GoalSetEvaluationInfoDto {
   submittedDate: Date | string;
   completedDate?: Date | string;
   approvalSteps: GoalSetApprovalStepDto[];
+  approvalHistory?: GoalSetApprovalHistoryEventDto[];
 }
 
 // NEW: Approval step for horizontal timeline display
@@ -201,4 +204,16 @@ export interface GoalSetApprovalStepDto {
   isCompleted: boolean;
   isPending: boolean;
   isRejected: boolean;
+}
+
+export interface GoalSetApprovalHistoryEventDto {
+  id: number;
+  actorUserId: number;
+  actorName: string;
+  actorRole: string;
+  action: string;
+  comment?: string;
+  fromStatus: string;
+  toStatus: string;
+  createdAt: Date | string;
 }

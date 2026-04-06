@@ -69,6 +69,26 @@ public class PersonalGoal
     /// When the employee marked this goal as completed
     /// </summary>
     public DateTime? CompletedAt { get; set; }
+
+    /// <summary>
+    /// Completion evidence link submitted by employee.
+    /// </summary>
+    public string? CompletionEvidenceUrl { get; set; }
+
+    /// <summary>
+    /// Completion certification link submitted by employee.
+    /// </summary>
+    public string? CompletionCertificationUrl { get; set; }
+
+    /// <summary>
+    /// Completion summary submitted by employee.
+    /// </summary>
+    public string? CompletionSummary { get; set; }
+
+    /// <summary>
+    /// Completion comment submitted by employee.
+    /// </summary>
+    public string? CompletionComment { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }

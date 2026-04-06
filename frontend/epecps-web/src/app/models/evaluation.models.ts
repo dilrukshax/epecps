@@ -100,6 +100,22 @@ export interface GoalDto {
   description: string;
   weightPct: number;
   evidenceUri?: string;
+  targetScore?: number;
+  currentScore?: number;
+  progressPercent?: number;
+  status?: string;
+  startDate?: Date;
+  dueDate?: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  completionEvidenceUrl?: string;
+  completionCertificationUrl?: string;
+  completionSummary?: string;
+  completionComment?: string;
+  categoryName?: string;
+  itemName?: string;
+  goalItemName?: string;
+  activities?: GoalActivityDto[];
   goalAssignmentId?: string;
   activationMethod?: string;
   activationSubmittedAt?: Date;
@@ -122,6 +138,16 @@ export interface GoalReviewerScoreDto {
   scoreValue: number;
   comment?: string;
   scoredAt?: Date;
+}
+
+export interface GoalActivityDto {
+  id: string;
+  description: string;
+  isFromTemplate: boolean;
+  status: string;
+  dueDate?: Date;
+  evidenceUrl?: string;
+  evidenceNotes?: string;
 }
 
 export interface ApprovalHistoryItemDto {
@@ -200,6 +226,8 @@ export interface StartGoalRequestDto {
  */
 export interface CompleteGoalRequestDto {
   evidenceUrl?: string;
+  certificationUrl?: string;
+  summary?: string;
   comment?: string;
   currentScore?: number;
 }
@@ -273,6 +301,8 @@ export interface GoalDetailWithStatusDto extends GoalDto {
   completedAt?: Date;
   completionComment?: string;
   completionEvidenceUrl?: string;
+  completionCertificationUrl?: string;
+  completionSummary?: string;
   canStart: boolean;
   canComplete: boolean;
 }
@@ -290,7 +320,7 @@ export interface BulkApprovalCandidateDto {
   status: string;
   overallScore?: number;
   scorePercentage: number; // Score as percentage (0-100)
-  isEligibleForPromotion: boolean; // Score >= 80%
+  isEligibleForPromotion: boolean; // Score >= 85%
   cycleId: number;
   cycleName: string;
   lastReviewedAt?: Date;
@@ -334,8 +364,8 @@ export interface BulkApprovalResultItemDto {
 export interface BulkApprovalStatsDto {
   pendingGmApproval: number;
   pendingHrProcessing: number;
-  eligibleForPromotion: number; // Score >= 80%
-  notEligibleForPromotion: number; // Score < 80%
+  eligibleForPromotion: number; // Score >= 85%
+  notEligibleForPromotion: number; // Score < 85%
   averageScore: number;
 }
 
@@ -431,7 +461,15 @@ export interface SelfEvaluationGoalInputDto {
   score: number;
   summary: string;
   evidenceUrl: string;
+  certificationUrl?: string;
   comment?: string;
+}
+
+export interface SubmitTlCombinedReviewDto {
+  overallScore: number;
+  comment?: string;
+  peerUserId1: number;
+  peerUserId2: number;
 }
 
 export interface GmV2DecisionDto {

@@ -261,6 +261,48 @@ public class EvaluationsController : ControllerBase
     }
 
     /// <summary>
+    /// Team Lead combined submission: overall score + assign peers in one action.
+    /// </summary>
+    [HttpPost("{evaluationId}/tl/combined-submit")]
+    public async Task<IActionResult> SubmitTlCombinedReview(
+        int evaluationId,
+        [FromBody] SubmitTlCombinedReviewDto dto,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var userId = await GetAuthenticatedUserIdAsync(cancellationToken);
+
+            await _evaluationWorkflowService.SubmitTlOverallAndAssignPeersAsync(
+                evaluationId,
+                userId,
+                dto.OverallScore,
+                dto.Comment,
+                dto.PeerUserId1,
+                dto.PeerUserId2,
+                cancellationToken);
+
+            return Ok(new { message = "TL review submitted and peer reviewers assigned successfully." });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Failed to submit TL combined review.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Process promotion decision (GM only)
     /// </summary>
     [HttpPost("{evaluationId}/promotion-decision")]
@@ -869,8 +911,8 @@ public class EvaluationsController : ControllerBase
 
     /// <summary>
     /// HOD submits overall score for an evaluation
-    /// If score >= 8 (80%), auto-recommends to GM
-    /// If score < 8 (80%), directly completes without promotion
+    /// If score >= 8.5 (85%), routes to GM
+    /// If score < 8.5 (85%), routes directly to HR
     /// </summary>
     [HttpPost("{evaluationId}/hod/submit-score")]
     public async Task<IActionResult> HodSubmitScore(
@@ -894,9 +936,9 @@ public class EvaluationsController : ControllerBase
                 dto.Comment,
                 cancellationToken);
 
-            var message = dto.Score >= 8 
-                ? "Score submitted successfully. Employee has been auto-recommended for promotion to GM." 
-                : "Score submitted successfully. Evaluation completed without promotion.";
+            var message = dto.Score >= 8.5m
+                ? "Score submitted successfully. Employee has been routed to GM review."
+                : "Score submitted successfully. Evaluation has been routed to HR processing.";
 
             return Ok(new { message, score = dto.Score, scorePercentage = dto.Score * 10 });
         }

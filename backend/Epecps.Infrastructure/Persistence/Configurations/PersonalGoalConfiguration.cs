@@ -48,6 +48,18 @@ public class PersonalGoalConfiguration : IEntityTypeConfiguration<PersonalGoal>
 
         builder.Property(pg => pg.CompletedAt);
 
+        builder.Property(pg => pg.CompletionEvidenceUrl)
+            .HasMaxLength(2000);
+
+        builder.Property(pg => pg.CompletionCertificationUrl)
+            .HasMaxLength(2000);
+
+        builder.Property(pg => pg.CompletionSummary)
+            .HasMaxLength(4000);
+
+        builder.Property(pg => pg.CompletionComment)
+            .HasMaxLength(2000);
+
         builder.Property(pg => pg.CreatedAt)
             .IsRequired()
             .HasDefaultValueSql("GETUTCDATE()");

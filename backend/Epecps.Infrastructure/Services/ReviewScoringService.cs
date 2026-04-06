@@ -1,5 +1,4 @@
 using Epecps.Application.DTOs.Evaluations;
-using Epecps.Application.DTOs.Evaluations;
 using Epecps.Application.Exceptions;
 using Epecps.Application.Interfaces;
 using Epecps.Domain.Entities;
@@ -256,6 +255,9 @@ public class ReviewScoringService : IReviewScoringService
         if (review.ReviewerRole == ReviewerRole.RM)
             throw new BusinessRuleException("RM reviewers submit item-level scores, not overall scores.");
 
+        if (review.ReviewerRole == ReviewerRole.TL && evaluation.Status == "Pending_TL_Review")
+            throw new BusinessRuleException("TL must use the combined submission endpoint to provide overall score and assign peers.");
+
         if (string.Equals(evaluation.WorkflowVersion, "v2", StringComparison.OrdinalIgnoreCase)
             && evaluation.Status == "V2_PENDING_PARALLEL_REVIEWS"
             && (review.ReviewerRole == ReviewerRole.TL || review.ReviewerRole == ReviewerRole.Peer))
@@ -489,6 +491,9 @@ public class ReviewScoringService : IReviewScoringService
         // RM should use the existing SubmitRmReviewScoringAsync method
         if (review.ReviewerRole == ReviewerRole.RM)
             throw new BusinessRuleException("RM reviewers should use the RM scoring endpoint for item-level scores.");
+
+        if (review.ReviewerRole == ReviewerRole.TL && evaluation.Status == "Pending_TL_Review")
+            throw new BusinessRuleException("TL must use the combined submission endpoint with overall score and peer assignment.");
 
         if (review.ReviewerUserId != reviewerUserId)
             throw new BusinessRuleException("You are not the assigned reviewer for this evaluation.");

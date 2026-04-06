@@ -278,7 +278,7 @@ namespace Epecps.Infrastructure.Migrations
                 column: "ActivationReviewedByUserId",
                 principalTable: "Users",
                 principalColumn: "UserId",
-                onDelete: ReferentialAction.SetNull);
+                onDelete: ReferentialAction.NoAction);
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)

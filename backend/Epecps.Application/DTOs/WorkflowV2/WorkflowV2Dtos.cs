@@ -30,6 +30,7 @@ public class SelfEvaluationGoalInputDto
     public decimal Score { get; set; }
     public string Summary { get; set; } = string.Empty;
     public string EvidenceUrl { get; set; } = string.Empty;
+    public string? CertificationUrl { get; set; }
     public string? Comment { get; set; }
 }
 

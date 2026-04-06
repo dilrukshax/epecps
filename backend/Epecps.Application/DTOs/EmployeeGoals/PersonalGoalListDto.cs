@@ -24,4 +24,10 @@ public class PersonalGoalListDto
     public PersonalGoalStatus Status { get; set; }
     public DateTime DueDate { get; set; }
     public DateTime CreatedAt { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public string? CompletionEvidenceUrl { get; set; }
+    public string? CompletionCertificationUrl { get; set; }
+    public string? CompletionSummary { get; set; }
+    public string? CompletionComment { get; set; }
 }

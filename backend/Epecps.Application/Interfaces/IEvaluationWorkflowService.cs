@@ -60,6 +60,18 @@ public interface IEvaluationWorkflowService
     Task AssignPeerReviewersAsync(int evaluationId, int teamLeadUserId, int peerUserId1, int peerUserId2, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Team Lead submits overall score and assigns both peers in one atomic action.
+    /// </summary>
+    Task SubmitTlOverallAndAssignPeersAsync(
+        int evaluationId,
+        int teamLeadUserId,
+        decimal overallScore,
+        string? comment,
+        int peerUserId1,
+        int peerUserId2,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get all pending approvals for a specific user based on their roles
     /// </summary>
     /// <param name="userId">The user ID</param>
@@ -142,7 +154,7 @@ public interface IEvaluationWorkflowService
     Task<BulkApprovalStatsDto> GetBulkApprovalStatsAsync(int userId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Get all evaluations pending GM approval (score >= 80%, recommended by HOD)
+    /// Get all evaluations pending GM approval (score >= 85%, recommended by HOD)
     /// </summary>
     /// <param name="userId">The GM user ID</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -177,8 +189,8 @@ public interface IEvaluationWorkflowService
 
     /// <summary>
     /// HOD submits overall score for an evaluation
-    /// If score >= 80%, auto-recommends to GM
-    /// If score < 80%, directly completes without promotion
+    /// If score >= 85%, routes to GM
+    /// If score < 85%, routes directly to HR
     /// </summary>
     /// <param name="evaluationId">The evaluation ID</param>
     /// <param name="hodUserId">The HOD user ID</param>

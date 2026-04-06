@@ -17,40 +17,6 @@ services:
       retries: 15
       start_period: 30s
 
-  backend-migrator:
-    profiles:
-      - migrate
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: epecps-backend-migrator
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://+:8080
-      DisableHttpsRedirection: "true"
-      ConnectionStrings__DefaultConnection: Server=db,1433;Database=EpecpsDb;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true
-      Database__AutoMigrate: "false"
-      Database__AutoSeed: "true"
-      Database__MigrateOnly: "true"
-      Database__IgnorePendingModelChangesWarning: "true"
-      Database__RecreateIfCoreTablesMissing: "true"
-      Database__StartupRetryCount: "15"
-      Database__StartupRetryDelaySeconds: "5"
-      Jwt__Issuer: Epecps
-      Jwt__Audience: EpecpsWeb
-      Jwt__SigningKey: ${JWT_SIGNING_KEY:-CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY}
-      Jwt__AccessTokenMinutes: "60"
-      Jwt__RefreshTokenDays: "14"
-      SuperAdmin__Email: ${SUPER_ADMIN_EMAIL:-superadmin@company.com}
-      SuperAdmin__Password: ${SUPER_ADMIN_PASSWORD:-CHANGE_THIS_SUPERADMIN_PASSWORD}
-      SuperAdmin__FullName: Super Admin
-      EmailSettings__EnableBackgroundProcessing: "false"
-      EmailSettings__BaseUrl: http://localhost:4200
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
-
   backend:
     build:
       context: .
@@ -61,7 +27,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       DisableHttpsRedirection: "true"
       ConnectionStrings__DefaultConnection: Server=db,1433;Database=EpecpsDb;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true
-      Database__AutoMigrate: "false"
+      Database__AutoMigrate: "true"
       Database__AutoSeed: "true"
       Database__MigrateOnly: "false"
       Database__IgnorePendingModelChangesWarning: "true"

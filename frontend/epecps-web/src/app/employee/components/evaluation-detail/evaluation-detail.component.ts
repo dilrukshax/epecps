@@ -17,7 +17,8 @@ import {
   SubmitActivationPlanRequestDto,
   ActivationPlanDecisionDto,
   SubmitSelfEvaluationV2Dto,
-  SelfEvaluationGoalInputDto
+  SelfEvaluationGoalInputDto,
+  SubmitTlCombinedReviewDto
 } from '../../../models/evaluation.models';
 
 @Component({
@@ -48,10 +49,9 @@ export class EvaluationDetailComponent implements OnInit {
   // Workflow v2 self-evaluation state
   submittingSelfEvaluation = false;
   selfEvaluationComment = '';
-  selfEvaluationGoals: { [personalGoalId: string]: { score: number; summary: string; evidenceUrl: string; comment: string } } = {};
+  selfEvaluationGoals: { [personalGoalId: string]: { score: number; summary: string; evidenceUrl: string; certificationUrl: string; comment: string } } = {};
 
   // Peer assignment state
-  showPeerAssignment = false;
   assigningPeers = false;
   loadingPeers = false;
   peerUserId1: number | null = null;
@@ -99,6 +99,8 @@ export class EvaluationDetailComponent implements OnInit {
   showCompleteGoalModal = false;
   completeModalGoal: GoalDto | null = null;
   completeFormEvidenceUrl = '';
+  completeFormCertificationUrl = '';
+  completeFormSummary = '';
   completeFormComment = '';
   completeFormCurrentScore: number | null = null;
 
@@ -506,6 +508,7 @@ export class EvaluationDetailComponent implements OnInit {
     this.showHrActions = false;
     this.tlCombinedReviewMode = false;
     this.gmVacancySelection = '';
+    this.useGoalLevelScoring = true;
 
     if (status.includes('v2_pending_employee_activation') || status.includes('v2_returned_for_activation')) {
       if (this.isGoalOwner) {
@@ -524,11 +527,7 @@ export class EvaluationDetailComponent implements OnInit {
     }
 
     if (status.includes('v2_active_goals')) {
-      if (this.currentUserId !== null && this.currentUserId === this.evaluation.teamLeadId && this.currentUserHasRole('TL')) {
-        this.isActiveApprover = true;
-        this.currentUserRole = 'TL';
-        this.loadAvailablePeers();
-      } else if (this.isGoalOwner) {
+      if (this.isGoalOwner) {
         this.isActiveApprover = true;
         this.currentUserRole = 'Employee';
       }
@@ -613,6 +612,7 @@ export class EvaluationDetailComponent implements OnInit {
       if (this.currentUserHasRole('TL')) {
         this.isActiveApprover = true;
         this.currentUserRole = 'TL';
+        this.useGoalLevelScoring = false;
         this.tlCombinedReviewMode = true;
         console.log('User role: TL (combined review mode - score + peer assignment)');
         // Load available peers for the combined form
@@ -674,7 +674,7 @@ export class EvaluationDetailComponent implements OnInit {
   private initializeSelfEvaluationState(): void {
     if (!this.evaluation) return;
 
-    const nextState: { [personalGoalId: string]: { score: number; summary: string; evidenceUrl: string; comment: string } } = {};
+    const nextState: { [personalGoalId: string]: { score: number; summary: string; evidenceUrl: string; certificationUrl: string; comment: string } } = {};
 
     this.evaluation.goals.forEach(goal => {
       const personalGoalId = goal.personalGoalId?.toString();
@@ -687,6 +687,7 @@ export class EvaluationDetailComponent implements OnInit {
         score: 0,
         summary: '',
         evidenceUrl: '',
+        certificationUrl: '',
         comment: ''
       };
     });
@@ -731,9 +732,10 @@ export class EvaluationDetailComponent implements OnInit {
 
   isV2TlPeerAssignmentStage(): boolean {
     if (!this.evaluation) return false;
+    const status = this.evaluation.status.toLowerCase();
     return this.currentUserRole === 'TL'
       && this.isWorkflowV2()
-      && this.evaluation.status.toLowerCase().includes('v2_active_goals');
+      && status.includes('pending_peer_assignment');
   }
 
   hasTwoAssignedPeers(): boolean {
@@ -741,7 +743,20 @@ export class EvaluationDetailComponent implements OnInit {
     return new Set(assignedPeerIds).size === 2;
   }
 
-  getSelfEvaluationGoalState(goal: GoalDto): { score: number; summary: string; evidenceUrl: string; comment: string } | null {
+  getCompletedGoalsForAutoSubmitCount(): number {
+    if (!this.evaluation?.goals?.length) {
+      return 0;
+    }
+
+    return this.evaluation.goals.filter(goal => {
+      const status = (goal.status || '').toLowerCase();
+      return !!goal.completedAt
+        || status.includes('completed')
+        || status.includes('underevaluation');
+    }).length;
+  }
+
+  getSelfEvaluationGoalState(goal: GoalDto): { score: number; summary: string; evidenceUrl: string; certificationUrl: string; comment: string } | null {
     const personalGoalId = goal.personalGoalId?.toString();
     if (!personalGoalId) {
       return null;
@@ -752,6 +767,7 @@ export class EvaluationDetailComponent implements OnInit {
         score: 0,
         summary: '',
         evidenceUrl: '',
+        certificationUrl: '',
         comment: ''
       };
     }
@@ -777,6 +793,12 @@ export class EvaluationDetailComponent implements OnInit {
     state.evidenceUrl = value;
   }
 
+  setSelfEvaluationGoalCertification(goal: GoalDto, value: string): void {
+    const state = this.getSelfEvaluationGoalState(goal);
+    if (!state) return;
+    state.certificationUrl = value;
+  }
+
   setSelfEvaluationGoalComment(goal: GoalDto, value: string): void {
     const state = this.getSelfEvaluationGoalState(goal);
     if (!state) return;
@@ -786,7 +808,6 @@ export class EvaluationDetailComponent implements OnInit {
   canSubmitSelfEvaluationV2(): boolean {
     if (!this.evaluation || !this.isEmployeeSelfEvaluationStage()) return false;
     if (this.evaluation.goals.length < 5) return false;
-    if (!this.hasTwoAssignedPeers()) return false;
 
     return this.evaluation.goals.every(goal => {
       const state = this.getSelfEvaluationGoalState(goal);
@@ -802,7 +823,7 @@ export class EvaluationDetailComponent implements OnInit {
     if (!this.evaluation || this.submittingSelfEvaluation) return;
 
     if (!this.canSubmitSelfEvaluationV2()) {
-      this.showToast('error', 'Complete score, evidence, and summary for each goal. TL must assign two peers before submission.');
+      this.showToast('error', 'Complete score, evidence, and summary for each goal before submission.');
       return;
     }
 
@@ -821,6 +842,7 @@ export class EvaluationDetailComponent implements OnInit {
         score: state.score,
         summary: state.summary.trim(),
         evidenceUrl: state.evidenceUrl.trim(),
+        certificationUrl: state.certificationUrl.trim() || undefined,
         comment: state.comment.trim() || undefined
       });
     }
@@ -836,7 +858,7 @@ export class EvaluationDetailComponent implements OnInit {
     this.evaluationService.submitSelfEvaluationV2(this.evaluationId, payload).subscribe({
       next: () => {
         this.submittingSelfEvaluation = false;
-        this.showToast('success', 'Self-evaluation submitted. TL, RM, and both assigned peers are now in review stage.');
+        this.showToast('success', 'Self-evaluation submitted. The evaluation is now pending RM post-completion review.');
         this.loadEvaluation();
       },
       error: (err) => {
@@ -977,22 +999,10 @@ export class EvaluationDetailComponent implements OnInit {
     this.comment = '';
   }
 
-  initiatePeerAssignment(): void {
-    this.showPeerAssignment = true;
-    this.peerUserId1 = null;
-    this.peerUserId2 = null;
-  }
-
   cancelAction(): void {
     this.showCommentBox = false;
     this.actionType = null;
     this.comment = '';
-  }
-
-  cancelPeerAssignment(): void {
-    this.showPeerAssignment = false;
-    this.peerUserId1 = null;
-    this.peerUserId2 = null;
   }
 
   confirmAction(): void {
@@ -1015,7 +1025,6 @@ export class EvaluationDetailComponent implements OnInit {
       next: () => {
         this.showToast('success', 'Peer reviewers assigned successfully!');
         this.assigningPeers = false;
-        this.showPeerAssignment = false;
         this.loadEvaluation();
       },
       error: (err) => {
@@ -1065,8 +1074,8 @@ export class EvaluationDetailComponent implements OnInit {
     }
 
     // For HOD, check if they want to recommend for promotion
-    if (this.currentUserRole === 'HOD' && this.evaluation.overallScore && this.evaluation.overallScore > 80) {
-      if (confirm('This employee has scored above 80. Do you want to recommend them for promotion to GM?\n\nClick OK to recommend for promotion, or Cancel to just approve without promotion recommendation.')) {
+    if (this.currentUserRole === 'HOD' && this.evaluation.overallScore && this.evaluation.overallScore >= 85) {
+      if (confirm('This employee has scored 85 or above. Do you want to recommend them for promotion to GM?\n\nClick OK to recommend for promotion, or Cancel to just approve without promotion recommendation.')) {
         this.recommendPromotionToGm();
         return;
       }
@@ -1169,8 +1178,8 @@ export class EvaluationDetailComponent implements OnInit {
 
             if (this.currentUserRole === 'HOD') {
               const avgScore = scoreResponse.calculatedScore ?? 0;
-              if (avgScore >= 8) {
-                if (confirm('This employee has scored 8 or above. Do you want to recommend them for promotion to GM?\n\nClick OK to recommend for promotion, or Cancel to approve without promotion.')) {
+              if (avgScore >= 8.5) {
+                if (confirm('This employee has scored 8.5 or above. Do you want to recommend them for promotion to GM?\n\nClick OK to recommend for promotion, or Cancel to approve without promotion.')) {
                   this.recommendPromotionToGm();
                   return;
                 }
@@ -1199,8 +1208,8 @@ export class EvaluationDetailComponent implements OnInit {
           next: (scoreResponse) => {
             console.log('Overall Score submitted successfully:', scoreResponse);
 
-            if (this.currentUserRole === 'HOD' && this.overallScore >= 8) {
-              if (confirm('This employee has scored 8 or above. Do you want to recommend them for promotion to GM?\n\nClick OK to recommend for promotion, or Cancel to approve without promotion.')) {
+            if (this.currentUserRole === 'HOD' && this.overallScore >= 8.5) {
+              if (confirm('This employee has scored 8.5 or above. Do you want to recommend them for promotion to GM?\n\nClick OK to recommend for promotion, or Cancel to approve without promotion.')) {
                 this.recommendPromotionToGm();
                 return;
               }
@@ -1333,8 +1342,10 @@ export class EvaluationDetailComponent implements OnInit {
 
   openCompleteGoalModal(goal: GoalDto): void {
     this.completeModalGoal = goal;
-    this.completeFormEvidenceUrl = '';
-    this.completeFormComment = '';
+    this.completeFormEvidenceUrl = goal.completionEvidenceUrl || goal.evidenceUri || '';
+    this.completeFormCertificationUrl = goal.completionCertificationUrl || '';
+    this.completeFormSummary = goal.completionSummary || '';
+    this.completeFormComment = goal.completionComment || '';
     this.completeFormCurrentScore = null;
     this.showCompleteGoalModal = true;
   }
@@ -1343,6 +1354,8 @@ export class EvaluationDetailComponent implements OnInit {
     this.showCompleteGoalModal = false;
     this.completeModalGoal = null;
     this.completeFormEvidenceUrl = '';
+    this.completeFormCertificationUrl = '';
+    this.completeFormSummary = '';
     this.completeFormComment = '';
     this.completeFormCurrentScore = null;
   }
@@ -1353,6 +1366,12 @@ export class EvaluationDetailComponent implements OnInit {
     const payload: CompleteGoalRequestDto = {};
     if (this.completeFormEvidenceUrl.trim()) {
       payload.evidenceUrl = this.completeFormEvidenceUrl.trim();
+    }
+    if (this.completeFormCertificationUrl.trim()) {
+      payload.certificationUrl = this.completeFormCertificationUrl.trim();
+    }
+    if (this.completeFormSummary.trim()) {
+      payload.summary = this.completeFormSummary.trim();
     }
     if (this.completeFormComment.trim()) {
       payload.comment = this.completeFormComment.trim();
@@ -1367,7 +1386,7 @@ export class EvaluationDetailComponent implements OnInit {
       next: (response) => {
         let message = response.message || 'Goal completed successfully!';
         if (response.workflowContinued) {
-          message = 'All goals completed! The evaluation has been forwarded for further review.';
+          message = 'All goals completed! The evaluation has been forwarded to RM post-completion review.';
         }
         this.showToast('success', message);
         this.completingGoalId = null;
@@ -1532,10 +1551,25 @@ export class EvaluationDetailComponent implements OnInit {
 
   getActionColor(action: string): string {
     const actionLower = action.toLowerCase();
-    if (actionLower.includes('approved') || actionLower.includes('recommended') || actionLower.includes('processed')) return 'text-green-600';
+    if (actionLower.includes('approved') || actionLower.includes('recommended') || actionLower.includes('processed') || actionLower.includes('completed')) return 'text-green-600';
     if (actionLower.includes('rejected')) return 'text-red-600';
-    if (actionLower.includes('submitted')) return 'text-blue-600';
+    if (actionLower.includes('submitted') || actionLower.includes('assigned') || actionLower.includes('workflowcontinued')) return 'text-blue-600';
     return 'text-gray-600';
+  }
+
+  formatApprovalAction(action: string): string {
+    if (!action) return 'Updated';
+
+    const normalized = action.toLowerCase();
+    if (normalized.includes('employeecompletedallgoals') || normalized.includes('workflowcontinued')) {
+      return 'All goals completed and auto-submitted to RM';
+    }
+
+    return action
+      .replace(/;/g, ' -> ')
+      .replace(/_/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, l => l.toUpperCase());
   }
 
   getActionIcon(action: string): string {
@@ -1886,7 +1920,7 @@ export class EvaluationDetailComponent implements OnInit {
     
     // For other roles (TL, Peer, HOD, GM)
     if (pendingReview.reviewerRole === ReviewerRole.TL) {
-      return 'Please score each goal individually (1-10). You must submit scores before approving.';
+      return 'Please submit your TL overall score (1-10) and assign two peer reviewers.';
     }
     
     if (pendingReview.reviewerRole === ReviewerRole.Peer) {
@@ -1929,100 +1963,52 @@ export class EvaluationDetailComponent implements OnInit {
   }
 
   /**
-   * TL Combined Review: Submit score, assign peers, and approve in one action
+   * TL Combined Review: Submit overall score and assign peers in one atomic action
    */
   submitTlCombinedReview(): void {
     if (!this.evaluation) return;
 
-    // Validate peer selections
     if (!this.peerUserId1 || !this.peerUserId2) {
       this.showToast('error', 'Please select both peer reviewers.');
       return;
     }
 
+    if (this.overallScore < 1 || this.overallScore > 10) {
+      this.showToast('error', 'Please provide a valid TL overall score (1-10).');
+      return;
+    }
+
+    const payload: SubmitTlCombinedReviewDto = {
+      overallScore: this.overallScore,
+      comment: this.overallComment || this.comment || undefined,
+      peerUserId1: this.peerUserId1,
+      peerUserId2: this.peerUserId2
+    };
+
     this.submittingTlCombinedReview = true;
 
-    if (this.pendingReviewId) {
-      // Build per-goal scores
-      const goalScores: RmItemScoreDto[] = [];
-      for (const goal of this.evaluation.goals) {
-        const goalKey = goal.personalGoalId ? goal.personalGoalId.toString() : goal.goalId.toString();
-        const scoreData = this.rmGoalScores[goalKey];
-        if (scoreData && scoreData.score > 0 && goal.personalGoalId) {
-          goalScores.push({
-            personalGoalId: goal.personalGoalId.toString(),
-            scoreValue: scoreData.score,
-            comment: scoreData.comment || undefined
-          });
-        }
-      }
-
-      if (goalScores.length === 0) {
+    this.evaluationService.submitTlCombinedReview(this.evaluationId, payload).subscribe({
+      next: () => {
         this.submittingTlCombinedReview = false;
-        this.showToast('error', 'Please score all goals before submitting.');
-        return;
+        this.showToast('success', 'TL overall score submitted and peer reviewers assigned successfully!');
+        this.loadEvaluation();
+      },
+      error: (err) => {
+        this.submittingTlCombinedReview = false;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to submit TL combined review.';
+        this.showToast('error', errorMessage);
       }
-
-      const goalScoreDto: SubmitReviewWithGoalScoresDto = {
-        goalScores,
-        overallComment: this.rmOverallComment || this.overallComment || undefined
-      };
-
-      // Step 1: Submit TL per-goal scores
-      this.evaluationService.submitGoalScores(this.evaluationId, this.pendingReviewId, goalScoreDto).subscribe({
-        next: (scoreResponse) => {
-          console.log('TL Goal scores submitted successfully:', scoreResponse);
-          
-          // Step 2: Approve the evaluation (this moves to Pending_Peer_Assignment)
-          this.evaluationService.approveEvaluation(this.evaluationId, this.overallComment || undefined).subscribe({
-            next: () => {
-              console.log('TL Approval successful, now assigning peers...');
-              
-              // Step 3: Assign peer reviewers
-              this.evaluationService.assignPeerReviewers(this.evaluationId, this.peerUserId1!, this.peerUserId2!).subscribe({
-                next: () => {
-                  this.submittingTlCombinedReview = false;
-                  this.showToast('success', 'Goal scores submitted and peer reviewers assigned successfully!');
-                  this.loadEvaluation();
-                },
-                error: (err) => {
-                  this.submittingTlCombinedReview = false;
-                  const errorMessage = err.error?.error || err.error?.message || 'Score submitted but failed to assign peer reviewers.';
-                  this.showToast('error', errorMessage);
-                  console.error('Error assigning peers:', err);
-                  this.loadEvaluation();
-                }
-              });
-            },
-            error: (err) => {
-              this.submittingTlCombinedReview = false;
-              const errorMessage = err.error?.error || err.error?.message || 'Score submitted but failed to approve evaluation.';
-              this.showToast('error', errorMessage);
-              console.error('Error approving evaluation:', err);
-              this.loadEvaluation();
-            }
-          });
-        },
-        error: (err) => {
-          this.submittingTlCombinedReview = false;
-          const errorMessage = err.error?.error || err.error?.message || 'Failed to submit TL goal scores.';
-          this.showToast('error', errorMessage);
-          console.error('Error submitting TL goal scores:', err);
-        }
-      });
-    } else {
-      this.submittingTlCombinedReview = false;
-      this.showToast('error', 'Could not find pending review. Please refresh and try again.');
-    }
+    });
   }
 
   /**
    * Check if TL can submit the combined review
    */
   canSubmitTlCombinedReview(): boolean {
-    const hasScores = this.hasAllScoresSelected();
-    return hasScores &&
-           this.peerUserId1 !== null && 
-           this.peerUserId2 !== null;
+    return this.overallScore >= 1 &&
+           this.overallScore <= 10 &&
+           this.peerUserId1 !== null &&
+           this.peerUserId2 !== null &&
+           this.peerUserId1 !== this.peerUserId2;
   }
 }

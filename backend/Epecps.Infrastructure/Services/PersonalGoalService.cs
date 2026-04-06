@@ -16,6 +16,7 @@ public class PersonalGoalService : IPersonalGoalService
 
     // Evaluation status constants (must match EvaluationWorkflowService)
     private const string STATUS_APPROVED_BY_RM = "Approved_By_RM";
+    private const string STATUS_V2_ACTIVE_GOALS = "V2_ACTIVE_GOALS";
 
     public PersonalGoalService(EpecpsDbContext context, IEvaluationWorkflowService evaluationWorkflowService)
     {
@@ -104,7 +105,13 @@ public class PersonalGoalService : IPersonalGoalService
                 ProgressPercent = pg.TargetScore > 0 ? Math.Round((pg.CurrentScore / pg.TargetScore) * 100, 2) : 0,
                 Status = pg.Status,
                 DueDate = pg.DueDate,
-                CreatedAt = pg.CreatedAt
+                CreatedAt = pg.CreatedAt,
+                StartedAt = pg.StartedAt,
+                CompletedAt = pg.CompletedAt,
+                CompletionEvidenceUrl = pg.CompletionEvidenceUrl,
+                CompletionCertificationUrl = pg.CompletionCertificationUrl,
+                CompletionSummary = pg.CompletionSummary,
+                CompletionComment = pg.CompletionComment
             })
             .ToListAsync(cancellationToken);
 
@@ -163,7 +170,13 @@ public class PersonalGoalService : IPersonalGoalService
                         ProgressPercent = g.TargetScore > 0 ? Math.Round((g.CurrentScore / g.TargetScore) * 100, 2) : 0,
                         Status = g.Status,
                         DueDate = g.DueDate,
-                        CreatedAt = g.CreatedAt
+                        CreatedAt = g.CreatedAt,
+                        StartedAt = g.StartedAt,
+                        CompletedAt = g.CompletedAt,
+                        CompletionEvidenceUrl = g.CompletionEvidenceUrl,
+                        CompletionCertificationUrl = g.CompletionCertificationUrl,
+                        CompletionSummary = g.CompletionSummary,
+                        CompletionComment = g.CompletionComment
                     }).ToList(),
                     EvaluationInfo = GetEvaluationInfoForGoalSet(goalSetId, userId).Result
                 };
@@ -195,13 +208,36 @@ public class PersonalGoalService : IPersonalGoalService
             .Include(ah => ah.ActorUser)
             .Where(ah => ah.EvaluationId == evaluation.EvaluationId)
             .OrderBy(ah => ah.CreatedAt)
+            .ThenBy(ah => ah.Id)
             .ToListAsync();
+
+        var approvalHistoryEvents = approvalHistory
+            .Select(history =>
+            {
+                var actorRole = string.IsNullOrWhiteSpace(history.ActorRole) ? "System" : history.ActorRole;
+
+                return new GoalSetApprovalHistoryEventDto
+                {
+                    Id = history.Id,
+                    ActorUserId = history.ActorUserId,
+                    ActorName = ResolveActorDisplayName(history.ActorUser?.FullName, actorRole, history.ActorUserId),
+                    ActorRole = actorRole,
+                    Action = history.Action,
+                    Comment = history.Comment,
+                    FromStatus = history.FromStatus,
+                    ToStatus = history.ToStatus,
+                    CreatedAt = history.CreatedAt
+                };
+            })
+            .ToList();
 
         var approvalSteps = new List<GoalSetApprovalStepDto>();
 
         foreach (var history in approvalHistory)
         {
-            var role = history.ActorRole;
+            var role = string.IsNullOrWhiteSpace(history.ActorRole) ? "System" : history.ActorRole;
+            var actorName = ResolveActorDisplayName(history.ActorUser?.FullName, role, history.ActorUserId);
+            var action = history.Action ?? string.Empty;
             
             var existingStep = approvalSteps.FirstOrDefault(s => s.Role == role);
             if (existingStep == null)
@@ -209,13 +245,17 @@ public class PersonalGoalService : IPersonalGoalService
                 approvalSteps.Add(new GoalSetApprovalStepDto
                 {
                     Role = role,
-                    ActorName = history.ActorUser.FullName,
-                    Action = history.Action,
+                    ActorName = actorName,
+                    Action = action,
                     Comment = history.Comment,
                     ActionDate = history.CreatedAt,
-                    IsCompleted = history.Action.Contains("Approved") || history.Action.Contains("Submitted") || history.Action.Contains("Recommended") || history.Action.Contains("Processed") || history.Action.Contains("Completed"),
+                    IsCompleted = action.Contains("Approved", StringComparison.OrdinalIgnoreCase) ||
+                                  action.Contains("Submitted", StringComparison.OrdinalIgnoreCase) ||
+                                  action.Contains("Recommended", StringComparison.OrdinalIgnoreCase) ||
+                                  action.Contains("Processed", StringComparison.OrdinalIgnoreCase) ||
+                                  action.Contains("Completed", StringComparison.OrdinalIgnoreCase),
                     IsPending = false,
-                    IsRejected = history.Action.Contains("Rejected")
+                    IsRejected = action.Contains("Rejected", StringComparison.OrdinalIgnoreCase)
                 });
             }
         }
@@ -264,10 +304,25 @@ public class PersonalGoalService : IPersonalGoalService
             EvaluationId = evaluation.EvaluationId,
             Status = evaluation.Status,
             OverallScore = evaluation.OverallScore,
-            SubmittedDate = approvalHistory.FirstOrDefault(ah => ah.Action == "SubmittedToRM")?.CreatedAt ?? DateTime.UtcNow,
+            SubmittedDate = approvalHistory
+                .FirstOrDefault(ah => ah.Action == "SubmittedToRM")?.CreatedAt
+                ?? approvalHistory.FirstOrDefault()?.CreatedAt
+                ?? DateTime.UtcNow,
             CompletedDate = status.Contains("Completed") ? approvalHistory.LastOrDefault()?.CreatedAt : null,
-            ApprovalSteps = approvalSteps.OrderBy(s => GetStepOrder(s.Role)).ToList()
+            ApprovalSteps = approvalSteps.OrderBy(s => GetStepOrder(s.Role)).ToList(),
+            ApprovalHistory = approvalHistoryEvents
         };
+    }
+
+    private static string ResolveActorDisplayName(string? actorFullName, string? actorRole, int actorUserId)
+    {
+        if (!string.IsNullOrWhiteSpace(actorFullName))
+            return actorFullName;
+
+        if (!string.IsNullOrWhiteSpace(actorRole))
+            return actorRole;
+
+        return actorUserId > 0 ? $"User {actorUserId}" : "System";
     }
 
     private int GetStepOrder(string role)
@@ -338,6 +393,12 @@ public class PersonalGoalService : IPersonalGoalService
             Status = goal.Status,
             CreatedAt = goal.CreatedAt,
             UpdatedAt = goal.UpdatedAt,
+            StartedAt = goal.StartedAt,
+            CompletedAt = goal.CompletedAt,
+            CompletionEvidenceUrl = goal.CompletionEvidenceUrl,
+            CompletionCertificationUrl = goal.CompletionCertificationUrl,
+            CompletionSummary = goal.CompletionSummary,
+            CompletionComment = goal.CompletionComment,
             CategoryName = goal.GoalItem.Category.Name,
             ItemName = goal.GoalItem.Name,
             GoalItemName = goal.GoalItem.Name,
@@ -598,7 +659,7 @@ public class PersonalGoalService : IPersonalGoalService
         {
             evaluation = await _context.Set<Evaluation>()
                 .Where(e => e.GoalSetId == goal.GoalSetId && e.EmployeeId == userId)
-                .Where(e => e.Status == STATUS_APPROVED_BY_RM)
+                .Where(e => e.Status == STATUS_APPROVED_BY_RM || e.Status == STATUS_V2_ACTIVE_GOALS)
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
@@ -675,12 +736,21 @@ public class PersonalGoalService : IPersonalGoalService
         if (newScore < 0 || newScore > goal.TargetScore)
             throw new BusinessRuleException($"Score must be between 0 and {goal.TargetScore}.");
 
+        var completionEvidenceUrl = string.IsNullOrWhiteSpace(dto?.EvidenceUrl) ? null : dto!.EvidenceUrl.Trim();
+        var completionCertificationUrl = string.IsNullOrWhiteSpace(dto?.CertificationUrl) ? null : dto!.CertificationUrl.Trim();
+        var completionSummary = string.IsNullOrWhiteSpace(dto?.Summary) ? null : dto!.Summary.Trim();
+        var completionComment = string.IsNullOrWhiteSpace(dto?.Comment) ? null : dto!.Comment.Trim();
+
         var oldStatus = goal.Status;
 
         // Update goal
         goal.Status = PersonalGoalStatus.Completed;
         goal.CurrentScore = newScore;
         goal.CompletedAt = DateTime.UtcNow;
+        goal.CompletionEvidenceUrl = completionEvidenceUrl;
+        goal.CompletionCertificationUrl = completionCertificationUrl;
+        goal.CompletionSummary = completionSummary;
+        goal.CompletionComment = completionComment;
         goal.UpdatedAt = DateTime.UtcNow;
 
         // Find the related evaluation
@@ -691,11 +761,20 @@ public class PersonalGoalService : IPersonalGoalService
         {
             evaluation = await _context.Set<Evaluation>()
                 .Where(e => e.GoalSetId == goal.GoalSetId && e.EmployeeId == userId)
-                .Where(e => e.Status == STATUS_APPROVED_BY_RM)
+                .Where(e => e.Status == STATUS_APPROVED_BY_RM || e.Status == STATUS_V2_ACTIVE_GOALS)
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (evaluation != null)
             {
+                var employeeGoalRecord = await _context.Set<EmployeeGoal>()
+                    .FirstOrDefaultAsync(
+                        eg => eg.EvaluationId == evaluation.EvaluationId && eg.PersonalGoalId == goal.Id,
+                        cancellationToken);
+                if (employeeGoalRecord != null)
+                {
+                    employeeGoalRecord.EvidenceUri = completionEvidenceUrl;
+                }
+
                 // Create approval history for goal completion
                 var approvalHistory = new ApprovalHistory
                 {
@@ -704,7 +783,7 @@ public class PersonalGoalService : IPersonalGoalService
                     ActorUserId = userId,
                     ActorRole = "Employee",
                     Action = "EmployeeCompletedGoal",
-                    Comment = dto?.Comment ?? $"Completed goal: {goal.Title}",
+                    Comment = completionComment ?? $"Completed goal: {goal.Title}",
                     FromStatus = oldStatus.ToString(),
                     ToStatus = goal.Status.ToString(),
                     CreatedAt = DateTime.UtcNow
@@ -733,7 +812,9 @@ public class PersonalGoalService : IPersonalGoalService
                     .Where(pg => pg.GoalSetId == goal.GoalSetId && pg.UserId == userId)
                     .ToListAsync(cancellationToken);
 
-                var allCompleted = allGoalsInSet.All(g => g.Status == PersonalGoalStatus.Completed);
+                var allCompleted = allGoalsInSet.All(g =>
+                    g.Status == PersonalGoalStatus.Completed ||
+                    g.Status == PersonalGoalStatus.UnderEvaluation);
 
                 if (allCompleted)
                 {
@@ -744,7 +825,7 @@ public class PersonalGoalService : IPersonalGoalService
                         g.UpdatedAt = DateTime.UtcNow;
                     }
 
-                    // Continue the workflow to TL review
+                    // Continue the workflow to RM post-completion review
                     evaluation = await _evaluationWorkflowService.ContinueWorkflowAfterEmployeeCompletionAsync(
                         evaluation.EvaluationId, 
                         cancellationToken);
@@ -767,7 +848,7 @@ public class PersonalGoalService : IPersonalGoalService
             GoalId = goalId,
             Status = goal.Status.ToString(),
             Message = workflowContinued 
-                ? "All goals completed! Your evaluation has been forwarded to the Team Lead for review."
+                ? "All goals completed! Your evaluation has been forwarded to the Reporting Manager for post-completion review."
                 : "Goal completed successfully.",
             WorkflowContinued = workflowContinued,
             EvaluationId = evaluation?.EvaluationId,

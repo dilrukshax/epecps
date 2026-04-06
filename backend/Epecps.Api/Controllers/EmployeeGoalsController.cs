@@ -163,7 +163,7 @@ public class EmployeeGoalsController : ControllerBase
     /// <summary>
     /// Mark a goal as completed
     /// Goal must be in InProgress status
-    /// If all goals in the evaluation are completed, triggers workflow continuation to TL review
+    /// If all goals in the evaluation are completed, triggers workflow continuation to RM post-completion review
     /// </summary>
     [HttpPost("{id}/complete")]
     public async Task<IActionResult> CompleteGoal(
