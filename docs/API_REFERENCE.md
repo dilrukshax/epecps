@@ -36,10 +36,15 @@ Assigns 5+ goals and creates a workflow-v2 evaluation.
 POST /api/v2/workflow/goal-sets/{goalSetId}/activation
 ```
 
-### TL Activation Decision
+### RM Activation Decision
 ```
 POST /api/v2/workflow/evaluations/{evaluationId}/activation/decision
 ```
+
+Notes:
+- Current primary status before this decision: `V2_PENDING_RM_ACTIVATION_REVIEW`.
+- Legacy in-flight status `V2_PENDING_TL_ACTIVATION_REVIEW` is still accepted for compatibility.
+- Authorized roles: `RM`, `SuperAdmin`.
 
 ### TL Peer Assignment (2 peers)
 ```

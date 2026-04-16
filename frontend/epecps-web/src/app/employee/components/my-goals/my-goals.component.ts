@@ -1,12 +1,15 @@
 import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
 import { EmployeeGoalsService } from '../../../services/employee-goals.service';
 import { EvaluationService } from '../../../services/evaluation.service';
 import {
+  ActivityStatus,
+  PersonalGoalActivityDto,
+  PersonalGoalDetailDto,
   PersonalGoalSetDto,
   PersonalGoalStatus,
   PersonalGoalListDto,
-  GoalSetApprovalHistoryEventDto
+  GoalSetApprovalHistoryEventDto,
+  UpdatePersonalGoalActivityDto
 } from '../../../models/employee-goals.models';
 import { CompleteGoalRequestDto } from '../../../models/evaluation.models';
 
@@ -32,9 +35,31 @@ export class MyGoalsComponent implements OnInit {
 
   // Expanded goal sets
   expandedSetIds: Set<string> = new Set();
+  expandedGoalIds: Set<string> = new Set();
 
   // Reference to enum for template
   PersonalGoalStatus = PersonalGoalStatus;
+  ActivityStatus = ActivityStatus;
+
+  // Inline goal details state (merged Goal Details experience)
+  goalDetails: { [goalId: string]: PersonalGoalDetailDto } = {};
+  goalDetailErrors: { [goalId: string]: string } = {};
+  loadingGoalDetailIds: Set<string> = new Set();
+
+  editingScoreGoalId: string | null = null;
+  tempScore = 0;
+
+  addingActivityGoalId: string | null = null;
+  newActivityDescription = '';
+  newActivityDueDate: string | null = null;
+
+  editingActivityGoalId: string | null = null;
+  editingActivity: PersonalGoalActivityDto | null = null;
+  activityFormData: UpdatePersonalGoalActivityDto | null = null;
+
+  // Workflow v2 activation state (employee stage)
+  activationMethods: { [goalAssignmentId: string]: string } = {};
+  submittingActivationGoalSetId: string | null = null;
 
   // ====== NEW: Start/Complete flow state ======
   startingGoalId: string | null = null;
@@ -52,8 +77,7 @@ export class MyGoalsComponent implements OnInit {
 
   constructor(
     private goalsService: EmployeeGoalsService,
-    private evaluationService: EvaluationService,
-    private router: Router
+    private evaluationService: EvaluationService
   ) {}
 
   ngOnInit(): void {
@@ -67,6 +91,7 @@ export class MyGoalsComponent implements OnInit {
     this.goalsService.getMyGoalSets().subscribe({
       next: (goalSets) => {
         this.goalSets = goalSets;
+        this.initializeActivationMethods(goalSets);
         this.applyFilters();
         this.loading = false;
       },
@@ -115,9 +140,76 @@ export class MyGoalsComponent implements OnInit {
     return this.expandedSetIds.has(goalSetId);
   }
 
-  viewGoalDetails(goalId: string, event: Event): void {
-    event.stopPropagation(); // Prevent card expansion toggle
-    this.router.navigate(['/employee/goals', goalId]);
+  toggleGoalInlineDetails(goalId: string, event: Event): void {
+    event.stopPropagation();
+
+    if (this.expandedGoalIds.has(goalId)) {
+      this.expandedGoalIds.delete(goalId);
+      this.cancelInlineEditsForGoal(goalId);
+      return;
+    }
+
+    this.expandedGoalIds.add(goalId);
+    this.loadGoalDetailsInline(goalId);
+  }
+
+  isGoalInlineExpanded(goalId: string): boolean {
+    return this.expandedGoalIds.has(goalId);
+  }
+
+  private initializeActivationMethods(goalSets: PersonalGoalSetDto[]): void {
+    for (const goalSet of goalSets) {
+      for (const goal of goalSet.goals) {
+        if (!goal.goalAssignmentId) continue;
+        if (this.activationMethods[goal.goalAssignmentId] !== undefined) continue;
+        this.activationMethods[goal.goalAssignmentId] = goal.activationMethod || '';
+      }
+    }
+  }
+
+  private cancelInlineEditsForGoal(goalId: string): void {
+    if (this.editingScoreGoalId === goalId) {
+      this.cancelEditingGoalScore();
+    }
+    if (this.addingActivityGoalId === goalId) {
+      this.cancelAddingActivity();
+    }
+    if (this.editingActivityGoalId === goalId) {
+      this.cancelEditingActivity();
+    }
+  }
+
+  loadGoalDetailsInline(goalId: string, forceRefresh = false): void {
+    if (!forceRefresh && this.goalDetails[goalId]) {
+      return;
+    }
+
+    this.loadingGoalDetailIds.add(goalId);
+    delete this.goalDetailErrors[goalId];
+
+    this.goalsService.getGoalDetails(goalId).subscribe({
+      next: (goal) => {
+        this.goalDetails[goalId] = goal;
+        this.loadingGoalDetailIds.delete(goalId);
+      },
+      error: (err) => {
+        this.goalDetailErrors[goalId] = 'Failed to load goal details.';
+        this.loadingGoalDetailIds.delete(goalId);
+        console.error('Error loading goal details:', err);
+      }
+    });
+  }
+
+  getGoalDetails(goalId: string): PersonalGoalDetailDto | null {
+    return this.goalDetails[goalId] || null;
+  }
+
+  isLoadingGoalDetails(goalId: string): boolean {
+    return this.loadingGoalDetailIds.has(goalId);
+  }
+
+  getGoalDetailError(goalId: string): string | null {
+    return this.goalDetailErrors[goalId] || null;
   }
 
   getStatusLabel(status: PersonalGoalStatus): string {
@@ -377,8 +469,21 @@ export class MyGoalsComponent implements OnInit {
   /**
    * Check if a goal can be started (approved by RM)
    */
-  canStartGoal(goal: PersonalGoalListDto): boolean {
-    return goal.status === PersonalGoalStatus.ApprovedByRM;
+  canStartGoal(goal: PersonalGoalListDto, goalSet: PersonalGoalSetDto): boolean {
+    if (goal.status !== PersonalGoalStatus.ApprovedByRM) {
+      return false;
+    }
+
+    const evaluationStatus = (goalSet.evaluationInfo?.status || '').toLowerCase();
+    if (!evaluationStatus) {
+      return true;
+    }
+
+    if (evaluationStatus.includes('v2_')) {
+      return evaluationStatus.includes('v2_active_goals');
+    }
+
+    return evaluationStatus.includes('approved_by_rm') || evaluationStatus.includes('approvedbyrm');
   }
 
   /**
@@ -420,11 +525,11 @@ export class MyGoalsComponent implements OnInit {
   /**
    * Handle start goal button click
    */
-  startGoal(goal: PersonalGoalListDto, event: Event): void {
+  startGoal(goal: PersonalGoalListDto, goalSet: PersonalGoalSetDto, event: Event): void {
     event.stopPropagation();
     
-    if (!this.canStartGoal(goal)) {
-      this.showToast('error', 'This goal cannot be started. It must be approved by RM first.');
+    if (!this.canStartGoal(goal, goalSet)) {
+      this.showToast('error', 'This goal cannot be started yet. Wait for RM activation approval.');
       return;
     }
 
@@ -438,6 +543,7 @@ export class MyGoalsComponent implements OnInit {
       next: (response) => {
         this.showToast('success', response.message || 'Goal started successfully! You can now work on this goal.');
         this.startingGoalId = null;
+        this.loadGoalDetailsInline(goal.id, true);
         this.loadGoals(); // Refresh to show updated status
       },
       error: (err) => {
@@ -528,6 +634,9 @@ export class MyGoalsComponent implements OnInit {
         
         this.showToast('success', message);
         this.completingGoalId = null;
+        if (this.completeModalGoal) {
+          this.loadGoalDetailsInline(this.completeModalGoal.id, true);
+        }
         this.closeCompleteModal();
         this.loadGoals(); // Refresh to show updated status and evaluation progress
       },
@@ -552,9 +661,290 @@ export class MyGoalsComponent implements OnInit {
    */
   editAndResubmit(goalSet: PersonalGoalSetDto, event: Event): void {
     event.stopPropagation();
-    // Navigate to the first goal in the set for editing
+    this.expandedSetIds.add(goalSet.goalSetId);
     if (goalSet.goals.length > 0) {
-      this.router.navigate(['/employee/goals', goalSet.goals[0].id]);
+      const firstGoalId = goalSet.goals[0].id;
+      this.expandedGoalIds.add(firstGoalId);
+      this.loadGoalDetailsInline(firstGoalId);
+    }
+  }
+
+  // ===== Workflow v2 activation plan (employee side) =====
+
+  private normalizeEvaluationStatus(goalSet: PersonalGoalSetDto): string {
+    return (goalSet.evaluationInfo?.status || '').toLowerCase();
+  }
+
+  isEmployeeActivationStage(goalSet: PersonalGoalSetDto): boolean {
+    const status = this.normalizeEvaluationStatus(goalSet);
+    return status.includes('v2_pending_employee_activation') || status.includes('v2_returned_for_activation');
+  }
+
+  isPendingRmActivationReviewStage(goalSet: PersonalGoalSetDto): boolean {
+    const status = this.normalizeEvaluationStatus(goalSet);
+    return status.includes('v2_pending_rm_activation_review') || status.includes('v2_pending_tl_activation_review');
+  }
+
+  getActivationMethod(goal: PersonalGoalListDto): string {
+    if (!goal.goalAssignmentId) return '';
+    if (this.activationMethods[goal.goalAssignmentId] === undefined) {
+      this.activationMethods[goal.goalAssignmentId] = goal.activationMethod || '';
+    }
+    return this.activationMethods[goal.goalAssignmentId];
+  }
+
+  setActivationMethod(goal: PersonalGoalListDto, value: string): void {
+    if (!goal.goalAssignmentId) return;
+    this.activationMethods[goal.goalAssignmentId] = value;
+  }
+
+  getGoalActivationFeedback(goal: PersonalGoalListDto): string | null {
+    if (goal.activationComment && goal.activationComment.trim()) {
+      return goal.activationComment.trim();
+    }
+    return null;
+  }
+
+  canSubmitActivationPlan(goalSet: PersonalGoalSetDto): boolean {
+    if (!this.isEmployeeActivationStage(goalSet)) return false;
+
+    const activationGoals = goalSet.goals.filter(g => !!g.goalAssignmentId);
+    if (activationGoals.length === 0) return false;
+
+    return activationGoals.every(goal => this.getActivationMethod(goal).trim().length > 0);
+  }
+
+  isSubmittingActivation(goalSetId: string): boolean {
+    return this.submittingActivationGoalSetId === goalSetId;
+  }
+
+  submitActivationPlan(goalSet: PersonalGoalSetDto, event: Event): void {
+    event.stopPropagation();
+
+    if (!this.canSubmitActivationPlan(goalSet) || this.submittingActivationGoalSetId) {
+      return;
+    }
+
+    const goals = goalSet.goals
+      .filter(g => !!g.goalAssignmentId)
+      .map(g => ({
+        goalAssignmentId: g.goalAssignmentId!,
+        method: this.getActivationMethod(g).trim()
+      }));
+
+    this.submittingActivationGoalSetId = goalSet.goalSetId;
+
+    this.evaluationService.submitActivationPlan(goalSet.goalSetId, { goals }).subscribe({
+      next: () => {
+        this.showToast('success', 'Activation plan submitted to RM successfully.');
+        this.submittingActivationGoalSetId = null;
+        this.loadGoals();
+      },
+      error: (err) => {
+        this.submittingActivationGoalSetId = null;
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to submit activation plan.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
+  // ===== Inline goal details + activity management =====
+
+  startEditingGoalScore(goal: PersonalGoalDetailDto, event: Event): void {
+    event.stopPropagation();
+    this.editingScoreGoalId = goal.id;
+    this.tempScore = goal.currentScore;
+  }
+
+  cancelEditingGoalScore(): void {
+    this.editingScoreGoalId = null;
+    this.tempScore = 0;
+  }
+
+  saveGoalScore(goalId: string): void {
+    const goal = this.goalDetails[goalId];
+    if (!goal) return;
+
+    if (this.tempScore < 0 || this.tempScore > goal.targetScore) {
+      this.showToast('error', `Score must be between 0 and ${goal.targetScore}.`);
+      return;
+    }
+
+    this.goalsService.updateGoalScore(goalId, { currentScore: this.tempScore }).subscribe({
+      next: () => {
+        this.showToast('success', 'Goal score updated.');
+        this.cancelEditingGoalScore();
+        this.loadGoalDetailsInline(goalId, true);
+        this.loadGoals();
+      },
+      error: (err) => {
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to update score.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
+  getCompletedActivitiesCount(goal: PersonalGoalDetailDto): number {
+    return goal.activities.filter(a => a.status === ActivityStatus.Done).length;
+  }
+
+  startAddingActivity(goalId: string, event: Event): void {
+    event.stopPropagation();
+    this.addingActivityGoalId = goalId;
+    this.newActivityDescription = '';
+    this.newActivityDueDate = null;
+  }
+
+  cancelAddingActivity(): void {
+    this.addingActivityGoalId = null;
+    this.newActivityDescription = '';
+    this.newActivityDueDate = null;
+  }
+
+  addActivity(goalId: string): void {
+    if (!this.newActivityDescription.trim()) {
+      this.showToast('error', 'Please enter an activity description.');
+      return;
+    }
+
+    const dueDate = this.newActivityDueDate ? new Date(this.newActivityDueDate).toISOString() : undefined;
+
+    this.goalsService.addActivity(goalId, {
+      description: this.newActivityDescription.trim(),
+      dueDate
+    }).subscribe({
+      next: () => {
+        this.showToast('success', 'Activity added.');
+        this.cancelAddingActivity();
+        this.loadGoalDetailsInline(goalId, true);
+        this.loadGoals();
+      },
+      error: (err) => {
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to add activity.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
+  startEditingActivity(goalId: string, activity: PersonalGoalActivityDto, event: Event): void {
+    event.stopPropagation();
+    this.editingActivityGoalId = goalId;
+    this.editingActivity = activity;
+    this.activityFormData = {
+      description: activity.description,
+      status: activity.status,
+      dueDate: activity.dueDate ? new Date(activity.dueDate).toISOString().split('T')[0] : undefined,
+      evidenceUrl: activity.evidenceUrl,
+      evidenceNotes: activity.evidenceNotes
+    };
+  }
+
+  cancelEditingActivity(): void {
+    this.editingActivityGoalId = null;
+    this.editingActivity = null;
+    this.activityFormData = null;
+  }
+
+  saveActivity(goalId: string): void {
+    if (!this.editingActivity || !this.activityFormData) {
+      return;
+    }
+
+    const dueDate = this.activityFormData.dueDate
+      ? new Date(this.activityFormData.dueDate).toISOString()
+      : undefined;
+
+    this.goalsService.updateActivity(goalId, this.editingActivity.id, {
+      description: this.activityFormData.description,
+      status: this.activityFormData.status,
+      dueDate,
+      evidenceUrl: this.activityFormData.evidenceUrl || undefined,
+      evidenceNotes: this.activityFormData.evidenceNotes || undefined
+    }).subscribe({
+      next: () => {
+        this.showToast('success', 'Activity updated.');
+        this.cancelEditingActivity();
+        this.loadGoalDetailsInline(goalId, true);
+        this.loadGoals();
+      },
+      error: (err) => {
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to update activity.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
+  quickUpdateActivityStatus(goalId: string, activity: PersonalGoalActivityDto, event: Event): void {
+    const selectElement = event.target as HTMLSelectElement;
+    const newStatus = parseInt(selectElement.value, 10) as ActivityStatus;
+
+    const dueDate = activity.dueDate ? new Date(activity.dueDate).toISOString() : undefined;
+
+    this.goalsService.updateActivity(goalId, activity.id, {
+      description: activity.description,
+      status: newStatus,
+      dueDate,
+      evidenceUrl: activity.evidenceUrl || undefined,
+      evidenceNotes: activity.evidenceNotes || undefined
+    }).subscribe({
+      next: () => {
+        this.loadGoalDetailsInline(goalId, true);
+        this.loadGoals();
+      },
+      error: (err) => {
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to update activity status.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
+  deleteActivity(goalId: string, activity: PersonalGoalActivityDto, event: Event): void {
+    event.stopPropagation();
+
+    if (!confirm(`Delete this activity?\n\n"${activity.description}"`)) {
+      return;
+    }
+
+    this.goalsService.deleteActivity(goalId, activity.id).subscribe({
+      next: (response) => {
+        this.showToast('success', response.message || 'Activity deleted.');
+        this.loadGoalDetailsInline(goalId, true);
+        this.loadGoals();
+      },
+      error: (err) => {
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to delete activity.';
+        this.showToast('error', errorMessage);
+      }
+    });
+  }
+
+  canManageInlineGoal(goal: PersonalGoalDetailDto): boolean {
+    return goal.status !== PersonalGoalStatus.Completed && goal.status !== PersonalGoalStatus.Cancelled;
+  }
+
+  getActivityStatusLabel(status: ActivityStatus): string {
+    switch (status) {
+      case ActivityStatus.NotStarted:
+        return 'Not Started';
+      case ActivityStatus.InProgress:
+        return 'In Progress';
+      case ActivityStatus.Done:
+        return 'Done';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  getActivityStatusClass(status: ActivityStatus): string {
+    switch (status) {
+      case ActivityStatus.NotStarted:
+        return 'bg-gray-100 text-gray-800';
+      case ActivityStatus.InProgress:
+        return 'bg-blue-100 text-blue-800';
+      case ActivityStatus.Done:
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   }
 

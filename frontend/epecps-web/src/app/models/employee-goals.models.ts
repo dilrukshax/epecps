@@ -101,6 +101,12 @@ export interface PersonalGoalListDto {
   completionEvidenceUrl?: string;
   completionCertificationUrl?: string;
   completionSummary?: string;
+  goalAssignmentId?: string;
+  activationMethod?: string;
+  activationStatus?: string;
+  activationSubmittedAt?: Date | string;
+  activationComment?: string;
+  activationReviewedAt?: Date | string;
   canStart?: boolean;
   canComplete?: boolean;
 }
@@ -133,6 +139,12 @@ export interface PersonalGoalDetailDto {
   status: PersonalGoalStatus;
   createdAt: Date | string;
   updatedAt?: Date | string;
+  startedAt?: Date | string;
+  completedAt?: Date | string;
+  completionComment?: string;
+  completionEvidenceUrl?: string;
+  completionCertificationUrl?: string;
+  completionSummary?: string;
   categoryName: string;
   itemName: string;
   goalItemName: string;

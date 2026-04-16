@@ -88,7 +88,7 @@ public class WorkflowV2Controller : ControllerBase
     }
 
     [HttpPost("evaluations/{evaluationId:int}/activation/decision")]
-    [Authorize(Roles = "TL,SuperAdmin")]
+    [Authorize(Roles = "RM,SuperAdmin")]
     public async Task<IActionResult> ProcessActivationDecision(
         int evaluationId,
         [FromBody] ActivationPlanDecisionDto request,

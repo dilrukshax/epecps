@@ -36,6 +36,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
     private const string STATUS_REJECTED = "Rejected";
     private const string STATUS_V2_PENDING_EMPLOYEE_ACTIVATION = "V2_PENDING_EMPLOYEE_ACTIVATION";
     private const string STATUS_V2_RETURNED_FOR_ACTIVATION = "V2_RETURNED_FOR_ACTIVATION";
+    private const string STATUS_V2_PENDING_RM_ACTIVATION_REVIEW = "V2_PENDING_RM_ACTIVATION_REVIEW";
     private const string STATUS_V2_PENDING_TL_ACTIVATION_REVIEW = "V2_PENDING_TL_ACTIVATION_REVIEW";
     private const string STATUS_V2_ACTIVE_GOALS = "V2_ACTIVE_GOALS";
     private const string STATUS_V2_PENDING_PARALLEL_REVIEWS = "V2_PENDING_PARALLEL_REVIEWS";
@@ -274,7 +275,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         switch (evaluation.Status)
         {
             case STATUS_PENDING_RM_REVIEW:
-                if (actorUserId != evaluation.ReportingManagerId)
+                if (!await CanActAsReportingManagerAsync(evaluation, actorUserId, cancellationToken))
                     throw new BusinessRuleException("Only the Reporting Manager can approve at this stage.");
                 
                 currentReview = evaluation.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.RM && r.Status == REVIEW_STATUS_PENDING);
@@ -323,7 +324,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
             case "Pending_RM_Review_PostCompletion":
                 // Second RM approval after employee completion
-                if (actorUserId != evaluation.ReportingManagerId)
+                if (!await CanActAsReportingManagerAsync(evaluation, actorUserId, cancellationToken))
                     throw new BusinessRuleException("Only the Reporting Manager can approve at this stage.");
                 
                 // Find the post-completion RM review (latest RM review entry)
@@ -397,18 +398,21 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 var peerAssignment = evaluation.PeerAssignments.FirstOrDefault(pa => pa.PeerUserId == actorUserId);
                 if (peerAssignment == null)
                     throw new BusinessRuleException("Only assigned peer reviewers can approve at this stage.");
-                
-                // ? FIX: Find the FIRST pending peer review for this user (allows same user to approve twice)
+
+                // Accept either pending (no explicit score submission yet) or completed
+                // (scores submitted before final approve action).
                 currentReview = evaluation.Reviews
-                    .Where(r => r.ReviewerRole == ReviewerRole.Peer && 
-                               r.ReviewerUserId == actorUserId && 
-                               r.Status == REVIEW_STATUS_PENDING)
-                    .OrderBy(r => r.ReviewId)
+                    .Where(r =>
+                        r.ReviewerRole == ReviewerRole.Peer &&
+                        r.ReviewerUserId == actorUserId &&
+                        (r.Status == REVIEW_STATUS_PENDING || r.Status == REVIEW_STATUS_COMPLETED))
+                    .OrderBy(r => r.Status == REVIEW_STATUS_PENDING ? 0 : 1)
+                    .ThenByDescending(r => r.ReviewId)
                     .FirstOrDefault();
-                
+
                 if (currentReview == null)
                     throw new BusinessRuleException("You have already completed all your peer reviews for this evaluation.");
-                
+
                 actorRole = "Peer";
                 break;
 
@@ -509,7 +513,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         switch (evaluation.Status)
         {
             case STATUS_PENDING_RM_REVIEW:
-                if (actorUserId != evaluation.ReportingManagerId)
+                if (!await CanActAsReportingManagerAsync(evaluation, actorUserId, cancellationToken))
                     throw new BusinessRuleException("Only the Reporting Manager can reject at this stage.");
                 currentReview = evaluation.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.RM);
                 actorRole = "RM";
@@ -532,7 +536,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
             case "Pending_RM_Review_PostCompletion":
                 // Second RM rejection after employee completion
-                if (actorUserId != evaluation.ReportingManagerId)
+                if (!await CanActAsReportingManagerAsync(evaluation, actorUserId, cancellationToken))
                     throw new BusinessRuleException("Only the Reporting Manager can reject at this stage.");
                 
                 currentReview = evaluation.Reviews
@@ -969,6 +973,16 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .ToListAsync(cancellationToken);
     }
 
+    private async Task<bool> CanActAsReportingManagerAsync(Evaluation evaluation, int actorUserId, CancellationToken cancellationToken)
+    {
+        if (actorUserId == evaluation.ReportingManagerId)
+            return true;
+
+        return await _context.UserManagerMappings.AnyAsync(
+            mapping => mapping.ManagerUserId == actorUserId && mapping.EmployeeUserId == evaluation.EmployeeId,
+            cancellationToken);
+    }
+
     private async Task TransitionToTeamLeadReviewAsync(Evaluation evaluation, CancellationToken cancellationToken)
     {
         // Create TL review
@@ -1021,86 +1035,96 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
     private async Task CheckAndTransitionAfterPeerReviewsAsync(Evaluation evaluation, CancellationToken cancellationToken)
     {
-        // ? FIX: Reload evaluation to get fresh data from database
         var freshEvaluation = await _context.Set<Evaluation>()
             .Include(e => e.Reviews)
+            .Include(e => e.PeerAssignments)
             .Include(e => e.Employee)
-            .AsNoTracking()
             .FirstOrDefaultAsync(e => e.EvaluationId == evaluation.EvaluationId, cancellationToken);
 
-        if (freshEvaluation == null) return;
+        if (freshEvaluation == null || freshEvaluation.Status != STATUS_PENDING_PEER_REVIEWS)
+            return;
 
-        // Check if both peer reviews are approved or completed
-        var peerReviews = freshEvaluation.Reviews.Where(r => r.ReviewerRole == ReviewerRole.Peer).ToList();
-        
-        Console.WriteLine($"CheckAndTransitionAfterPeerReviews: Found {peerReviews.Count} peer reviews");
-        foreach (var pr in peerReviews)
+        static bool IsReviewCompleted(Review review) =>
+            review.Status == REVIEW_STATUS_APPROVED || review.Status == REVIEW_STATUS_COMPLETED;
+
+        List<Review> effectivePeerReviews;
+        var assignedPeerIds = freshEvaluation.PeerAssignments
+            .Select(pa => pa.PeerUserId)
+            .Distinct()
+            .ToList();
+
+        if (assignedPeerIds.Count == 2)
         {
-            Console.WriteLine($"  Peer Review {pr.ReviewId}: Status={pr.Status}, ReviewerUserId={pr.ReviewerUserId}");
+            effectivePeerReviews = assignedPeerIds
+                .Select(peerId => freshEvaluation.Reviews
+                    .Where(r => r.ReviewerRole == ReviewerRole.Peer && r.ReviewerUserId == peerId)
+                    .OrderByDescending(r => r.ReviewId)
+                    .FirstOrDefault())
+                .Where(r => r != null)
+                .Cast<Review>()
+                .ToList();
         }
-        
-        // ? FIX: Check for both "Approved" and "Completed" statuses
-        var allPeerReviewsDone = peerReviews.Count == 2 && 
-            peerReviews.All(r => r.Status == REVIEW_STATUS_APPROVED || r.Status == REVIEW_STATUS_COMPLETED);
-        
-        Console.WriteLine($"CheckAndTransitionAfterPeerReviews: allPeerReviewsDone={allPeerReviewsDone}");
-        
-        if (allPeerReviewsDone)
+        else
         {
-            Console.WriteLine("CheckAndTransitionAfterPeerReviews: Both peers done, transitioning to HOD review");
-            
-            // Both peers approved, move to HOD review
-            var hodReview = new Review
+            // Legacy fallback for older data that may not have clean peer assignments.
+            effectivePeerReviews = freshEvaluation.Reviews
+                .Where(r => r.ReviewerRole == ReviewerRole.Peer)
+                .GroupBy(r => r.ReviewerUserId)
+                .Select(g => g.OrderByDescending(r => r.ReviewId).First())
+                .ToList();
+        }
+
+        var allPeerReviewsDone = effectivePeerReviews.Count == 2 && effectivePeerReviews.All(IsReviewCompleted);
+        if (!allPeerReviewsDone)
+            return;
+
+        var hodReviewerUserId = await ResolveHodReviewerUserIdAsync(freshEvaluation, cancellationToken);
+
+        var existingHodReview = freshEvaluation.Reviews
+            .Where(r => r.ReviewerRole == ReviewerRole.HOD)
+            .OrderByDescending(r => r.ReviewId)
+            .FirstOrDefault();
+
+        if (existingHodReview == null || existingHodReview.Status != REVIEW_STATUS_PENDING)
+        {
+            _context.Set<Review>().Add(new Review
             {
-                EvaluationId = evaluation.EvaluationId,
-                ReviewerUserId = await GetHodUserIdAsync(cancellationToken),
+                EvaluationId = freshEvaluation.EvaluationId,
+                ReviewerUserId = hodReviewerUserId,
                 ReviewerRole = ReviewerRole.HOD,
                 Status = REVIEW_STATUS_PENDING,
                 OverallComment = null,
                 SubmittedAt = null
-            };
-
-            _context.Set<Review>().Add(hodReview);
-
-            evaluation.Status = STATUS_PENDING_HOD_REVIEW;
-
-            // Notify HOD
-            var notification = new Notification
-            {
-                UserId = hodReview.ReviewerUserId,
-                Subject = $"Evaluation Pending: {evaluation.Employee?.FullName ?? freshEvaluation.Employee?.FullName ?? "Employee"}",
-                Channel = "Email",
-                SentAt = DateTime.UtcNow
-            };
-
-            _context.Set<Notification>().Add(notification);
-
-            // ? SEND EMAIL to HOD
-            var hod = await _context.Users.FindAsync(new object[] { hodReview.ReviewerUserId }, cancellationToken);
-            var employee = evaluation.Employee ?? freshEvaluation.Employee ?? await _context.Users.FindAsync(new object[] { evaluation.EmployeeId }, cancellationToken);
-            
-            if (hod != null && employee != null)
-            {
-                await _emailService.SendEvaluationNotificationAsync(
-                    hod.Email,
-                    hod.FullName,
-                    employee.FullName,
-                    "Pending",
-                    "HOD",
-                    "All peer reviews are complete. Please review the evaluation and decide on promotion recommendation.",
-                    evaluation.EvaluationId,
-                    cancellationToken);
-            }
-            
-            // ? Save changes immediately to ensure status is persisted
-            await _context.SaveChangesAsync(cancellationToken);
+            });
         }
-        else
+
+        freshEvaluation.Status = STATUS_PENDING_HOD_REVIEW;
+
+        _context.Set<Notification>().Add(new Notification
         {
-            Console.WriteLine($"CheckAndTransitionAfterPeerReviews: Not all peers done yet. Waiting for remaining reviews.");
+            UserId = hodReviewerUserId,
+            Subject = $"Evaluation Pending: {freshEvaluation.Employee?.FullName ?? "Employee"}",
+            Channel = "Email",
+            SentAt = DateTime.UtcNow
+        });
+
+        var hod = await _context.Users.FindAsync(new object[] { hodReviewerUserId }, cancellationToken);
+        var employee = freshEvaluation.Employee ?? await _context.Users.FindAsync(new object[] { freshEvaluation.EmployeeId }, cancellationToken);
+
+        if (hod != null && employee != null)
+        {
+            await _emailService.SendEvaluationNotificationAsync(
+                hod.Email,
+                hod.FullName,
+                employee.FullName,
+                "Pending",
+                "HOD",
+                "All peer reviews are complete. Please review the evaluation and decide on promotion recommendation.",
+                freshEvaluation.EvaluationId,
+                cancellationToken);
         }
 
-        await Task.CompletedTask;
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task TransitionAfterHodReviewAsync(Evaluation evaluation, int hodUserId, CancellationToken cancellationToken)
@@ -1235,6 +1259,31 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             throw new BusinessRuleException("No HOD found in the system.");
 
         return hodUser;
+    }
+
+    private async Task<int> ResolveHodReviewerUserIdAsync(Evaluation evaluation, CancellationToken cancellationToken)
+    {
+        var employeeDeptId = evaluation.Employee?.DeptId;
+        if (employeeDeptId == null || employeeDeptId <= 0)
+        {
+            employeeDeptId = await _context.Users
+                .Where(u => u.UserId == evaluation.EmployeeId)
+                .Select(u => (int?)u.DeptId)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        if (employeeDeptId.HasValue && employeeDeptId.Value > 0)
+        {
+            var mappedHodUserId = await _context.DepartmentHodMappings
+                .Where(mapping => mapping.DeptId == employeeDeptId.Value)
+                .Select(mapping => mapping.HodUserId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (mappedHodUserId > 0)
+                return mappedHodUserId;
+        }
+
+        return await GetHodUserIdAsync(cancellationToken);
     }
 
     private async Task<int> GetGmUserIdAsync(CancellationToken cancellationToken)
@@ -1454,7 +1503,6 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 (
                     e.Status == STATUS_PENDING_TL_REVIEW ||
                     e.Status == STATUS_PENDING_PEER_ASSIGNMENT ||
-                    e.Status == STATUS_V2_PENDING_TL_ACTIVATION_REVIEW ||
                     e.Status == STATUS_V2_PENDING_PARALLEL_REVIEWS))
             .Select(e => new MyEvaluationDto
             {
@@ -1664,6 +1712,29 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
 
         pendingApprovals.AddRange(rmApprovalsSecond);
 
+        // Workflow-v2 RM activation review (new status + legacy compatibility)
+        var rmActivationApprovals = await _context.Set<Evaluation>()
+            .Include(e => e.Employee)
+            .Include(e => e.Cycle)
+            .Where(e =>
+                e.ReportingManagerId == userId &&
+                (e.Status == STATUS_V2_PENDING_RM_ACTIVATION_REVIEW ||
+                 e.Status == STATUS_V2_PENDING_TL_ACTIVATION_REVIEW))
+            .Select(e => new PendingApprovalDto
+            {
+                EvaluationId = e.EvaluationId,
+                EmployeeId = e.EmployeeId,
+                EmployeeName = e.Employee.FullName,
+                Status = e.Status,
+                RequiredRole = "RM",
+                SubmittedDate = null,
+                CycleId = e.CycleId,
+                CycleName = e.Cycle.Name
+            })
+            .ToListAsync(cancellationToken);
+
+        pendingApprovals.AddRange(rmActivationApprovals);
+
         // Workflow-v2 RM review task (parallel stage)
         var rmV2ParallelApprovals = await _context.Set<Evaluation>()
             .Include(e => e.Employee)
@@ -1715,26 +1786,6 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             .ToListAsync(cancellationToken);
 
         pendingApprovals.AddRange(tlApprovals);
-
-        // Workflow-v2 TL activation review
-        var tlActivationApprovals = await _context.Set<Evaluation>()
-            .Include(e => e.Employee)
-            .Include(e => e.Cycle)
-            .Where(e => e.TeamLeadId == userId && e.Status == STATUS_V2_PENDING_TL_ACTIVATION_REVIEW)
-            .Select(e => new PendingApprovalDto
-            {
-                EvaluationId = e.EvaluationId,
-                EmployeeId = e.EmployeeId,
-                EmployeeName = e.Employee.FullName,
-                Status = e.Status,
-                RequiredRole = "TL",
-                SubmittedDate = null,
-                CycleId = e.CycleId,
-                CycleName = e.Cycle.Name
-            })
-            .ToListAsync(cancellationToken);
-
-        pendingApprovals.AddRange(tlActivationApprovals);
 
         // Workflow-v2 TL parallel review
         var tlV2ParallelApprovals = await _context.Set<Evaluation>()

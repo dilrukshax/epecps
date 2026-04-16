@@ -518,10 +518,11 @@ export class EvaluationDetailComponent implements OnInit {
       return;
     }
 
-    if (status.includes('v2_pending_tl_activation_review')) {
-      if (this.currentUserHasRole('TL')) {
+    if (status.includes('v2_pending_rm_activation_review') || status.includes('v2_pending_tl_activation_review')) {
+      const isAssignedRm = this.currentUserId !== null && this.currentUserId === this.evaluation.reportingManagerId;
+      if (this.currentUserHasRole('RM') && (isAssignedRm || this.currentUserIsSuperAdmin())) {
         this.isActiveApprover = true;
-        this.currentUserRole = 'TL';
+        this.currentUserRole = 'RM';
       }
       return;
     }
@@ -622,8 +623,9 @@ export class EvaluationDetailComponent implements OnInit {
       // For peer reviews, check if current user has ANY pending review using userId
       console.log('Checking for pending peer reviews...');
       console.log('Current userId:', this.currentUserId);
-      
-      if (this.currentUserHasRole('Peer') && this.currentUserId !== null) {
+
+      // Do not require a dedicated "Peer" role; assigned reviewers can be regular employees.
+      if (this.currentUserId !== null) {
         // Get all peer reviews for the current user
         const allPeerReviewsForUser = this.evaluation.reviews.filter(r => 
           r.reviewerRole === ReviewerRole.Peer && r.reviewerUserId === this.currentUserId
@@ -702,9 +704,11 @@ export class EvaluationDetailComponent implements OnInit {
       (status.includes('v2_pending_employee_activation') || status.includes('v2_returned_for_activation'));
   }
 
-  isTlActivationStage(): boolean {
+  isRmActivationStage(): boolean {
     if (!this.evaluation) return false;
-    return this.currentUserRole === 'TL' && this.evaluation.status.toLowerCase().includes('v2_pending_tl_activation_review');
+    const status = this.evaluation.status.toLowerCase();
+    return this.currentUserRole === 'RM'
+      && (status.includes('v2_pending_rm_activation_review') || status.includes('v2_pending_tl_activation_review'));
   }
 
   isWorkflowV2(): boolean {
@@ -942,7 +946,7 @@ export class EvaluationDetailComponent implements OnInit {
     this.processingActivationDecision = true;
     this.error = null;
 
-    this.evaluationService.tlActivationDecision(this.evaluationId, payload).subscribe({
+    this.evaluationService.rmActivationDecision(this.evaluationId, payload).subscribe({
       next: () => {
         this.processingActivationDecision = false;
         this.activationDecisionComment = '';
@@ -968,6 +972,11 @@ export class EvaluationDetailComponent implements OnInit {
   private currentUserHasRole(role: string): boolean {
     const currentRoles = (this.authService.getCurrentUser()?.roles || []).map(r => r.toUpperCase());
     return currentRoles.includes(role.toUpperCase()) || currentRoles.includes('SUPERADMIN');
+  }
+
+  private currentUserIsSuperAdmin(): boolean {
+    const currentRoles = (this.authService.getCurrentUser()?.roles || []).map(r => r.toUpperCase());
+    return currentRoles.includes('SUPERADMIN');
   }
 
   loadAvailablePeers(): void {

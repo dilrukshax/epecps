@@ -1,4 +1,5 @@
 using Epecps.Application.DTOs.EmployeeGoals;
+using Epecps.Application.DTOs.Evaluations;
 using Epecps.Application.DTOs.WorkflowV2;
 using Epecps.Application.Exceptions;
 using Epecps.Application.Interfaces;
@@ -239,6 +240,41 @@ public class EvaluationWorkflowTests
             .Where(n => n.UserId == employeeId && n.Subject.Contains("Approved"))
             .FirstOrDefaultAsync();
         Assert.NotNull(notification);
+    }
+
+    [Fact]
+    public async Task MappedManagerCanApproveRmStages()
+    {
+        // Arrange
+        var (context, employeeId, _, _, goalSetId, cycleId) = await SetupTestDataAsync();
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
+
+        var mappedManager = new User
+        {
+            UserId = 9,
+            Email = "mapped-rm@test.com",
+            FullName = "Mapped RM",
+            DeptId = 1,
+            IsActive = true
+        };
+        context.Users.Add(mappedManager);
+        context.UserRoles.Add(new UserRole { UserId = 9, RoleId = 2 }); // RM
+        context.UserManagerMappings.Add(new UserManagerMapping
+        {
+            ManagerUserId = 9,
+            EmployeeUserId = employeeId
+        });
+        await context.SaveChangesAsync();
+
+        var evaluation = await workflowService.StartEvaluationForGoalSetAsync(employeeId, goalSetId, cycleId);
+
+        // Act - first RM approval by mapped manager
+        await workflowService.ApproveAsync(evaluation.EvaluationId, 9, "Approved by mapped manager");
+
+        // Assert
+        var updatedEvaluation = await context.Evaluations.FindAsync(evaluation.EvaluationId);
+        Assert.NotNull(updatedEvaluation);
+        Assert.Equal("Approved_By_RM", updatedEvaluation!.Status);
     }
 
     [Fact]
@@ -642,6 +678,40 @@ public class EvaluationWorkflowTests
     }
 
     [Fact]
+    public async Task StartGoal_InWorkflowV2PendingEmployeeActivation_IsBlockedUntilRmApproval()
+    {
+        // Arrange
+        var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
+        var personalGoalService = new PersonalGoalService(context, workflowService);
+
+        var goal = await context.PersonalGoals
+            .Where(g => g.GoalSetId == goalSetId && g.UserId == employeeId)
+            .OrderBy(g => g.Title)
+            .FirstAsync();
+        goal.Status = PersonalGoalStatus.ApprovedByRM;
+
+        context.Evaluations.Add(new Evaluation
+        {
+            CycleId = cycleId,
+            EmployeeId = employeeId,
+            ReportingManagerId = rmId,
+            TeamLeadId = tlId,
+            GoalSetId = goalSetId,
+            WorkflowVersion = "v2",
+            Status = "V2_PENDING_EMPLOYEE_ACTIVATION"
+        });
+        await context.SaveChangesAsync();
+
+        // Act
+        var ex = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            personalGoalService.StartGoalAsync(goal.Id, employeeId));
+
+        // Assert
+        Assert.Contains("activation approval", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task CompleteGoal_RequiresInProgressStatus()
     {
         // Arrange
@@ -661,6 +731,41 @@ public class EvaluationWorkflowTests
         // Act & Assert - should throw because goal is not in progress
         await Assert.ThrowsAsync<BusinessRuleException>(() => 
             personalGoalService.CompleteGoalAsync(goalToComplete.Id, employeeId, null));
+    }
+
+    [Fact]
+    public async Task CompleteGoal_InWorkflowV2PendingActivationReview_IsBlockedUntilRmApproval()
+    {
+        // Arrange
+        var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
+        var personalGoalService = new PersonalGoalService(context, workflowService);
+
+        var goal = await context.PersonalGoals
+            .Where(g => g.GoalSetId == goalSetId && g.UserId == employeeId)
+            .OrderBy(g => g.Title)
+            .FirstAsync();
+        goal.Status = PersonalGoalStatus.InProgress;
+        goal.StartedAt = DateTime.UtcNow.AddDays(-1);
+
+        context.Evaluations.Add(new Evaluation
+        {
+            CycleId = cycleId,
+            EmployeeId = employeeId,
+            ReportingManagerId = rmId,
+            TeamLeadId = tlId,
+            GoalSetId = goalSetId,
+            WorkflowVersion = "v2",
+            Status = "V2_PENDING_RM_ACTIVATION_REVIEW"
+        });
+        await context.SaveChangesAsync();
+
+        // Act
+        var ex = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            personalGoalService.CompleteGoalAsync(goal.Id, employeeId, new CompleteGoalRequestDto { Comment = "done" }));
+
+        // Assert
+        Assert.Contains("activation approval", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -716,6 +821,55 @@ public class EvaluationWorkflowTests
         Assert.Equal(request.CertificationUrl, goalDto.CompletionCertificationUrl);
         Assert.Equal(request.Summary, goalDto.CompletionSummary);
         Assert.Equal(request.Comment, goalDto.CompletionComment);
+    }
+
+    [Fact]
+    public async Task GetMyGoalSets_ReturnsGoalActivationFieldsForInlinePlanUi()
+    {
+        // Arrange
+        var (context, employeeId, rmId, _, goalSetId, _) = await SetupTestDataAsync();
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
+        var personalGoalService = new PersonalGoalService(context, workflowService);
+
+        var goal = await context.PersonalGoals
+            .Where(g => g.GoalSetId == goalSetId && g.UserId == employeeId)
+            .OrderBy(g => g.Title)
+            .FirstAsync();
+
+        var assignmentId = Guid.NewGuid();
+        context.GoalAssignments.Add(new GoalAssignment
+        {
+            Id = assignmentId,
+            AssignedByUserId = rmId,
+            AssignedToUserId = employeeId,
+            GoalItemId = goal.GoalItemId,
+            GoalSetId = goalSetId,
+            PersonalGoalId = goal.Id,
+            Title = goal.Title,
+            Description = goal.Description,
+            TargetScore = goal.TargetScore,
+            StartDate = goal.StartDate,
+            DueDate = goal.DueDate,
+            Status = AssignedGoalStatus.Accepted,
+            ActivationStatus = "PendingRM",
+            ActivationMethod = "Deliver by weekly milestones",
+            ActivationTlComment = "Please clarify dependencies",
+            ActivationSubmittedAt = DateTime.UtcNow.AddHours(-2),
+            ActivationReviewedAt = DateTime.UtcNow.AddHours(-1)
+        });
+        await context.SaveChangesAsync();
+
+        // Act
+        var sets = await personalGoalService.GetMyGoalSetsAsync(employeeId);
+        var dto = sets.SelectMany(s => s.Goals).First(g => g.Id == goal.Id);
+
+        // Assert
+        Assert.Equal(assignmentId, dto.GoalAssignmentId);
+        Assert.Equal("PendingRM", dto.ActivationStatus);
+        Assert.Equal("Deliver by weekly milestones", dto.ActivationMethod);
+        Assert.Equal("Please clarify dependencies", dto.ActivationComment);
+        Assert.NotNull(dto.ActivationSubmittedAt);
+        Assert.NotNull(dto.ActivationReviewedAt);
     }
 
     [Fact]
@@ -896,6 +1050,105 @@ public class EvaluationWorkflowTests
         Assert.Equal(2, peerReviews.Count);
         Assert.All(peerReviews, r => Assert.Equal("Pending", r.Status));
         Assert.Equal(new[] { 5, 6 }, peerReviews.Select(r => r.ReviewerUserId).ToArray());
+    }
+
+    [Fact]
+    public async Task PeerSubmitGoalScoresThenApprove_TransitionsToHodAfterBothPeers()
+    {
+        // Arrange
+        var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
+        var workflowService = new EvaluationWorkflowService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
+        var reviewScoringService = new ReviewScoringService(context, _emailServiceMock.Object, _workflowV2ServiceMock.Object);
+        var personalGoalService = new PersonalGoalService(context, workflowService);
+
+        var evaluation = await workflowService.StartEvaluationForGoalSetAsync(employeeId, goalSetId, cycleId);
+        await workflowService.ApproveAsync(evaluation.EvaluationId, rmId, "Approved");
+
+        var goals = await context.PersonalGoals.Where(g => g.GoalSetId == goalSetId).ToListAsync();
+        foreach (var goal in goals)
+        {
+            await personalGoalService.StartGoalAsync(goal.Id, employeeId);
+            await personalGoalService.CompleteGoalAsync(goal.Id, employeeId, new CompleteGoalRequestDto
+            {
+                Summary = "Done",
+                EvidenceUrl = "https://evidence.example.com",
+                Comment = "Completed"
+            });
+        }
+
+        var rmPostReview = await context.Reviews
+            .Where(r => r.EvaluationId == evaluation.EvaluationId && r.ReviewerRole == ReviewerRole.RM)
+            .OrderByDescending(r => r.ReviewId)
+            .FirstAsync();
+        rmPostReview.Status = "Completed";
+        rmPostReview.OverallScore = 8.8m;
+        rmPostReview.SubmittedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
+
+        await workflowService.ApproveAsync(evaluation.EvaluationId, rmId, "RM scored and approved");
+        await workflowService.SubmitTlOverallAndAssignPeersAsync(
+            evaluation.EvaluationId,
+            tlId,
+            9.0m,
+            "Strong overall performance",
+            5,
+            6);
+
+        var personalGoalIds = goals.Select(g => g.Id).ToList();
+
+        async Task SubmitPeerScoresAndApproveAsync(int peerUserId, decimal score)
+        {
+            var peerReview = await context.Reviews
+                .Where(r =>
+                    r.EvaluationId == evaluation.EvaluationId &&
+                    r.ReviewerRole == ReviewerRole.Peer &&
+                    r.ReviewerUserId == peerUserId)
+                .OrderByDescending(r => r.ReviewId)
+                .FirstAsync();
+
+            var dto = new SubmitReviewWithGoalScoresDto
+            {
+                GoalScores = personalGoalIds
+                    .Select(goalId => new ReviewItemScoreDto
+                    {
+                        PersonalGoalId = goalId,
+                        ScoreValue = score,
+                        Comment = "Peer score"
+                    })
+                    .ToList(),
+                OverallComment = "Peer completed review"
+            };
+
+            await reviewScoringService.SubmitReviewWithGoalScoresAsync(
+                evaluation.EvaluationId,
+                peerReview.ReviewId,
+                peerUserId,
+                dto);
+
+            await workflowService.ApproveAsync(
+                evaluation.EvaluationId,
+                peerUserId,
+                "Peer approval");
+        }
+
+        // Act
+        await SubmitPeerScoresAndApproveAsync(5, 8.2m);
+
+        var statusAfterFirstPeer = await context.Evaluations.FindAsync(evaluation.EvaluationId);
+        Assert.NotNull(statusAfterFirstPeer);
+        Assert.Equal("Pending_Peer_Reviews", statusAfterFirstPeer!.Status);
+
+        await SubmitPeerScoresAndApproveAsync(6, 8.7m);
+
+        // Assert
+        var updatedEvaluation = await context.Evaluations
+            .Include(e => e.Reviews)
+            .FirstAsync(e => e.EvaluationId == evaluation.EvaluationId);
+
+        Assert.Equal("Pending_HOD_Review", updatedEvaluation.Status);
+        Assert.Contains(updatedEvaluation.Reviews, r =>
+            r.ReviewerRole == ReviewerRole.HOD &&
+            r.Status == "Pending");
     }
 
     [Fact]
@@ -1186,5 +1439,238 @@ public class EvaluationWorkflowTests
             .FirstOrDefaultAsync();
         Assert.NotNull(rmReview);
         Assert.Equal("Pending", rmReview!.Status);
+    }
+
+    private async Task<(EpecpsDbContext context, int employeeId, int rmId, int tlId, Guid goalSetId, int evaluationId, List<GoalAssignment> assignments)>
+        SetupWorkflowV2ActivationScenarioAsync(
+            string evaluationStatus,
+            string assignmentActivationStatus = "PendingEmployee",
+            bool withActivationMethods = false)
+    {
+        var (context, employeeId, rmId, tlId, goalSetId, cycleId) = await SetupTestDataAsync();
+
+        var seedGoal = await context.PersonalGoals.FirstAsync(g => g.GoalSetId == goalSetId);
+        var goals = await context.PersonalGoals
+            .Where(g => g.GoalSetId == goalSetId && g.UserId == employeeId)
+            .ToListAsync();
+
+        if (goals.Count < 5)
+        {
+            var required = 5 - goals.Count;
+            var additionalGoals = Enumerable.Range(0, required)
+                .Select(i => new PersonalGoal
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = employeeId,
+                    GoalItemId = seedGoal.GoalItemId,
+                    GoalSetId = goalSetId,
+                    Title = $"Activation Goal {i + 1}",
+                    Description = $"Activation test goal {i + 1}",
+                    TargetScore = 100,
+                    CurrentScore = 0,
+                    StartDate = DateTime.UtcNow.AddDays(-7),
+                    DueDate = DateTime.UtcNow.AddMonths(3),
+                    Status = PersonalGoalStatus.ApprovedByRM,
+                    CreatedAt = DateTime.UtcNow
+                })
+                .ToList();
+
+            context.PersonalGoals.AddRange(additionalGoals);
+            await context.SaveChangesAsync();
+
+            goals = await context.PersonalGoals
+                .Where(g => g.GoalSetId == goalSetId && g.UserId == employeeId)
+                .ToListAsync();
+        }
+
+        var evaluation = new Evaluation
+        {
+            CycleId = cycleId,
+            EmployeeId = employeeId,
+            ReportingManagerId = rmId,
+            TeamLeadId = tlId,
+            GoalSetId = goalSetId,
+            WorkflowVersion = "v2",
+            Status = evaluationStatus
+        };
+        context.Evaluations.Add(evaluation);
+        await context.SaveChangesAsync();
+
+        var now = DateTime.UtcNow;
+        var assignments = goals.Select((goal, index) => new GoalAssignment
+        {
+            Id = Guid.NewGuid(),
+            AssignedByUserId = rmId,
+            AssignedToUserId = employeeId,
+            GoalItemId = goal.GoalItemId,
+            GoalSetId = goalSetId,
+            Title = goal.Title,
+            Description = goal.Description,
+            TargetScore = goal.TargetScore,
+            StartDate = goal.StartDate,
+            DueDate = goal.DueDate,
+            Status = AssignedGoalStatus.Accepted,
+            PersonalGoalId = goal.Id,
+            ActivationStatus = assignmentActivationStatus,
+            ActivationMethod = withActivationMethods ? $"Method {index + 1}" : null,
+            ActivationSubmittedAt = withActivationMethods ? now : null,
+            CreatedAt = now
+        }).ToList();
+
+        context.GoalAssignments.AddRange(assignments);
+        await context.SaveChangesAsync();
+
+        return (context, employeeId, rmId, tlId, goalSetId, evaluation.EvaluationId, assignments);
+    }
+
+    [Fact]
+    public async Task WorkflowV2_SubmitActivationPlan_MovesToPendingRmActivationReview()
+    {
+        // Arrange
+        var setup = await SetupWorkflowV2ActivationScenarioAsync("V2_PENDING_EMPLOYEE_ACTIVATION");
+        var workflowV2Service = new WorkflowV2Service(setup.context);
+
+        var request = new SubmitActivationPlanRequestDto
+        {
+            Goals = setup.assignments
+                .Select((assignment, index) => new GoalActivationMethodDto
+                {
+                    GoalAssignmentId = assignment.Id,
+                    Method = $"Execution method {index + 1}"
+                })
+                .ToList()
+        };
+
+        // Act
+        await workflowV2Service.SubmitActivationPlanAsync(setup.goalSetId, setup.employeeId, request);
+
+        // Assert
+        var evaluation = await setup.context.Evaluations.FindAsync(setup.evaluationId);
+        Assert.NotNull(evaluation);
+        Assert.Equal("V2_PENDING_RM_ACTIVATION_REVIEW", evaluation!.Status);
+
+        var assignments = await setup.context.GoalAssignments
+            .Where(a => a.GoalSetId == setup.goalSetId && a.AssignedToUserId == setup.employeeId)
+            .ToListAsync();
+
+        Assert.All(assignments, assignment =>
+        {
+            Assert.Equal("PendingRM", assignment.ActivationStatus);
+            Assert.False(string.IsNullOrWhiteSpace(assignment.ActivationMethod));
+            Assert.NotNull(assignment.ActivationSubmittedAt);
+        });
+
+        var rmNotification = await setup.context.Notifications
+            .OrderByDescending(n => n.SentAt)
+            .FirstOrDefaultAsync(n => n.UserId == setup.rmId);
+        Assert.NotNull(rmNotification);
+        Assert.Contains("pending RM review", rmNotification!.Subject);
+    }
+
+    [Fact]
+    public async Task WorkflowV2_AssignedRmCanApproveActivationPlan()
+    {
+        // Arrange
+        var setup = await SetupWorkflowV2ActivationScenarioAsync(
+            "V2_PENDING_RM_ACTIVATION_REVIEW",
+            assignmentActivationStatus: "PendingRM",
+            withActivationMethods: true);
+        var workflowV2Service = new WorkflowV2Service(setup.context);
+
+        // Act
+        await workflowV2Service.ProcessActivationDecisionAsync(
+            setup.evaluationId,
+            setup.rmId,
+            new ActivationPlanDecisionDto
+            {
+                Approved = true,
+                Comment = "Approved by RM"
+            });
+
+        // Assert
+        var evaluation = await setup.context.Evaluations.FindAsync(setup.evaluationId);
+        Assert.NotNull(evaluation);
+        Assert.Equal("V2_ACTIVE_GOALS", evaluation!.Status);
+
+        var assignments = await setup.context.GoalAssignments
+            .Where(a => a.GoalSetId == setup.goalSetId && a.AssignedToUserId == setup.employeeId)
+            .ToListAsync();
+
+        Assert.All(assignments, assignment =>
+        {
+            Assert.Equal("Approved", assignment.ActivationStatus);
+            Assert.Equal(setup.rmId, assignment.ActivationReviewedByUserId);
+            Assert.Equal("Approved by RM", assignment.ActivationTlComment);
+            Assert.NotNull(assignment.ActivationReviewedAt);
+        });
+
+        var approvalHistory = await setup.context.ApprovalHistories
+            .OrderByDescending(h => h.Id)
+            .FirstOrDefaultAsync(h => h.EvaluationId == setup.evaluationId);
+        Assert.NotNull(approvalHistory);
+        Assert.Equal("RM", approvalHistory!.ActorRole);
+        Assert.Equal("ActivationApprovedByRM", approvalHistory.Action);
+    }
+
+    [Fact]
+    public async Task WorkflowV2_TlCannotProcessActivationDecision()
+    {
+        // Arrange
+        var setup = await SetupWorkflowV2ActivationScenarioAsync(
+            "V2_PENDING_RM_ACTIVATION_REVIEW",
+            assignmentActivationStatus: "PendingRM",
+            withActivationMethods: true);
+        var workflowV2Service = new WorkflowV2Service(setup.context);
+
+        // Act + Assert
+        var ex = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            workflowV2Service.ProcessActivationDecisionAsync(
+                setup.evaluationId,
+                setup.tlId,
+                new ActivationPlanDecisionDto
+                {
+                    Approved = true
+                }));
+
+        Assert.Contains("Only assigned Reporting Manager", ex.Message);
+    }
+
+    [Fact]
+    public async Task WorkflowV2_RmCanProcessLegacyTlActivationStatus()
+    {
+        // Arrange
+        var setup = await SetupWorkflowV2ActivationScenarioAsync(
+            "V2_PENDING_TL_ACTIVATION_REVIEW",
+            assignmentActivationStatus: "PendingRM",
+            withActivationMethods: true);
+        var workflowV2Service = new WorkflowV2Service(setup.context);
+
+        var rejectedGoalIds = setup.assignments.Take(2).Select(a => a.Id).ToList();
+
+        // Act
+        await workflowV2Service.ProcessActivationDecisionAsync(
+            setup.evaluationId,
+            setup.rmId,
+            new ActivationPlanDecisionDto
+            {
+                Approved = false,
+                Comment = "Please add more implementation detail.",
+                RejectedGoalAssignmentIds = rejectedGoalIds
+            });
+
+        // Assert
+        var evaluation = await setup.context.Evaluations.FindAsync(setup.evaluationId);
+        Assert.NotNull(evaluation);
+        Assert.Equal("V2_RETURNED_FOR_ACTIVATION", evaluation!.Status);
+
+        var reloadedAssignments = await setup.context.GoalAssignments
+            .Where(a => rejectedGoalIds.Contains(a.Id))
+            .ToListAsync();
+        Assert.All(reloadedAssignments, assignment =>
+        {
+            Assert.Equal("Rejected", assignment.ActivationStatus);
+            Assert.Equal("Please add more implementation detail.", assignment.ActivationTlComment);
+            Assert.Equal(setup.rmId, assignment.ActivationReviewedByUserId);
+        });
     }
 }

@@ -76,7 +76,7 @@ public class GoalAssignment
     public DateTime? ActivationSubmittedAt { get; set; }
 
     /// <summary>
-    /// Activation lifecycle state: PendingEmployee, PendingTL, Approved, Rejected.
+    /// Activation lifecycle state: PendingEmployee, PendingRM, Approved, Rejected.
     /// </summary>
     public string ActivationStatus { get; set; } = "PendingEmployee";
 

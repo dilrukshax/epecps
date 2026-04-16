@@ -17,6 +17,7 @@ public class PersonalGoalService : IPersonalGoalService
     // Evaluation status constants (must match EvaluationWorkflowService)
     private const string STATUS_APPROVED_BY_RM = "Approved_By_RM";
     private const string STATUS_V2_ACTIVE_GOALS = "V2_ACTIVE_GOALS";
+    private const string WORKFLOW_VERSION_V2 = "v2";
 
     public PersonalGoalService(EpecpsDbContext context, IEvaluationWorkflowService evaluationWorkflowService)
     {
@@ -92,30 +93,52 @@ public class PersonalGoalService : IPersonalGoalService
             .Include(pg => pg.GoalItem)
                 .ThenInclude(gi => gi.Category)
             .OrderByDescending(pg => pg.CreatedAt)
-            .Select(pg => new PersonalGoalListDto
-            {
-                Id = pg.Id,
-                GoalSetId = pg.GoalSetId,
-                Title = pg.Title,
-                CategoryName = pg.GoalItem.Category.Name,
-                ItemName = pg.GoalItem.Name,
-                GoalItemName = pg.GoalItem.Name,
-                TargetScore = pg.TargetScore,
-                CurrentScore = pg.CurrentScore,
-                ProgressPercent = pg.TargetScore > 0 ? Math.Round((pg.CurrentScore / pg.TargetScore) * 100, 2) : 0,
-                Status = pg.Status,
-                DueDate = pg.DueDate,
-                CreatedAt = pg.CreatedAt,
-                StartedAt = pg.StartedAt,
-                CompletedAt = pg.CompletedAt,
-                CompletionEvidenceUrl = pg.CompletionEvidenceUrl,
-                CompletionCertificationUrl = pg.CompletionCertificationUrl,
-                CompletionSummary = pg.CompletionSummary,
-                CompletionComment = pg.CompletionComment
-            })
             .ToListAsync(cancellationToken);
 
-        return goals;
+        var personalGoalIds = goals.Select(g => g.Id).ToList();
+        var assignmentLookup = await _context.Set<GoalAssignment>()
+            .Where(ga => ga.AssignedToUserId == userId && ga.PersonalGoalId.HasValue)
+            .Where(ga => personalGoalIds.Contains(ga.PersonalGoalId!.Value))
+            .OrderByDescending(ga => ga.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        var assignmentByPersonalGoalId = assignmentLookup
+            .GroupBy(ga => ga.PersonalGoalId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        return goals.Select(pg =>
+            {
+                assignmentByPersonalGoalId.TryGetValue(pg.Id, out var assignment);
+
+                return new PersonalGoalListDto
+                {
+                    Id = pg.Id,
+                    GoalSetId = pg.GoalSetId,
+                    Title = pg.Title,
+                    CategoryName = pg.GoalItem.Category.Name,
+                    ItemName = pg.GoalItem.Name,
+                    GoalItemName = pg.GoalItem.Name,
+                    TargetScore = pg.TargetScore,
+                    CurrentScore = pg.CurrentScore,
+                    ProgressPercent = pg.TargetScore > 0 ? Math.Round((pg.CurrentScore / pg.TargetScore) * 100, 2) : 0,
+                    Status = pg.Status,
+                    DueDate = pg.DueDate,
+                    CreatedAt = pg.CreatedAt,
+                    StartedAt = pg.StartedAt,
+                    CompletedAt = pg.CompletedAt,
+                    CompletionEvidenceUrl = pg.CompletionEvidenceUrl,
+                    CompletionCertificationUrl = pg.CompletionCertificationUrl,
+                    CompletionSummary = pg.CompletionSummary,
+                    CompletionComment = pg.CompletionComment,
+                    GoalAssignmentId = assignment?.Id,
+                    ActivationMethod = assignment?.ActivationMethod,
+                    ActivationStatus = assignment?.ActivationStatus,
+                    ActivationSubmittedAt = assignment?.ActivationSubmittedAt,
+                    ActivationComment = assignment?.ActivationTlComment,
+                    ActivationReviewedAt = assignment?.ActivationReviewedAt
+                };
+            })
+            .ToList();
     }
 
     public async Task<List<PersonalGoalSetDto>> GetMyGoalSetsAsync(int userId, CancellationToken cancellationToken = default)
@@ -127,6 +150,17 @@ public class PersonalGoalService : IPersonalGoalService
                     .ThenInclude(c => c.Template)
             .OrderByDescending(pg => pg.CreatedAt)
             .ToListAsync(cancellationToken);
+
+        var personalGoalIds = allGoals.Select(g => g.Id).ToList();
+        var assignmentLookup = await _context.Set<GoalAssignment>()
+            .Where(ga => ga.AssignedToUserId == userId && ga.PersonalGoalId.HasValue)
+            .Where(ga => personalGoalIds.Contains(ga.PersonalGoalId!.Value))
+            .OrderByDescending(ga => ga.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        var assignmentByPersonalGoalId = assignmentLookup
+            .GroupBy(ga => ga.PersonalGoalId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var groupedGoals = allGoals
             .GroupBy(g => g.GoalSetId ?? Guid.Empty)
@@ -157,26 +191,37 @@ public class PersonalGoalService : IPersonalGoalService
                     Status = DetermineOverallStatus(group.ToList()),
                     CreatedAt = group.First().CreatedAt,
                     Categories = group.Select(g => g.GoalItem.Category.Name).Distinct().OrderBy(c => c).ToList(),
-                    Goals = group.Select(g => new PersonalGoalListDto
+                    Goals = group.Select(g =>
                     {
-                        Id = g.Id,
-                        GoalSetId = g.GoalSetId,
-                        Title = g.Title,
-                        CategoryName = g.GoalItem.Category.Name,
-                        ItemName = g.GoalItem.Name,
-                        GoalItemName = g.GoalItem.Name,
-                        TargetScore = g.TargetScore,
-                        CurrentScore = g.CurrentScore,
-                        ProgressPercent = g.TargetScore > 0 ? Math.Round((g.CurrentScore / g.TargetScore) * 100, 2) : 0,
-                        Status = g.Status,
-                        DueDate = g.DueDate,
-                        CreatedAt = g.CreatedAt,
-                        StartedAt = g.StartedAt,
-                        CompletedAt = g.CompletedAt,
-                        CompletionEvidenceUrl = g.CompletionEvidenceUrl,
-                        CompletionCertificationUrl = g.CompletionCertificationUrl,
-                        CompletionSummary = g.CompletionSummary,
-                        CompletionComment = g.CompletionComment
+                        assignmentByPersonalGoalId.TryGetValue(g.Id, out var assignment);
+
+                        return new PersonalGoalListDto
+                        {
+                            Id = g.Id,
+                            GoalSetId = g.GoalSetId,
+                            Title = g.Title,
+                            CategoryName = g.GoalItem.Category.Name,
+                            ItemName = g.GoalItem.Name,
+                            GoalItemName = g.GoalItem.Name,
+                            TargetScore = g.TargetScore,
+                            CurrentScore = g.CurrentScore,
+                            ProgressPercent = g.TargetScore > 0 ? Math.Round((g.CurrentScore / g.TargetScore) * 100, 2) : 0,
+                            Status = g.Status,
+                            DueDate = g.DueDate,
+                            CreatedAt = g.CreatedAt,
+                            StartedAt = g.StartedAt,
+                            CompletedAt = g.CompletedAt,
+                            CompletionEvidenceUrl = g.CompletionEvidenceUrl,
+                            CompletionCertificationUrl = g.CompletionCertificationUrl,
+                            CompletionSummary = g.CompletionSummary,
+                            CompletionComment = g.CompletionComment,
+                            GoalAssignmentId = assignment?.Id,
+                            ActivationMethod = assignment?.ActivationMethod,
+                            ActivationStatus = assignment?.ActivationStatus,
+                            ActivationSubmittedAt = assignment?.ActivationSubmittedAt,
+                            ActivationComment = assignment?.ActivationTlComment,
+                            ActivationReviewedAt = assignment?.ActivationReviewedAt
+                        };
                     }).ToList(),
                     EvaluationInfo = GetEvaluationInfoForGoalSet(goalSetId, userId).Result
                 };
@@ -653,15 +698,9 @@ public class PersonalGoalService : IPersonalGoalService
         if (goal.Status != PersonalGoalStatus.ApprovedByRM)
             throw new BusinessRuleException($"Goal can only be started when approved by RM. Current status: {goal.Status}");
 
-        // Find the related evaluation
-        Evaluation? evaluation = null;
-        if (goal.GoalSetId.HasValue)
-        {
-            evaluation = await _context.Set<Evaluation>()
-                .Where(e => e.GoalSetId == goal.GoalSetId && e.EmployeeId == userId)
-                .Where(e => e.Status == STATUS_APPROVED_BY_RM || e.Status == STATUS_V2_ACTIVE_GOALS)
-                .FirstOrDefaultAsync(cancellationToken);
-        }
+        // Find the related evaluation and enforce workflow stage
+        var evaluation = await GetLatestEvaluationForGoalSetAsync(goal.GoalSetId, userId, cancellationToken);
+        EnsureGoalExecutionStageIsAllowed(evaluation);
 
         var oldStatus = goal.Status;
 
@@ -753,17 +792,13 @@ public class PersonalGoalService : IPersonalGoalService
         goal.CompletionComment = completionComment;
         goal.UpdatedAt = DateTime.UtcNow;
 
-        // Find the related evaluation
-        Evaluation? evaluation = null;
+        // Find the related evaluation and enforce workflow stage
+        var evaluation = await GetLatestEvaluationForGoalSetAsync(goal.GoalSetId, userId, cancellationToken);
+        EnsureGoalExecutionStageIsAllowed(evaluation);
         bool workflowContinued = false;
 
         if (goal.GoalSetId.HasValue)
         {
-            evaluation = await _context.Set<Evaluation>()
-                .Where(e => e.GoalSetId == goal.GoalSetId && e.EmployeeId == userId)
-                .Where(e => e.Status == STATUS_APPROVED_BY_RM || e.Status == STATUS_V2_ACTIVE_GOALS)
-                .FirstOrDefaultAsync(cancellationToken);
-
             if (evaluation != null)
             {
                 var employeeGoalRecord = await _context.Set<EmployeeGoal>()
@@ -942,5 +977,45 @@ public class PersonalGoalService : IPersonalGoalService
         _context.PersonalGoals.RemoveRange(goals);
 
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<Evaluation?> GetLatestEvaluationForGoalSetAsync(Guid? goalSetId, int userId, CancellationToken cancellationToken)
+    {
+        if (!goalSetId.HasValue)
+        {
+            return null;
+        }
+
+        return await _context.Set<Evaluation>()
+            .Where(e => e.GoalSetId == goalSetId && e.EmployeeId == userId)
+            .OrderByDescending(e => e.EvaluationId)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private static void EnsureGoalExecutionStageIsAllowed(Evaluation? evaluation)
+    {
+        if (evaluation == null)
+        {
+            return;
+        }
+
+        var isWorkflowV2 = string.Equals(
+            evaluation.WorkflowVersion,
+            WORKFLOW_VERSION_V2,
+            StringComparison.OrdinalIgnoreCase);
+
+        if (isWorkflowV2 &&
+            !string.Equals(evaluation.Status, STATUS_V2_ACTIVE_GOALS, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessRuleException(
+                $"Goals can only be started or completed after RM activation approval. Current evaluation status: {evaluation.Status}");
+        }
+
+        if (!isWorkflowV2 &&
+            !string.Equals(evaluation.Status, STATUS_APPROVED_BY_RM, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessRuleException(
+                $"Goals can only be started or completed after RM approval. Current evaluation status: {evaluation.Status}");
+        }
     }
 }

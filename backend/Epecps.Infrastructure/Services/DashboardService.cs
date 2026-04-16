@@ -272,6 +272,13 @@ public class DashboardService : IDashboardService
                 .CountAsync(cancellationToken);
 
             count += await _context.Set<Evaluation>()
+                .Where(e => e.ReportingManagerId == userId)
+                .Where(e =>
+                    e.Status == "V2_PENDING_RM_ACTIVATION_REVIEW" ||
+                    e.Status == "V2_PENDING_TL_ACTIVATION_REVIEW")
+                .CountAsync(cancellationToken);
+
+            count += await _context.Set<Evaluation>()
                 .Include(e => e.Reviews)
                 .Where(e => e.Status == "V2_PENDING_PARALLEL_REVIEWS")
                 .Where(e => e.Reviews.Any(r =>
@@ -293,12 +300,11 @@ public class DashboardService : IDashboardService
                 .Include(e => e.Reviews)
                 .Where(e => e.TeamLeadId == userId)
                 .Where(e =>
-                    e.Status == "V2_PENDING_TL_ACTIVATION_REVIEW" ||
-                    (e.Status == "V2_PENDING_PARALLEL_REVIEWS" &&
+                    e.Status == "V2_PENDING_PARALLEL_REVIEWS" &&
                      e.Reviews.Any(r =>
                          r.ReviewerRole == ReviewerRole.TL &&
                          r.ReviewerUserId == userId &&
-                         r.Status == "Pending")))
+                         r.Status == "Pending"))
                 .CountAsync(cancellationToken);
         }
 
@@ -443,6 +449,11 @@ public class DashboardService : IDashboardService
             return true;
 
         if (userRoles.Contains("RM") &&
+            (status == "V2_PENDING_RM_ACTIVATION_REVIEW" || status == "V2_PENDING_TL_ACTIVATION_REVIEW") &&
+            evaluation.ReportingManagerId == userId)
+            return true;
+
+        if (userRoles.Contains("RM") &&
             status == "V2_PENDING_PARALLEL_REVIEWS" &&
             evaluation.Reviews.Any(r => r.ReviewerRole == ReviewerRole.RM && r.ReviewerUserId == userId && r.Status == "Pending"))
             return true;
@@ -451,9 +462,8 @@ public class DashboardService : IDashboardService
             return true;
 
         if (userRoles.Contains("TL") &&
-            (status == "V2_PENDING_TL_ACTIVATION_REVIEW" ||
-             (status == "V2_PENDING_PARALLEL_REVIEWS" &&
-              evaluation.Reviews.Any(r => r.ReviewerRole == ReviewerRole.TL && r.ReviewerUserId == userId && r.Status == "Pending"))) &&
+            status == "V2_PENDING_PARALLEL_REVIEWS" &&
+            evaluation.Reviews.Any(r => r.ReviewerRole == ReviewerRole.TL && r.ReviewerUserId == userId && r.Status == "Pending") &&
             evaluation.TeamLeadId == userId)
             return true;
 
@@ -496,15 +506,18 @@ public class DashboardService : IDashboardService
                 stats.GoalSetsAwaitingReview = await _context.Set<Evaluation>()
                     .Include(e => e.Reviews)
                     .Where(e =>
-                        (e.ReportingManagerId == userId || rmEmployeeIds.Contains(e.EmployeeId)) &&
                         (
-                            e.Status == "Pending_RM_Review" ||
-                            e.Status == "Pending_RM_Review_PostCompletion" ||
+                            ((e.ReportingManagerId == userId || rmEmployeeIds.Contains(e.EmployeeId)) &&
+                             (e.Status == "Pending_RM_Review" ||
+                              e.Status == "Pending_RM_Review_PostCompletion")) ||
                             (e.Status == "V2_PENDING_PARALLEL_REVIEWS" &&
                              e.Reviews.Any(r =>
                                  r.ReviewerRole == ReviewerRole.RM &&
                                  r.ReviewerUserId == userId &&
-                                 r.Status == "Pending"))
+                                 r.Status == "Pending")) ||
+                            (e.ReportingManagerId == userId &&
+                             (e.Status == "V2_PENDING_RM_ACTIVATION_REVIEW" ||
+                              e.Status == "V2_PENDING_TL_ACTIVATION_REVIEW"))
                         ))
                     .CountAsync(cancellationToken);
                 

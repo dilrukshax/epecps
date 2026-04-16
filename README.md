@@ -651,6 +651,8 @@ SuperAdmin,superadmin@company.com,CHANGE_THIS_SUPERADMIN_PASSWORD
 "Admin, Employee",admin.ops@empovate.test,AdminOps#2026
 Employee,employee.one@empovate.test,EmpOne#2026
 Employee,employee.two@empovate.test,EmpTwo#2026
+Employee,employee.three@empovate.test,EmpThree#2026
+Employee,employee.four@empovate.test,EmpFour#2026
 "Accountant, Employee",accountant.test@empovate.test,Account#2026
 Employee,employee.multi@empovate.test,EmpMulti#2026
 ```
@@ -763,6 +765,26 @@ employee.two@empovate.test
 Password
 ```txt
 EmpTwo#2026
+```
+
+#### Employee (employee.three)
+Username / Email
+```txt
+employee.three@empovate.test
+```
+Password
+```txt
+EmpThree#2026
+```
+
+#### Employee (employee.four)
+Username / Email
+```txt
+employee.four@empovate.test
+```
+Password
+```txt
+EmpFour#2026
 ```
 
 #### Accountant, Employee

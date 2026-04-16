@@ -4,7 +4,7 @@
 This document describes the workflow-v2 process aligned to EmpoVate360:
 
 1. Admin setup and configuration
-2. RM goal assignment + employee activation + TL activation approval
+2. RM goal assignment + employee activation + RM activation approval
 3. Employee evidence submission and self-evaluation
 4. Parallel TL/RM/Peer reviews
 5. HOD threshold routing (>= 80 to GM, < 80 to HR/PIP)
@@ -14,7 +14,8 @@ This document describes the workflow-v2 process aligned to EmpoVate360:
 - Admin: departments, users, roles, RM mappings, goal pool/templates, evaluation periods, projects.
 - RM: assigns at least 5 goals to each employee.
 - Employee: submits activation methods, works on goals, submits per-goal evidence + self-ratings.
-- TL: approves activation plans and assigns exactly 2 peers.
+- RM: approves activation plans.
+- TL: assigns exactly 2 peers.
 - Peers (2): submit parallel peer review scores.
 - HOD: finalizes department decision based on computed threshold.
 - GM: promotion decision based on vacancy availability.
@@ -37,12 +38,13 @@ This document describes the workflow-v2 process aligned to EmpoVate360:
 ### Step 2: Employee Submits Activation Plan
 - Employee provides activation method for each assigned goal.
 - System validates all assigned goals are covered.
-- Status moves to `V2_PENDING_TL_ACTIVATION_REVIEW`.
+- Status moves to `V2_PENDING_RM_ACTIVATION_REVIEW`.
 
-### Step 3: TL Activation Decision
-- TL reviews activation methods.
+### Step 3: RM Activation Decision
+- RM reviews activation methods.
 - Approve: status -> `V2_ACTIVE_GOALS`.
 - Return: status -> `V2_RETURNED_FOR_ACTIVATION`.
+- Compatibility: in-flight records with `V2_PENDING_TL_ACTIVATION_REVIEW` are still accepted and routed through RM decision logic.
 
 ### Step 4: TL Assigns Peers (2)
 - While status is `V2_ACTIVE_GOALS`, TL assigns exactly two peers.
@@ -105,7 +107,7 @@ For `V2_PENDING_GM_DECISION`:
 
 ## Status Lifecycle (Workflow v2)
 1. `V2_PENDING_EMPLOYEE_ACTIVATION`
-2. `V2_PENDING_TL_ACTIVATION_REVIEW`
+2. `V2_PENDING_RM_ACTIVATION_REVIEW`
 3. `V2_ACTIVE_GOALS`
 4. `V2_PENDING_PARALLEL_REVIEWS`
 5. `V2_PENDING_HOD_REVIEW`

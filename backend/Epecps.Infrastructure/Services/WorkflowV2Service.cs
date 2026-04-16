@@ -10,6 +10,9 @@ namespace Epecps.Infrastructure.Services;
 
 public class WorkflowV2Service : IWorkflowV2Service
 {
+    private const string STATUS_V2_PENDING_RM_ACTIVATION_REVIEW = "V2_PENDING_RM_ACTIVATION_REVIEW";
+    private const string STATUS_V2_PENDING_TL_ACTIVATION_REVIEW = "V2_PENDING_TL_ACTIVATION_REVIEW";
+
     private readonly EpecpsDbContext _context;
 
     public WorkflowV2Service(EpecpsDbContext context)
@@ -65,7 +68,7 @@ public class WorkflowV2Service : IWorkflowV2Service
 
             assignment.ActivationMethod = item.Method.Trim();
             assignment.ActivationSubmittedAt = DateTime.UtcNow;
-            assignment.ActivationStatus = "PendingTL";
+            assignment.ActivationStatus = "PendingRM";
             assignment.ActivationTlComment = null;
             assignment.ActivationReviewedByUserId = null;
             assignment.ActivationReviewedAt = null;
@@ -73,7 +76,7 @@ public class WorkflowV2Service : IWorkflowV2Service
         }
 
         var fromStatus = evaluation.Status;
-        evaluation.Status = "V2_PENDING_TL_ACTIVATION_REVIEW";
+        evaluation.Status = STATUS_V2_PENDING_RM_ACTIVATION_REVIEW;
 
         _context.ApprovalHistories.Add(new ApprovalHistory
         {
@@ -89,8 +92,8 @@ public class WorkflowV2Service : IWorkflowV2Service
 
         _context.Notifications.Add(new Notification
         {
-            UserId = evaluation.TeamLeadId,
-            Subject = "Activation plan pending TL review",
+            UserId = evaluation.ReportingManagerId,
+            Subject = "Activation plan pending RM review",
             Channel = "Email",
             SentAt = DateTime.UtcNow
         });
@@ -100,7 +103,7 @@ public class WorkflowV2Service : IWorkflowV2Service
 
     public async Task ProcessActivationDecisionAsync(
         int evaluationId,
-        int tlUserId,
+        int rmUserId,
         ActivationPlanDecisionDto request,
         CancellationToken cancellationToken = default)
     {
@@ -117,12 +120,19 @@ public class WorkflowV2Service : IWorkflowV2Service
             throw new BusinessRuleException("Activation decision is only available for workflow v2.");
         }
 
-        if (evaluation.TeamLeadId != tlUserId)
+        var isSuperAdmin = await _context.UserRoles
+            .Include(ur => ur.Role)
+            .AnyAsync(
+                ur => ur.UserId == rmUserId && ur.Role.Name == "SuperAdmin",
+                cancellationToken);
+
+        if (evaluation.ReportingManagerId != rmUserId && !isSuperAdmin)
         {
-            throw new BusinessRuleException("Only assigned Team Lead can review activation plans.");
+            throw new BusinessRuleException("Only assigned Reporting Manager can review activation plans.");
         }
 
-        if (evaluation.Status != "V2_PENDING_TL_ACTIVATION_REVIEW")
+        if (evaluation.Status != STATUS_V2_PENDING_RM_ACTIVATION_REVIEW &&
+            evaluation.Status != STATUS_V2_PENDING_TL_ACTIVATION_REVIEW)
         {
             throw new BusinessRuleException($"Activation decision cannot be processed in status: {evaluation.Status}");
         }
@@ -140,7 +150,7 @@ public class WorkflowV2Service : IWorkflowV2Service
             {
                 assignment.ActivationStatus = "Approved";
                 assignment.ActivationTlComment = request.Comment;
-                assignment.ActivationReviewedByUserId = tlUserId;
+                assignment.ActivationReviewedByUserId = rmUserId;
                 assignment.ActivationReviewedAt = now;
                 assignment.UpdatedAt = now;
             }
@@ -161,7 +171,7 @@ public class WorkflowV2Service : IWorkflowV2Service
                 {
                     assignment.ActivationStatus = "Rejected";
                     assignment.ActivationTlComment = request.Comment ?? "Please update activation plan.";
-                    assignment.ActivationReviewedByUserId = tlUserId;
+                    assignment.ActivationReviewedByUserId = rmUserId;
                     assignment.ActivationReviewedAt = now;
                     assignment.UpdatedAt = now;
                 }
@@ -173,9 +183,9 @@ public class WorkflowV2Service : IWorkflowV2Service
         _context.ApprovalHistories.Add(new ApprovalHistory
         {
             EvaluationId = evaluation.EvaluationId,
-            ActorUserId = tlUserId,
-            ActorRole = "TL",
-            Action = request.Approved ? "ActivationApprovedByTL" : "ActivationRejectedByTL",
+            ActorUserId = rmUserId,
+            ActorRole = "RM",
+            Action = request.Approved ? "ActivationApprovedByRM" : "ActivationRejectedByRM",
             Comment = request.Comment,
             FromStatus = fromStatus,
             ToStatus = evaluation.Status,
@@ -185,7 +195,7 @@ public class WorkflowV2Service : IWorkflowV2Service
         _context.Notifications.Add(new Notification
         {
             UserId = evaluation.EmployeeId,
-            Subject = request.Approved ? "Activation plan approved by TL" : "Activation plan returned by TL",
+            Subject = request.Approved ? "Activation plan approved by RM" : "Activation plan returned by RM",
             Channel = "Email",
             SentAt = now
         });

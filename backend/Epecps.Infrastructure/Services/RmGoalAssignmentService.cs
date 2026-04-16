@@ -11,7 +11,7 @@ namespace Epecps.Infrastructure.Services;
 /// <summary>
 /// Service for RM to assign goals to employees from the system goal library.
 /// Workflow v2:
-/// RM assigns >= 5 goals -> employee submits activation plan -> TL reviews activation.
+/// RM assigns >= 5 goals -> employee submits activation plan -> RM reviews activation.
 /// </summary>
 public class RmGoalAssignmentService : IRmGoalAssignmentService
 {

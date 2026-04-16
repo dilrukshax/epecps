@@ -30,4 +30,10 @@ public class PersonalGoalListDto
     public string? CompletionCertificationUrl { get; set; }
     public string? CompletionSummary { get; set; }
     public string? CompletionComment { get; set; }
+    public Guid? GoalAssignmentId { get; set; }
+    public string? ActivationMethod { get; set; }
+    public string? ActivationStatus { get; set; }
+    public DateTime? ActivationSubmittedAt { get; set; }
+    public string? ActivationComment { get; set; }
+    public DateTime? ActivationReviewedAt { get; set; }
 }

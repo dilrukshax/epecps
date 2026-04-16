@@ -396,7 +396,7 @@ export class EvaluationService {
     );
   }
 
-  tlActivationDecision(evaluationId: number, payload: ActivationPlanDecisionDto): Observable<any> {
+  rmActivationDecision(evaluationId: number, payload: ActivationPlanDecisionDto): Observable<any> {
     return this.http.post(
       `${this.workflowV2BaseUrl}/evaluations/${evaluationId}/activation/decision`,
       payload

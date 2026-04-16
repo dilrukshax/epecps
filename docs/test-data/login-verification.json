@@ -86,6 +86,20 @@
     ]
   },
   {
+    "email": "employee.three@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee"
+    ]
+  },
+  {
+    "email": "employee.four@empovate.test",
+    "status": 200,
+    "roles": [
+      "Employee"
+    ]
+  },
+  {
     "email": "accountant.test@empovate.test",
     "status": 200,
     "roles": [
