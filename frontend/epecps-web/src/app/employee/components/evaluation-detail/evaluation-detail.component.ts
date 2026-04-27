@@ -609,13 +609,21 @@ export class EvaluationDetailComponent implements OnInit {
         console.log('User role: RM (first approval - no scoring)');
       }
     } else if (status.includes('pending_tl')) {
-      // TL Review stage - enable combined mode (score + peer assignment)
+      // TL Review stage - enable combined mode (goal scoring + peer assignment)
       if (this.currentUserHasRole('TL')) {
         this.isActiveApprover = true;
         this.currentUserRole = 'TL';
-        this.useGoalLevelScoring = false;
+        this.useGoalLevelScoring = true;
         this.tlCombinedReviewMode = true;
-        console.log('User role: TL (combined review mode - score + peer assignment)');
+        this.initializeGoalLevelScoring({
+          reviewId: 0,
+          reviewerUserId: this.currentUserId || 0,
+          reviewerName: '',
+          reviewerRole: ReviewerRole.TL,
+          status: 'Pending',
+          items: []
+        });
+        console.log('User role: TL (combined review mode - goal scoring + peer assignment)');
         // Load available peers for the combined form
         this.loadAvailablePeers();
       }
@@ -1371,6 +1379,10 @@ export class EvaluationDetailComponent implements OnInit {
 
   confirmCompleteGoal(): void {
     if (!this.completeModalGoal) return;
+    if (!this.completeFormComment.trim()) {
+      this.showToast('error', 'Please describe how you achieved this goal before completing it.');
+      return;
+    }
 
     const payload: CompleteGoalRequestDto = {};
     if (this.completeFormEvidenceUrl.trim()) {
@@ -1840,7 +1852,7 @@ export class EvaluationDetailComponent implements OnInit {
       },
       error: (err) => {
         this.processingGmDecision = false;
-        const errorMessage = err.error?.message || 'Failed to process GM decision. Please try again.';
+        const errorMessage = err.error?.error || err.error?.message || 'Failed to process GM decision. Please try again.';
         this.showToast('error', errorMessage);
         console.error('Error processing GM decision:', err);
       }
@@ -1929,7 +1941,7 @@ export class EvaluationDetailComponent implements OnInit {
     
     // For other roles (TL, Peer, HOD, GM)
     if (pendingReview.reviewerRole === ReviewerRole.TL) {
-      return 'Please submit your TL overall score (1-10) and assign two peer reviewers.';
+      return 'Please score each goal individually and assign two peer reviewers.';
     }
     
     if (pendingReview.reviewerRole === ReviewerRole.Peer) {
@@ -1982,14 +1994,28 @@ export class EvaluationDetailComponent implements OnInit {
       return;
     }
 
-    if (this.overallScore < 1 || this.overallScore > 10) {
-      this.showToast('error', 'Please provide a valid TL overall score (1-10).');
+    if (!this.hasAllScoresSelected()) {
+      this.showToast('error', 'Please score all goals before submitting the TL review.');
       return;
     }
 
+    const goalScores: RmItemScoreDto[] = [];
+    for (const goal of this.evaluation.goals) {
+      const goalKey = goal.personalGoalId ? goal.personalGoalId.toString() : goal.goalId.toString();
+      const scoreData = this.rmGoalScores[goalKey];
+
+      if (scoreData && scoreData.score > 0 && goal.personalGoalId) {
+        goalScores.push({
+          personalGoalId: goal.personalGoalId.toString(),
+          scoreValue: scoreData.score,
+          comment: scoreData.comment || undefined
+        });
+      }
+    }
+
     const payload: SubmitTlCombinedReviewDto = {
-      overallScore: this.overallScore,
-      comment: this.overallComment || this.comment || undefined,
+      goalScores,
+      overallComment: this.rmOverallComment || this.overallComment || this.comment || undefined,
       peerUserId1: this.peerUserId1,
       peerUserId2: this.peerUserId2
     };
@@ -1999,7 +2025,7 @@ export class EvaluationDetailComponent implements OnInit {
     this.evaluationService.submitTlCombinedReview(this.evaluationId, payload).subscribe({
       next: () => {
         this.submittingTlCombinedReview = false;
-        this.showToast('success', 'TL overall score submitted and peer reviewers assigned successfully!');
+        this.showToast('success', 'TL goal scores submitted and peer reviewers assigned successfully!');
         this.loadEvaluation();
       },
       error: (err) => {
@@ -2014,8 +2040,7 @@ export class EvaluationDetailComponent implements OnInit {
    * Check if TL can submit the combined review
    */
   canSubmitTlCombinedReview(): boolean {
-    return this.overallScore >= 1 &&
-           this.overallScore <= 10 &&
+    return this.hasAllScoresSelected() &&
            this.peerUserId1 !== null &&
            this.peerUserId2 !== null &&
            this.peerUserId1 !== this.peerUserId2;

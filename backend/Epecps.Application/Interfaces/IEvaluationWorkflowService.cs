@@ -60,13 +60,12 @@ public interface IEvaluationWorkflowService
     Task AssignPeerReviewersAsync(int evaluationId, int teamLeadUserId, int peerUserId1, int peerUserId2, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Team Lead submits overall score and assigns both peers in one atomic action.
+    /// Team Lead submits per-goal scores and assigns both peers in one atomic action.
     /// </summary>
     Task SubmitTlOverallAndAssignPeersAsync(
         int evaluationId,
         int teamLeadUserId,
-        decimal overallScore,
-        string? comment,
+        SubmitTlCombinedReviewDto dto,
         int peerUserId1,
         int peerUserId2,
         CancellationToken cancellationToken = default);

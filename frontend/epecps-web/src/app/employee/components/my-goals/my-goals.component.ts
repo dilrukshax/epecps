@@ -25,6 +25,7 @@ import { CompleteGoalRequestDto } from '../../../models/evaluation.models';
 export class MyGoalsComponent implements OnInit {
   goalSets: PersonalGoalSetDto[] = [];
   filteredGoalSets: PersonalGoalSetDto[] = [];
+  private goalSetDisplayNames: Record<string, string> = {};
   loading = false;
   error: string | null = null;
   submittingGoalSetId: string | null = null;
@@ -91,6 +92,7 @@ export class MyGoalsComponent implements OnInit {
     this.goalsService.getMyGoalSets().subscribe({
       next: (goalSets) => {
         this.goalSets = goalSets;
+        this.goalSetDisplayNames = this.buildGoalSetDisplayNames(goalSets);
         this.initializeActivationMethods(goalSets);
         this.applyFilters();
         this.loading = false;
@@ -110,7 +112,7 @@ export class MyGoalsComponent implements OnInit {
 
       // Search filter
       const searchMatch = !this.searchQuery || 
-        goalSet.templateName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+        this.getGoalSetDisplayName(goalSet).toLowerCase().includes(this.searchQuery.toLowerCase()) ||
         goalSet.categories.some(cat => cat.toLowerCase().includes(this.searchQuery.toLowerCase())) ||
         goalSet.goals.some(g => g.title.toLowerCase().includes(this.searchQuery.toLowerCase()));
 
@@ -297,6 +299,10 @@ export class MyGoalsComponent implements OnInit {
     return `${monthsDiff}-month goal period`;
   }
 
+  getGoalSetDisplayName(goalSet: PersonalGoalSetDto): string {
+    return this.goalSetDisplayNames[goalSet.goalSetId] || `${new Date(goalSet.startDate).getFullYear()} - Evaluation Cycle 01`;
+  }
+
   submitGoalSetForEvaluation(goalSet: PersonalGoalSetDto, event: Event): void {
     event.stopPropagation();
     
@@ -305,7 +311,7 @@ export class MyGoalsComponent implements OnInit {
       return;
     }
 
-    if (!confirm(`Are you sure you want to submit this goal set for evaluation?\n\nTemplate: ${goalSet.templateName}\nProgress: ${goalSet.progressPercent.toFixed(0)}%\n\nOnce submitted, your supervisor will be notified and you won't be able to edit these goals.`)) {
+    if (!confirm(`Are you sure you want to submit this goal set for evaluation?\n\nCycle: ${this.getGoalSetDisplayName(goalSet)}\nProgress: ${goalSet.progressPercent.toFixed(0)}%\n\nOnce submitted, your supervisor will be notified and you won't be able to edit these goals.`)) {
       return;
     }
 
@@ -412,7 +418,7 @@ export class MyGoalsComponent implements OnInit {
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete this entire goal set?\n\nTemplate: ${goalSet.templateName}\nGoals: ${goalSet.goalCount}\n\nThis action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to delete this entire goal set?\n\nCycle: ${this.getGoalSetDisplayName(goalSet)}\nGoals: ${goalSet.goalCount}\n\nThis action cannot be undone.`)) {
       return;
     }
 
@@ -602,6 +608,10 @@ export class MyGoalsComponent implements OnInit {
    */
   confirmCompleteGoal(): void {
     if (!this.completeModalGoal) return;
+    if (!this.completeFormComment.trim()) {
+      this.showToast('error', 'Please describe how you achieved this goal before completing it.');
+      return;
+    }
 
     const payload: CompleteGoalRequestDto = {};
     
@@ -673,6 +683,36 @@ export class MyGoalsComponent implements OnInit {
 
   private normalizeEvaluationStatus(goalSet: PersonalGoalSetDto): string {
     return (goalSet.evaluationInfo?.status || '').toLowerCase();
+  }
+
+  private buildGoalSetDisplayNames(goalSets: PersonalGoalSetDto[]): Record<string, string> {
+    const goalSetsByYear = new Map<number, PersonalGoalSetDto[]>();
+
+    for (const goalSet of goalSets) {
+      const year = new Date(goalSet.startDate).getFullYear();
+      const setsForYear = goalSetsByYear.get(year) || [];
+      setsForYear.push(goalSet);
+      goalSetsByYear.set(year, setsForYear);
+    }
+
+    const displayNames: Record<string, string> = {};
+
+    for (const [year, setsForYear] of goalSetsByYear.entries()) {
+      const orderedSets = [...setsForYear].sort((a, b) => {
+        const startDateDiff = new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+        if (startDateDiff !== 0) {
+          return startDateDiff;
+        }
+
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+
+      orderedSets.forEach((goalSet, index) => {
+        displayNames[goalSet.goalSetId] = `${year} - Evaluation Cycle ${String(index + 1).padStart(2, '0')}`;
+      });
+    }
+
+    return displayNames;
   }
 
   isEmployeeActivationStage(goalSet: PersonalGoalSetDto): boolean {

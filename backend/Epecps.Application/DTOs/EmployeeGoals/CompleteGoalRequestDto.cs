@@ -2,7 +2,7 @@ namespace Epecps.Application.DTOs.EmployeeGoals;
 
 /// <summary>
 /// Request DTO for completing a goal
-/// Optionally allows the employee to provide evidence or a comment
+/// Requires the employee to provide a completion comment and optionally provide supporting details
 /// </summary>
 public class CompleteGoalRequestDto
 {
@@ -22,7 +22,7 @@ public class CompleteGoalRequestDto
     public string? Summary { get; set; }
     
     /// <summary>
-    /// Optional comment explaining the completion
+    /// Required comment explaining how the goal was completed
     /// </summary>
     public string? Comment { get; set; }
     

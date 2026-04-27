@@ -189,7 +189,7 @@
           </div>
 
           <!-- Title and Info -->
-          <h3 class="text-xl font-semibold text-gray-900 mb-2">{{ goalSet.templateName }}</h3>
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">{{ getGoalSetDisplayName(goalSet) }}</h3>
           <p class="text-sm text-gray-600 mb-4">
             {{ goalSet.goalCount }} goal{{ goalSet.goalCount !== 1 ? 's' : '' }} • 
             {{ goalSet.categories.join(', ') }}
@@ -279,63 +279,6 @@
           *ngIf="isGoalSetExpanded(goalSet.goalSetId)"
           class="border-t border-gray-200 bg-gray-50 p-6">
           
-          <!-- Evaluation Status + Full History -->
-          <div *ngIf="goalSet.evaluationInfo" class="mb-6">
-            <div class="bg-white rounded-lg border border-gray-200 p-6">
-              <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <p class="text-sm font-medium text-gray-700">Evaluation Status</p>
-                  <p class="text-lg font-semibold" [ngClass]="getEvaluationStatusClass(goalSet.evaluationInfo.status)">
-                    {{ formatEvaluationStatus(goalSet.evaluationInfo.status) }}
-                  </p>
-                </div>
-                <div *ngIf="goalSet.evaluationInfo.overallScore !== undefined && goalSet.evaluationInfo.overallScore !== null" class="md:text-right">
-                  <p class="text-sm font-medium text-gray-700">Overall Score</p>
-                  <p class="text-2xl font-bold text-primary-600">{{ goalSet.evaluationInfo.overallScore | number:'1.0-0' }}%</p>
-                </div>
-                <div class="md:text-right">
-                  <p class="text-sm font-medium text-gray-700">Submitted</p>
-                  <p class="text-sm text-gray-900">{{ goalSet.evaluationInfo.submittedDate | date:'MMM d, yyyy' }}</p>
-                </div>
-                <div *ngIf="goalSet.evaluationInfo.completedDate" class="md:text-right">
-                  <p class="text-sm font-medium text-gray-700">Completed</p>
-                  <p class="text-sm text-gray-900">{{ goalSet.evaluationInfo.completedDate | date:'MMM d, yyyy' }}</p>
-                </div>
-              </div>
-
-              <div class="mt-6 border-t border-gray-200 pt-4">
-                <h5 class="text-sm font-semibold text-gray-800">Full Approval History</h5>
-                <p class="text-xs text-gray-500 mt-1">Chronological events including automatic RM post-completion submission.</p>
-
-                <div *ngIf="getEvaluationHistory(goalSet).length === 0" class="mt-3 rounded border border-dashed border-gray-300 p-3 text-sm text-gray-500">
-                  No approval history available yet.
-                </div>
-
-                <ol *ngIf="getEvaluationHistory(goalSet).length > 0" class="mt-3 space-y-3">
-                  <li *ngFor="let item of getEvaluationHistory(goalSet)" class="rounded border border-gray-200 bg-gray-50 p-3">
-                    <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p class="text-sm text-gray-700">
-                          <span class="font-semibold text-gray-900">{{ item.actorName || item.actorRole || 'System' }}</span>
-                          <span class="text-gray-500">({{ item.actorRole || 'System' }})</span>
-                        </p>
-                        <p class="text-sm font-medium" [ngClass]="getHistoryActionClass(item.action)">
-                          {{ formatHistoryAction(item.action) }}
-                        </p>
-                      </div>
-                      <span class="text-xs text-gray-500">{{ item.createdAt | date:'medium' }}</span>
-                    </div>
-
-                    <p *ngIf="item.comment" class="mt-2 text-sm text-gray-700 italic">"{{ item.comment }}"</p>
-                    <p *ngIf="item.fromStatus || item.toStatus" class="mt-2 text-xs text-gray-600">
-                      {{ item.fromStatus ? formatEvaluationStatus(item.fromStatus) : 'N/A' }} -> {{ item.toStatus ? formatEvaluationStatus(item.toStatus) : 'N/A' }}
-                    </p>
-                  </li>
-                </ol>
-              </div>
-            </div>
-          </div>
-
           <!-- Workflow v2: Employee activation plan -->
           <div *ngIf="goalSet.evaluationInfo && isEmployeeActivationStage(goalSet)" class="mb-6 bg-indigo-50 border border-indigo-200 rounded-lg p-5">
             <div class="flex items-start justify-between gap-3">
@@ -712,6 +655,63 @@
               </div>
             </div>
           </div>
+
+          <!-- Evaluation Status + Full History -->
+          <div *ngIf="goalSet.evaluationInfo" class="mt-6">
+            <div class="bg-white rounded-lg border border-gray-200 p-6">
+              <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p class="text-sm font-medium text-gray-700">Evaluation Status</p>
+                  <p class="text-lg font-semibold" [ngClass]="getEvaluationStatusClass(goalSet.evaluationInfo.status)">
+                    {{ formatEvaluationStatus(goalSet.evaluationInfo.status) }}
+                  </p>
+                </div>
+                <div *ngIf="goalSet.evaluationInfo.overallScore !== undefined && goalSet.evaluationInfo.overallScore !== null" class="md:text-right">
+                  <p class="text-sm font-medium text-gray-700">Overall Score</p>
+                  <p class="text-2xl font-bold text-primary-600">{{ goalSet.evaluationInfo.overallScore | number:'1.0-0' }}%</p>
+                </div>
+                <div class="md:text-right">
+                  <p class="text-sm font-medium text-gray-700">Submitted</p>
+                  <p class="text-sm text-gray-900">{{ goalSet.evaluationInfo.submittedDate | date:'MMM d, yyyy' }}</p>
+                </div>
+                <div *ngIf="goalSet.evaluationInfo.completedDate" class="md:text-right">
+                  <p class="text-sm font-medium text-gray-700">Completed</p>
+                  <p class="text-sm text-gray-900">{{ goalSet.evaluationInfo.completedDate | date:'MMM d, yyyy' }}</p>
+                </div>
+              </div>
+
+              <div class="mt-6 border-t border-gray-200 pt-4">
+                <h5 class="text-sm font-semibold text-gray-800">Full Approval History</h5>
+                <p class="text-xs text-gray-500 mt-1">Chronological events including automatic RM post-completion submission.</p>
+
+                <div *ngIf="getEvaluationHistory(goalSet).length === 0" class="mt-3 rounded border border-dashed border-gray-300 p-3 text-sm text-gray-500">
+                  No approval history available yet.
+                </div>
+
+                <ol *ngIf="getEvaluationHistory(goalSet).length > 0" class="mt-3 space-y-3">
+                  <li *ngFor="let item of getEvaluationHistory(goalSet)" class="rounded border border-gray-200 bg-gray-50 p-3">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p class="text-sm text-gray-700">
+                          <span class="font-semibold text-gray-900">{{ item.actorName || item.actorRole || 'System' }}</span>
+                          <span class="text-gray-500">({{ item.actorRole || 'System' }})</span>
+                        </p>
+                        <p class="text-sm font-medium" [ngClass]="getHistoryActionClass(item.action)">
+                          {{ formatHistoryAction(item.action) }}
+                        </p>
+                      </div>
+                      <span class="text-xs text-gray-500">{{ item.createdAt | date:'medium' }}</span>
+                    </div>
+
+                    <p *ngIf="item.comment" class="mt-2 text-sm text-gray-700 italic">"{{ item.comment }}"</p>
+                    <p *ngIf="item.fromStatus || item.toStatus" class="mt-2 text-xs text-gray-600">
+                      {{ item.fromStatus ? formatEvaluationStatus(item.fromStatus) : 'N/A' }} -> {{ item.toStatus ? formatEvaluationStatus(item.toStatus) : 'N/A' }}
+                    </p>
+                  </li>
+                </ol>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -814,13 +814,16 @@
               <!-- Comment Input -->
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Completion Comment <span class="text-gray-500">(optional)</span>
+                  Completion Comment <span class="text-red-500">*</span>
                 </label>
                 <textarea 
                   [(ngModel)]="completeFormComment"
                   rows="3"
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="Describe how you achieved this goal..."></textarea>
+                <p class="mt-1 text-xs text-gray-500">
+                  Required. Explain how you achieved this goal before marking it complete.
+                </p>
               </div>
 
               <!-- Info Box -->
@@ -841,7 +844,7 @@
           <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 border-t">
             <button 
               (click)="confirmCompleteGoal()"
-              [disabled]="completingGoalId !== null"
+              [disabled]="completingGoalId !== null || !completeFormComment.trim()"
               class="inline-flex w-full justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 sm:ml-3 sm:w-auto disabled:bg-gray-400 disabled:cursor-not-allowed">
               <svg 
                 *ngIf="completingGoalId"

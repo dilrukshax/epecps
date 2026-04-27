@@ -180,7 +180,7 @@ public class WorkflowV2Controller : ControllerBase
     }
 
     [HttpPost("evaluations/{evaluationId:int}/gm/decision")]
-    [Authorize(Roles = "GM,SuperAdmin")]
+    [Authorize]
     public async Task<IActionResult> GmDecision(
         int evaluationId,
         [FromBody] GmV2DecisionDto request,

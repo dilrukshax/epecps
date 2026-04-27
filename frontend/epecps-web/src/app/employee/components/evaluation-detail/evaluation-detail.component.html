@@ -321,7 +321,42 @@
                 </div>
                 <div class="flex-1">
                   <h4 class="text-base font-semibold text-gray-900">{{ goal.title }}</h4>
-                  <p class="text-xs text-gray-600 mt-1">{{ goal.description }}</p>
+                  <p *ngIf="goal.description" class="text-xs text-gray-600 mt-1">{{ goal.description }}</p>
+
+                  <div *ngIf="goal.completionSummary || goal.completionComment || (goal.activities && goal.activities.length > 0)" class="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 space-y-3">
+                    <div *ngIf="goal.completionSummary">
+                      <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Completion Summary</p>
+                      <p class="mt-1 text-sm text-gray-700">{{ goal.completionSummary }}</p>
+                    </div>
+
+                    <div *ngIf="goal.completionComment">
+                      <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">How This Goal Was Achieved</p>
+                      <p class="mt-1 text-sm text-gray-700">{{ goal.completionComment }}</p>
+                    </div>
+
+                    <div *ngIf="goal.activities && goal.activities.length > 0">
+                      <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Activities</p>
+                      <div class="mt-2 space-y-2">
+                        <div *ngFor="let activity of goal.activities" class="rounded border border-gray-200 bg-white p-2">
+                          <div class="flex items-start justify-between gap-3">
+                            <p class="text-sm text-gray-700">{{ activity.description }}</p>
+                            <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                              {{ getStatusLabel(activity.status) }}
+                            </span>
+                          </div>
+                          <p *ngIf="activity.evidenceNotes" class="mt-2 text-xs text-gray-500">{{ activity.evidenceNotes }}</p>
+                          <a
+                            *ngIf="activity.evidenceUrl"
+                            [href]="activity.evidenceUrl"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="mt-2 inline-flex text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">
+                            View activity evidence
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -426,37 +461,95 @@
 
           <!-- TL COMBINED REVIEW SECTION (Per-Goal Scoring + Peer Assignment) -->
           <div *ngIf="tlCombinedReviewMode" class="space-y-6">
-            <!-- Section 1: TL Overall Scoring -->
+            <!-- Section 1: TL Goal Scoring -->
             <div class="border-2 border-indigo-200 rounded-lg overflow-hidden">
               <div class="px-4 py-3 bg-indigo-50 border-b border-indigo-200">
-                <h3 class="text-lg font-semibold text-indigo-900">Step 1: Submit TL Overall Score</h3>
-                <p class="text-sm text-indigo-700">Give one overall score (1-10) for the employee</p>
+                <h3 class="text-lg font-semibold text-indigo-900">Step 1: Score Each Goal</h3>
+                <p class="text-sm text-indigo-700">Use the same per-goal evaluation form as RM before assigning peer reviewers.</p>
               </div>
               <div class="p-4 space-y-4">
-                <div class="border border-gray-200 rounded-lg p-4">
-                  <label class="block text-sm font-medium text-gray-700 mb-3">Overall TL Score (1-10)</label>
-                  <div class="flex items-center justify-center gap-2 flex-wrap mb-3">
-                    <button
-                      *ngFor="let score of [1,2,3,4,5,6,7,8,9,10]"
-                      type="button"
-                      (click)="overallScore = score"
-                      [class.bg-indigo-600]="overallScore === score"
-                      [class.text-white]="overallScore === score"
-                      [class.bg-gray-100]="overallScore !== score"
-                      [class.text-gray-700]="overallScore !== score"
-                      class="w-11 h-11 rounded-lg font-bold text-base transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 hover:opacity-80">
-                      {{ score }}
-                    </button>
+                <div *ngFor="let goal of evaluation?.goals; let i = index" class="border border-gray-200 rounded-lg p-4">
+                  <div class="flex items-start gap-3 mb-3">
+                    <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                      <span class="text-sm font-bold text-indigo-600">{{ i + 1 }}</span>
+                    </div>
+                    <div class="flex-1">
+                      <h4 class="text-base font-semibold text-gray-900">{{ goal.title }}</h4>
+                      <p *ngIf="goal.description" class="text-xs text-gray-600 mt-1">{{ goal.description }}</p>
+
+                      <div *ngIf="goal.completionSummary || goal.completionComment || (goal.activities && goal.activities.length > 0)" class="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 space-y-3">
+                        <div *ngIf="goal.completionSummary">
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Completion Summary</p>
+                          <p class="mt-1 text-sm text-gray-700">{{ goal.completionSummary }}</p>
+                        </div>
+
+                        <div *ngIf="goal.completionComment">
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">How This Goal Was Achieved</p>
+                          <p class="mt-1 text-sm text-gray-700">{{ goal.completionComment }}</p>
+                        </div>
+
+                        <div *ngIf="goal.activities && goal.activities.length > 0">
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Activities</p>
+                          <div class="mt-2 space-y-2">
+                            <div *ngFor="let activity of goal.activities" class="rounded border border-gray-200 bg-white p-2">
+                              <div class="flex items-start justify-between gap-3">
+                                <p class="text-sm text-gray-700">{{ activity.description }}</p>
+                                <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                  {{ getStatusLabel(activity.status) }}
+                                </span>
+                              </div>
+                              <p *ngIf="activity.evidenceNotes" class="mt-2 text-xs text-gray-500">{{ activity.evidenceNotes }}</p>
+                              <a
+                                *ngIf="activity.evidenceUrl"
+                                [href]="activity.evidenceUrl"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="mt-2 inline-flex text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">
+                                View activity evidence
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="text-center text-sm text-indigo-700">
-                    Selected: <span class="font-bold">{{ overallScore }}/10</span>
+
+                  <div class="mt-3">
+                    <label class="block text-xs font-medium text-gray-700 mb-2">Select Score (1-10):</label>
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <button
+                        *ngFor="let score of [1,2,3,4,5,6,7,8,9,10]"
+                        type="button"
+                        (click)="selectGoalScore(goal, score)"
+                        [class.bg-indigo-600]="getGoalScore(goal) === score"
+                        [class.text-white]="getGoalScore(goal) === score"
+                        [class.bg-gray-100]="getGoalScore(goal) !== score"
+                        [class.text-gray-700]="getGoalScore(goal) !== score"
+                        [class.ring-2]="getGoalScore(goal) === score"
+                        [class.ring-indigo-400]="getGoalScore(goal) === score"
+                        class="w-9 h-9 rounded-lg font-medium text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 hover:opacity-80">
+                        {{ score }}
+                      </button>
+                    </div>
+                    <div *ngIf="getGoalScore(goal) > 0" class="mt-2 text-xs text-indigo-600">
+                      Selected: <span class="font-bold">{{ getGoalScore(goal) }}/10</span>
+                    </div>
+                  </div>
+
+                  <div class="mt-3">
+                    <input
+                      type="text"
+                      [ngModel]="getGoalComment(goal)"
+                      (ngModelChange)="setGoalComment(goal, $event)"
+                      placeholder="Add a comment for this goal (optional)"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
                   </div>
                 </div>
 
                 <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
                   <label class="block text-sm font-medium text-gray-700 mb-2">Overall Comment (Optional)</label>
                   <textarea
-                    [(ngModel)]="overallComment"
+                    [(ngModel)]="rmOverallComment"
                     rows="2"
                     placeholder="Add any overall feedback..."
                     class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
@@ -566,7 +659,7 @@
                   <svg class="-ml-0.5 mr-2 h-5 w-5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                   </svg>
-                  Submit Score & Assign Peers
+                  Submit Goal Scores & Assign Peers
                 </span>
               </button>
               <button 
@@ -581,7 +674,7 @@
           <!-- Comment Section (for non-scoring actions or additional comments) - Hide for TL Combined Mode -->
           <div *ngIf="!needsPeerAssignment && !hasPendingScoringRequirement && !tlCombinedReviewMode && !isEmployeeActivationStage() && !isRmActivationStage() && !isEmployeeSelfEvaluationStage() && !isV2HodFinalizeStage() && !isV2TlPeerAssignmentStage() && !isV2ParallelReviewStage()" class="mb-6">
             <label class="block text-sm font-medium text-gray-700 mb-2">
-              Comment <span class="text-gray-500">(Optional for approval, required for rejection)</span>
+              Comment <span class="text-gray-500">(Optional)</span>
             </label>
             <textarea 
               [(ngModel)]="comment" 
@@ -607,25 +700,7 @@
                 <svg class="-ml-0.5 mr-2 h-5 w-5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                 </svg>
-                Approve
-              </span>
-            </button>
-            <button 
-              (click)="rejectEvaluation()" 
-              [disabled]="approving || rejecting"
-              class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent textBase font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
-              <span *ngIf="rejecting" class="inline-flex items-center">
-                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Rejecting...
-              </span>
-              <span *ngIf="!rejecting">
-                <svg class="-ml-0.5 mr-2 h-5 w-5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                Reject
+                Submit
               </span>
             </button>
             <button 
@@ -802,13 +877,14 @@
                 <textarea [(ngModel)]="completeFormSummary" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Short summary of achievements..."></textarea>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Completion Comment (optional)</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Completion Comment <span class="text-red-500">*</span></label>
                 <textarea [(ngModel)]="completeFormComment" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Describe how you achieved this goal..."></textarea>
+                <p class="mt-1 text-xs text-gray-500">Required. Explain how you achieved this goal before marking it complete.</p>
               </div>
             </div>
           </div>
           <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 border-t">
-            <button (click)="confirmCompleteGoal()" [disabled]="completingGoalId !== null" class="inline-flex w-full justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 sm:ml-3 sm:w-auto disabled:bg-gray-400">
+            <button (click)="confirmCompleteGoal()" [disabled]="completingGoalId !== null || !completeFormComment.trim()" class="inline-flex w-full justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 sm:ml-3 sm:w-auto disabled:bg-gray-400">
               {{ completingGoalId ? 'Completing...' : 'Complete Goal' }}
             </button>
             <button (click)="closeCompleteGoalModal()" [disabled]="completingGoalId !== null" class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto">

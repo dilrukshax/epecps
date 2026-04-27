@@ -466,8 +466,8 @@ export interface SelfEvaluationGoalInputDto {
 }
 
 export interface SubmitTlCombinedReviewDto {
-  overallScore: number;
-  comment?: string;
+  goalScores: RmItemScoreDto[];
+  overallComment?: string;
   peerUserId1: number;
   peerUserId2: number;
 }

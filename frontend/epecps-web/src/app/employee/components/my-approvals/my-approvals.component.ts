@@ -376,4 +376,45 @@ export class MyApprovalsComponent implements OnInit {
   canShowBulkTab(): boolean {
     return this.hasGmRole || this.hasHrRole;
   }
+
+  getPageTitle(): string {
+    if (this.activeTab === 'pending') {
+      const cycleLabel = this.getPrimaryCycleLabel();
+      return cycleLabel ? `Eligible List from ${cycleLabel}` : 'Eligible List';
+    }
+
+    if (this.activeTab === 'all') {
+      return 'Evaluation History';
+    }
+
+    return 'Bulk Approval Queue';
+  }
+
+  getPageSubtitle(): string {
+    if (this.activeTab === 'pending') {
+      return 'Review employees who are ready for your action in the current evaluation cycle.';
+    }
+
+    if (this.activeTab === 'all') {
+      return 'View your completed and in-progress evaluation work across cycles.';
+    }
+
+    return 'Process eligible approvals in bulk for the current cycle.';
+  }
+
+  private getPrimaryCycleLabel(): string | null {
+    const cycleName = this.pendingApprovals[0]?.cycleName || this.allEvaluations[0]?.cycleName;
+    if (!cycleName) return null;
+
+    const yearMatch = cycleName.match(/(20\d{2})/);
+    if (!yearMatch) return cycleName;
+
+    const year = yearMatch[1];
+    const explicitCycleMatch = cycleName.match(/evaluation cycle\s*(\d+)/i);
+    if (explicitCycleMatch) {
+      return `${year} Evaluation Cycle ${explicitCycleMatch[1].padStart(2, '0')}`;
+    }
+
+    return `${year} Evaluation Cycle 01`;
+  }
 }

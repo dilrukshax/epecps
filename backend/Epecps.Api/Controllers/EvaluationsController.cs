@@ -261,7 +261,7 @@ public class EvaluationsController : ControllerBase
     }
 
     /// <summary>
-    /// Team Lead combined submission: overall score + assign peers in one action.
+    /// Team Lead combined submission: per-goal scores + assign peers in one action.
     /// </summary>
     [HttpPost("{evaluationId}/tl/combined-submit")]
     public async Task<IActionResult> SubmitTlCombinedReview(
@@ -276,13 +276,12 @@ public class EvaluationsController : ControllerBase
             await _evaluationWorkflowService.SubmitTlOverallAndAssignPeersAsync(
                 evaluationId,
                 userId,
-                dto.OverallScore,
-                dto.Comment,
+                dto,
                 dto.PeerUserId1,
                 dto.PeerUserId2,
                 cancellationToken);
 
-            return Ok(new { message = "TL review submitted and peer reviewers assigned successfully." });
+            return Ok(new { message = "TL goal scores submitted and peer reviewers assigned successfully." });
         }
         catch (NotFoundException ex)
         {

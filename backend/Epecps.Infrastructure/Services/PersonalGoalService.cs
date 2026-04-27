@@ -780,6 +780,9 @@ public class PersonalGoalService : IPersonalGoalService
         var completionSummary = string.IsNullOrWhiteSpace(dto?.Summary) ? null : dto!.Summary.Trim();
         var completionComment = string.IsNullOrWhiteSpace(dto?.Comment) ? null : dto!.Comment.Trim();
 
+        if (completionComment == null)
+            throw new BusinessRuleException("Please describe how you achieved this goal before completing it.");
+
         var oldStatus = goal.Status;
 
         // Update goal

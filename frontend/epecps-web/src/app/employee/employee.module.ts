@@ -9,6 +9,7 @@ import { GoalDetailsComponent } from './components/goal-details/goal-details.com
 import { HrReportsComponent } from './components/hr-reports/hr-reports.component';
 import { HrPipCasesComponent } from './components/hr-pip-cases/hr-pip-cases.component';
 import { RmAssignGoalsComponent } from './components/rm-assign-goals/rm-assign-goals.component';
+import { RmAssignedGoalSetDetailComponent } from './components/rm-assigned-goal-set-detail/rm-assigned-goal-set-detail.component';
 
 // Shared Module (contains HeaderComponent)
 import { SharedModule } from '../shared/shared.module';
@@ -22,7 +23,8 @@ import { SharedModule } from '../shared/shared.module';
     GoalDetailsComponent,
     HrReportsComponent,
     HrPipCasesComponent,
-    RmAssignGoalsComponent
+    RmAssignGoalsComponent,
+    RmAssignedGoalSetDetailComponent
   ],
   imports: [
     CommonModule,

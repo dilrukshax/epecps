@@ -2011,27 +2011,40 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         {
             if (e.OverallScore.HasValue && e.OverallScore.Value > 0)
                 return e.OverallScore.Value;
-            
-            var allReviewScores = e.Reviews
+
+            var perGoalScores = e.Reviews
                 .Where(r => r.ReviewScores != null)
                 .SelectMany(r => r.ReviewScores)
+                .Where(rs => rs.PersonalGoalId != null)
+                .GroupBy(rs => rs.PersonalGoalId)
+                .Select(g => g.Average(rs => rs.ScoreValue))
                 .ToList();
-            
-            if (allReviewScores.Any())
-                return Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
-            
+
+            if (perGoalScores.Any())
+                return Math.Round(perGoalScores.Average() * 10m, 2);
+
+            var overallScores = e.Reviews
+                .Where(r => r.ReviewScores != null)
+                .SelectMany(r => r.ReviewScores)
+                .Where(rs => rs.PersonalGoalId == null)
+                .Select(rs => rs.ScoreValue)
+                .ToList();
+
+            if (overallScores.Any())
+                return Math.Round(overallScores.Average() * 10m, 2);
+
             var allReviewItems = e.Reviews
                 .Where(r => r.ReviewItems != null)
                 .SelectMany(r => r.ReviewItems)
                 .ToList();
-            
+
             if (allReviewItems.Any())
                 return Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
-            
+
             var hodReview = e.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD && r.OverallScore.HasValue);
             if (hodReview?.OverallScore.HasValue == true)
                 return hodReview.OverallScore.Value * 10m;
-            
+
             return 0m;
         }).ToList();
 
@@ -2082,32 +2095,48 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             }
             else
             {
-                // Try to calculate from ReviewScores
-                var allReviewScores = e.Reviews
+                var perGoalScores = e.Reviews
                     .Where(r => r.ReviewScores != null)
                     .SelectMany(r => r.ReviewScores)
+                    .Where(rs => rs.PersonalGoalId != null)
+                    .GroupBy(rs => rs.PersonalGoalId)
+                    .Select(g => g.Average(rs => rs.ScoreValue))
                     .ToList();
-                
-                if (allReviewScores.Any())
+
+                if (perGoalScores.Any())
                 {
-                    scorePercentage = Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
+                    scorePercentage = Math.Round(perGoalScores.Average() * 10m, 2);
                 }
                 else
                 {
-                    var allReviewItems = e.Reviews
-                        .Where(r => r.ReviewItems != null)
-                        .SelectMany(r => r.ReviewItems)
+                    var overallScores = e.Reviews
+                        .Where(r => r.ReviewScores != null)
+                        .SelectMany(r => r.ReviewScores)
+                        .Where(rs => rs.PersonalGoalId == null)
+                        .Select(rs => rs.ScoreValue)
                         .ToList();
-                    
-                    if (allReviewItems.Any())
+
+                    if (overallScores.Any())
                     {
-                        scorePercentage = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                        scorePercentage = Math.Round(overallScores.Average() * 10m, 2);
                     }
                     else
                     {
-                        var hodReview = e.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD && r.OverallScore.HasValue);
-                        if (hodReview?.OverallScore.HasValue == true)
-                            scorePercentage = hodReview.OverallScore.Value * 10m;
+                        var allReviewItems = e.Reviews
+                            .Where(r => r.ReviewItems != null)
+                            .SelectMany(r => r.ReviewItems)
+                            .ToList();
+
+                        if (allReviewItems.Any())
+                        {
+                            scorePercentage = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                        }
+                        else
+                        {
+                            var hodReview = e.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD && r.OverallScore.HasValue);
+                            if (hodReview?.OverallScore.HasValue == true)
+                                scorePercentage = hodReview.OverallScore.Value * 10m;
+                        }
                     }
                 }
             }
@@ -2169,32 +2198,48 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
             }
             else
             {
-                // Try to calculate from ReviewScores
-                var allReviewScores = e.Reviews
+                var perGoalScores = e.Reviews
                     .Where(r => r.ReviewScores != null)
                     .SelectMany(r => r.ReviewScores)
+                    .Where(rs => rs.PersonalGoalId != null)
+                    .GroupBy(rs => rs.PersonalGoalId)
+                    .Select(g => g.Average(rs => rs.ScoreValue))
                     .ToList();
-                
-                if (allReviewScores.Any())
+
+                if (perGoalScores.Any())
                 {
-                    scorePercentage = Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
+                    scorePercentage = Math.Round(perGoalScores.Average() * 10m, 2);
                 }
                 else
                 {
-                    var allReviewItems = e.Reviews
-                        .Where(r => r.ReviewItems != null)
-                        .SelectMany(r => r.ReviewItems)
+                    var overallScores = e.Reviews
+                        .Where(r => r.ReviewScores != null)
+                        .SelectMany(r => r.ReviewScores)
+                        .Where(rs => rs.PersonalGoalId == null)
+                        .Select(rs => rs.ScoreValue)
                         .ToList();
-                    
-                    if (allReviewItems.Any())
+
+                    if (overallScores.Any())
                     {
-                        scorePercentage = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                        scorePercentage = Math.Round(overallScores.Average() * 10m, 2);
                     }
                     else
                     {
-                        var hodReview = e.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD && r.OverallScore.HasValue);
-                        if (hodReview?.OverallScore.HasValue == true)
-                            scorePercentage = hodReview.OverallScore.Value * 10m;
+                        var allReviewItems = e.Reviews
+                            .Where(r => r.ReviewItems != null)
+                            .SelectMany(r => r.ReviewItems)
+                            .ToList();
+
+                        if (allReviewItems.Any())
+                        {
+                            scorePercentage = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                        }
+                        else
+                        {
+                            var hodReview = e.Reviews.FirstOrDefault(r => r.ReviewerRole == ReviewerRole.HOD && r.OverallScore.HasValue);
+                            if (hodReview?.OverallScore.HasValue == true)
+                                scorePercentage = hodReview.OverallScore.Value * 10m;
+                        }
                     }
                 }
             }
@@ -2477,15 +2522,11 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
     public async Task SubmitTlOverallAndAssignPeersAsync(
         int evaluationId,
         int teamLeadUserId,
-        decimal overallScore,
-        string? comment,
+        SubmitTlCombinedReviewDto dto,
         int peerUserId1,
         int peerUserId2,
         CancellationToken cancellationToken = default)
     {
-        if (overallScore < 1 || overallScore > 10)
-            throw new BusinessRuleException("Overall score must be between 1 and 10.");
-
         if (peerUserId1 == peerUserId2)
             throw new BusinessRuleException("Two different peer reviewers are required.");
 
@@ -2532,7 +2573,31 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         if (tlReview.Status == REVIEW_STATUS_APPROVED)
             throw new BusinessRuleException("TL review has already been approved.");
 
-        var normalizedComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        if (dto.GoalScores == null || dto.GoalScores.Count == 0)
+            throw new BusinessRuleException("Please score all goals before submitting the TL review.");
+
+        var personalGoals = await _context.PersonalGoals
+            .Where(pg => pg.GoalSetId == evaluation.GoalSetId && pg.UserId == evaluation.EmployeeId)
+            .ToListAsync(cancellationToken);
+
+        if (!personalGoals.Any())
+            throw new NotFoundException("No personal goals found for this evaluation.");
+
+        var submittedGoalIds = dto.GoalScores.Select(s => s.PersonalGoalId).ToHashSet();
+        var invalidGoals = submittedGoalIds.Where(id => !personalGoals.Any(pg => pg.Id == id)).ToList();
+        if (invalidGoals.Any())
+            throw new BusinessRuleException("One or more goal IDs are not part of this evaluation's goal set.");
+
+        if (submittedGoalIds.Count != dto.GoalScores.Count)
+            throw new BusinessRuleException("Duplicate goal scores are not allowed.");
+
+        if (submittedGoalIds.Count != personalGoals.Count)
+            throw new BusinessRuleException("Team Lead must submit scores for all assigned goals.");
+
+        if (dto.GoalScores.Any(s => s.ScoreValue < 1 || s.ScoreValue > 10))
+            throw new BusinessRuleException("Each goal score must be between 1 and 10.");
+
+        var normalizedComment = string.IsNullOrWhiteSpace(dto.OverallComment) ? null : dto.OverallComment.Trim();
         var now = DateTime.UtcNow;
         var oldStatus = evaluation.Status;
 
@@ -2547,19 +2612,38 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 _context.Set<ReviewScore>().RemoveRange(existingTlScores);
             }
 
+            decimal totalScore = 0;
+            foreach (var goalScore in dto.GoalScores)
+            {
+                totalScore += goalScore.ScoreValue;
+
+                _context.Set<ReviewScore>().Add(new ReviewScore
+                {
+                    EvaluationId = evaluation.EvaluationId,
+                    ReviewId = tlReview.ReviewId,
+                    ReviewerId = teamLeadUserId,
+                    PersonalGoalId = goalScore.PersonalGoalId,
+                    ScoreValue = goalScore.ScoreValue,
+                    Comment = goalScore.Comment,
+                    CreatedAt = now
+                });
+            }
+
+            var averageScore = Math.Round(totalScore / dto.GoalScores.Count, 2);
+
             _context.Set<ReviewScore>().Add(new ReviewScore
             {
                 EvaluationId = evaluation.EvaluationId,
                 ReviewId = tlReview.ReviewId,
                 ReviewerId = teamLeadUserId,
                 PersonalGoalId = null,
-                ScoreValue = overallScore,
+                ScoreValue = averageScore,
                 Comment = normalizedComment,
                 CreatedAt = now
             });
 
             tlReview.Status = REVIEW_STATUS_COMPLETED;
-            tlReview.OverallScore = overallScore;
+            tlReview.OverallScore = averageScore;
             tlReview.OverallComment = normalizedComment;
             tlReview.SubmittedAt = now;
 
@@ -2610,8 +2694,8 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 ReviewId = tlReview.ReviewId,
                 ActorUserId = teamLeadUserId,
                 ActorRole = "TL",
-                Action = "TlSubmittedOverallAndAssignedPeers",
-                Comment = normalizedComment,
+                Action = "TlSubmittedGoalScoresAndAssignedPeers",
+                Comment = normalizedComment ?? $"Submitted per-goal TL scores for {dto.GoalScores.Count} goal(s). Average: {averageScore:F2}",
                 FromStatus = oldStatus,
                 ToStatus = evaluation.Status,
                 CreatedAt = now
@@ -2630,7 +2714,8 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 AfterJson = System.Text.Json.JsonSerializer.Serialize(new
                 {
                     Status = evaluation.Status,
-                    OverallScore = overallScore,
+                    OverallScore = averageScore,
+                    GoalScoreCount = dto.GoalScores.Count,
                     PeerUserId1 = peerUserId1,
                     PeerUserId2 = peerUserId2
                 }),
@@ -3166,16 +3251,33 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
         // Calculate overall score if not already set
         if (!evaluation.OverallScore.HasValue || evaluation.OverallScore.Value == 0)
         {
-            var allReviewScores = evaluation.Reviews.SelectMany(r => r.ReviewScores).ToList();
-            if (allReviewScores.Any())
-                evaluation.OverallScore = Math.Round(allReviewScores.Average(rs => rs.ScoreValue) * 10m, 2);
+            var perGoalScores = evaluation.Reviews
+                .SelectMany(r => r.ReviewScores)
+                .Where(rs => rs.PersonalGoalId != null)
+                .GroupBy(rs => rs.PersonalGoalId)
+                .Select(g => g.Average(rs => rs.ScoreValue))
+                .ToList();
+
+            if (perGoalScores.Any())
+                evaluation.OverallScore = Math.Round(perGoalScores.Average() * 10m, 2);
             else
             {
-                var allReviewItems = evaluation.Reviews.SelectMany(r => r.ReviewItems).ToList();
-                if (allReviewItems.Any())
-                    evaluation.OverallScore = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                var overallScores = evaluation.Reviews
+                    .SelectMany(r => r.ReviewScores)
+                    .Where(rs => rs.PersonalGoalId == null)
+                    .Select(rs => rs.ScoreValue)
+                    .ToList();
+
+                if (overallScores.Any())
+                    evaluation.OverallScore = Math.Round(overallScores.Average() * 10m, 2);
                 else
-                    evaluation.OverallScore = PROMOTION_THRESHOLD;
+                {
+                    var allReviewItems = evaluation.Reviews.SelectMany(r => r.ReviewItems).ToList();
+                    if (allReviewItems.Any())
+                        evaluation.OverallScore = Math.Round(allReviewItems.Average(ri => ri.RatingValue), 2);
+                    else
+                        evaluation.OverallScore = PROMOTION_THRESHOLD;
+                }
             }
         }
 

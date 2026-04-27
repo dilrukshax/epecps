@@ -4,6 +4,7 @@ import { MyGoalsComponent } from './components/my-goals/my-goals.component';
 import { HrReportsComponent } from './components/hr-reports/hr-reports.component';
 import { HrPipCasesComponent } from './components/hr-pip-cases/hr-pip-cases.component';
 import { RmAssignGoalsComponent } from './components/rm-assign-goals/rm-assign-goals.component';
+import { RmAssignedGoalSetDetailComponent } from './components/rm-assigned-goal-set-detail/rm-assigned-goal-set-detail.component';
 import { AuthGuard } from '../core/auth/auth.guard';
 import { RoleGuard } from '../core/auth/role.guard';
 
@@ -22,6 +23,12 @@ const routes: Routes = [
         component: MyGoalsComponent
       }
     ]
+  },
+  {
+    path: 'rm-assign-goals/history/:employeeUserId/:goalSetId',
+    component: RmAssignedGoalSetDetailComponent,
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: ['RM', 'Admin', 'SuperAdmin'] }
   },
   {
     path: 'rm-assign-goals',

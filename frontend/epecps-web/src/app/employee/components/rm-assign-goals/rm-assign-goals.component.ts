@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import {
   RmGoalAssignmentService,
   GoalLibraryItemDto,
@@ -52,17 +52,29 @@ export class RmAssignGoalsComponent implements OnInit {
   // History tab
   assignments: GoalAssignmentListDto[] = [];
   filteredAssignments: GoalAssignmentListDto[] = [];
+  groupedAssignments: AssignmentHistoryGroup[] = [];
+  filteredGroupedAssignments: AssignmentHistoryGroup[] = [];
   assignmentSearchQuery = '';
 
   constructor(
     private rmService: RmGoalAssignmentService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
+    const requestedTab = this.route.snapshot.queryParamMap.get('tab');
+    if (requestedTab === 'history') {
+      this.activeTab = 'history';
+    }
+
     this.calculateGoalPeriod();
     this.loadEmployees();
     this.loadGoalLibrary();
+
+    if (this.activeTab === 'history') {
+      this.loadAssignments();
+    }
   }
 
   // ===========================
@@ -303,6 +315,8 @@ export class RmAssignGoalsComponent implements OnInit {
       next: (assignments) => {
         this.assignments = assignments;
         this.filteredAssignments = assignments;
+        this.groupedAssignments = this.buildAssignmentGroups(assignments);
+        this.filteredGroupedAssignments = this.groupedAssignments;
         this.loading = false;
       },
       error: (err) => {
@@ -320,6 +334,62 @@ export class RmAssignGoalsComponent implements OnInit {
       a.title.toLowerCase().includes(query) ||
       a.categoryName.toLowerCase().includes(query)
     );
+    this.filteredGroupedAssignments = this.groupedAssignments.filter(group => {
+      const searchableGoals = group.goals.some(goal =>
+        goal.title.toLowerCase().includes(query) ||
+        goal.categoryName.toLowerCase().includes(query)
+      );
+
+      return !query ||
+        group.employeeName.toLowerCase().includes(query) ||
+        group.employeeEmail.toLowerCase().includes(query) ||
+        group.cycleLabel.toLowerCase().includes(query) ||
+        searchableGoals;
+    });
+  }
+
+  openAssignmentGroup(group: AssignmentHistoryGroup): void {
+    this.router.navigate([
+      '/employee/rm-assign-goals/history',
+      group.employeeUserId,
+      group.goalSetId
+    ]);
+  }
+
+  private buildAssignmentGroups(assignments: GoalAssignmentListDto[]): AssignmentHistoryGroup[] {
+    const grouped = new Map<string, AssignmentHistoryGroup>();
+
+    for (const assignment of assignments) {
+      const key = `${assignment.employeeUserId}-${assignment.goalSetId}`;
+      const existing = grouped.get(key);
+
+      if (existing) {
+        existing.goals.push(assignment);
+        if (new Date(assignment.createdAt) > new Date(existing.createdAt)) {
+          existing.createdAt = assignment.createdAt;
+        }
+        continue;
+      }
+
+      grouped.set(key, {
+        goalSetId: assignment.goalSetId,
+        employeeUserId: assignment.employeeUserId,
+        employeeName: assignment.employeeName,
+        employeeEmail: assignment.employeeEmail,
+        cycleLabel: `${new Date(assignment.startDate).getFullYear()} Evaluation Cycle`,
+        startDate: assignment.startDate,
+        dueDate: assignment.dueDate,
+        createdAt: assignment.createdAt,
+        goals: [assignment]
+      });
+    }
+
+    return Array.from(grouped.values())
+      .map(group => ({
+        ...group,
+        goals: [...group.goals].sort((a, b) => a.title.localeCompare(b.title))
+      }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   // ===========================
@@ -334,4 +404,16 @@ export class RmAssignGoalsComponent implements OnInit {
       this.router.navigate(['/dashboard']);
     }
   }
+}
+
+interface AssignmentHistoryGroup {
+  goalSetId: string;
+  employeeUserId: number;
+  employeeName: string;
+  employeeEmail: string;
+  cycleLabel: string;
+  startDate: string;
+  dueDate: string;
+  createdAt: string;
+  goals: GoalAssignmentListDto[];
 }
