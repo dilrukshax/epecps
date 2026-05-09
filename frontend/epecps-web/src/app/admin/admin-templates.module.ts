@@ -15,6 +15,9 @@ import { GoalLibraryComponent } from './components/goal-library/goal-library.com
 import { SharedModule } from '../shared/shared.module';
 import { AuthGuard } from '../core/auth/auth.guard';
 import { RoleGuard } from '../core/auth/role.guard';
+import { Departments } from './components/departments/departments';
+import { Projects } from './components/projects/projects';
+import { Users } from './components/users/users';
 
 const routes: Routes = [
   {
@@ -31,9 +34,21 @@ const routes: Routes = [
   },
   {
     path: 'users',
-    component: UserManagementComponent,
+    component: Users,
     canActivate: [AuthGuard, RoleGuard],
-    data: { roles: ['SuperAdmin'] }
+    data: { roles: ['Admin', 'SuperAdmin'] }
+  },
+  {
+    path: 'departments',
+    component: Departments,
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: ['Admin', 'SuperAdmin'] }
+  },
+  {
+    path: 'projects',
+    component: Projects,
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: ['Admin', 'SuperAdmin'] }
   },
   {
     path: ':id',
@@ -42,6 +57,7 @@ const routes: Routes = [
     data: { roles: ['Admin', 'SuperAdmin'] }
   }
 ];
+
 
 @NgModule({
   declarations: [
@@ -53,7 +69,10 @@ const routes: Routes = [
     CategoryFormDialogComponent,
     ItemFormDialogComponent,
     UserManagementComponent,
-    GoalLibraryComponent
+    GoalLibraryComponent,
+    Departments,
+    Projects,
+    Users
   ],
   imports: [
     CommonModule,

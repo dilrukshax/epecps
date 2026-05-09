@@ -1156,7 +1156,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .Where(rs => reviewIds.Contains(rs.ReviewId)
                     && rs.PersonalGoalId == null
                     && (rs.Review.Status == "Completed" || rs.Review.Status == "Approved"))
-                .Select(rs => rs.ScoreValue)
+                .Select(rs => rs.ScoreValue > 10m ? rs.ScoreValue / 10m : rs.ScoreValue)
                 .ToListAsync(cancellationToken);
 
             if (overallScores.Any())
@@ -2017,7 +2017,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .SelectMany(r => r.ReviewScores)
                 .Where(rs => rs.PersonalGoalId != null)
                 .GroupBy(rs => rs.PersonalGoalId)
-                .Select(g => g.Average(rs => rs.ScoreValue))
+                .Select(g => g.Average(rs => rs.ScoreValue > 10m ? rs.ScoreValue / 10m : rs.ScoreValue))
                 .ToList();
 
             if (perGoalScores.Any())
@@ -2027,7 +2027,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .Where(r => r.ReviewScores != null)
                 .SelectMany(r => r.ReviewScores)
                 .Where(rs => rs.PersonalGoalId == null)
-                .Select(rs => rs.ScoreValue)
+                .Select(rs => rs.ScoreValue > 10m ? rs.ScoreValue / 10m : rs.ScoreValue)
                 .ToList();
 
             if (overallScores.Any())
@@ -2100,7 +2100,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     .SelectMany(r => r.ReviewScores)
                     .Where(rs => rs.PersonalGoalId != null)
                     .GroupBy(rs => rs.PersonalGoalId)
-                    .Select(g => g.Average(rs => rs.ScoreValue))
+                    .Select(g => g.Average(rs => rs.ScoreValue > 10m ? rs.ScoreValue / 10m : rs.ScoreValue))
                     .ToList();
 
                 if (perGoalScores.Any())
@@ -2113,7 +2113,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                         .Where(r => r.ReviewScores != null)
                         .SelectMany(r => r.ReviewScores)
                         .Where(rs => rs.PersonalGoalId == null)
-                        .Select(rs => rs.ScoreValue)
+                        .Select(rs => rs.ScoreValue > 10m ? rs.ScoreValue / 10m : rs.ScoreValue)
                         .ToList();
 
                     if (overallScores.Any())
@@ -2203,7 +2203,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                     .SelectMany(r => r.ReviewScores)
                     .Where(rs => rs.PersonalGoalId != null)
                     .GroupBy(rs => rs.PersonalGoalId)
-                    .Select(g => g.Average(rs => rs.ScoreValue))
+                    .Select(g => g.Average(rs => rs.ScoreValue > 10m ? rs.ScoreValue / 10m : rs.ScoreValue))
                     .ToList();
 
                 if (perGoalScores.Any())
@@ -2216,7 +2216,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                         .Where(r => r.ReviewScores != null)
                         .SelectMany(r => r.ReviewScores)
                         .Where(rs => rs.PersonalGoalId == null)
-                        .Select(rs => rs.ScoreValue)
+                        .Select(rs => rs.ScoreValue > 10m ? rs.ScoreValue / 10m : rs.ScoreValue)
                         .ToList();
 
                     if (overallScores.Any())
@@ -3255,7 +3255,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 .SelectMany(r => r.ReviewScores)
                 .Where(rs => rs.PersonalGoalId != null)
                 .GroupBy(rs => rs.PersonalGoalId)
-                .Select(g => g.Average(rs => rs.ScoreValue))
+                .Select(g => g.Average(rs => rs.ScoreValue > 10m ? rs.ScoreValue / 10m : rs.ScoreValue))
                 .ToList();
 
             if (perGoalScores.Any())
@@ -3265,7 +3265,7 @@ public class EvaluationWorkflowService : IEvaluationWorkflowService
                 var overallScores = evaluation.Reviews
                     .SelectMany(r => r.ReviewScores)
                     .Where(rs => rs.PersonalGoalId == null)
-                    .Select(rs => rs.ScoreValue)
+                    .Select(rs => rs.ScoreValue > 10m ? rs.ScoreValue / 10m : rs.ScoreValue)
                     .ToList();
 
                 if (overallScores.Any())

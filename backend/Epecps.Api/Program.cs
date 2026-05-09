@@ -59,6 +59,11 @@ services.AddScoped<IUserProjectImportService, UserProjectImportService>();
 services.AddScoped<ISuperAdminBootstrapService, SuperAdminBootstrapService>();
 services.AddScoped<IWorkflowV2Service, WorkflowV2Service>();
 
+// Admin Services
+services.AddScoped<IAdminDepartmentService, AdminDepartmentService>();
+services.AddScoped<IAdminProjectService, AdminProjectService>();
+services.AddScoped<IAdminUserService, AdminUserService>();
+
 var allowedOrigins = config.GetSection("Cors:AllowedOrigins").Get<string[]>();
 if (allowedOrigins is null || allowedOrigins.Length == 0)
 {

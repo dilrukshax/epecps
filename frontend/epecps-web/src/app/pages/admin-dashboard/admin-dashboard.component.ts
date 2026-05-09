@@ -28,24 +28,31 @@ export class AdminDashboardComponent implements OnInit {
       color: 'blue'
     },
     {
-      title: 'User & Role Management',
-      description: 'Manage users and assign roles',
+      title: 'User Management',
+      description: 'Manage users, assign roles, and reporting managers',
       icon: 'users',
       route: '/admin/templates/users',
       color: 'green'
+    },
+    {
+      title: 'Department Management',
+      description: 'Manage departments and assign HODs',
+      icon: 'office',
+      route: '/admin/templates/departments',
+      color: 'purple'
+    },
+    {
+      title: 'Project Management',
+      description: 'Manage projects and assign Tech Leads',
+      icon: 'briefcase',
+      route: '/admin/templates/projects',
+      color: 'blue'
     },
     {
       title: 'Score Templates',
       description: 'Manage underlying score templates and categories',
       icon: 'list',
       route: '/admin/templates/templates',
-      color: 'purple'
-    },
-    {
-      title: 'System Settings',
-      description: 'Configure system-wide settings',
-      icon: 'settings',
-      route: '#',
       color: 'gray'
     }
   ];

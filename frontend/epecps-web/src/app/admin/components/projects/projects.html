@@ -1,0 +1,168 @@
+<div class="container mx-auto p-4 max-w-7xl">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Project Management</h1>
+    <button (click)="openCreateForm()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded shadow">
+      <i class="fa fa-plus mr-2"></i> Add Project
+    </button>
+  </div>
+
+  <div *ngIf="error" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+    <span class="block sm:inline">{{ error }}</span>
+    <span (click)="clearMessages()" class="absolute top-0 bottom-0 right-0 px-4 py-3 cursor-pointer">
+      <i class="fa fa-times"></i>
+    </span>
+  </div>
+
+  <div *ngIf="successMessage" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
+    <span class="block sm:inline">{{ successMessage }}</span>
+    <span (click)="clearMessages()" class="absolute top-0 bottom-0 right-0 px-4 py-3 cursor-pointer">
+      <i class="fa fa-times"></i>
+    </span>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading" class="flex justify-center py-8">
+    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+  </div>
+
+  <!-- Projects Table -->
+  <div *ngIf="!loading" class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project Manager</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisor</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tech Leads (TLs)</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <tr *ngFor="let proj of projects">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ proj.projectCode }}</td>
+            <td class="px-6 py-4 text-sm text-gray-500">{{ proj.projectName }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <span [ngClass]="{
+                'bg-green-100 text-green-800': proj.status === 'Active',
+                'bg-gray-100 text-gray-800': proj.status === 'Completed',
+                'bg-yellow-100 text-yellow-800': proj.status === 'On Hold',
+                'bg-red-100 text-red-800': proj.status === 'Cancelled'
+              }" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
+                {{ proj.status }}
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ proj.projectManagerName || '-' }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ proj.supervisorName || '-' }}</td>
+            <td class="px-6 py-4 text-sm text-gray-500">
+              <div class="flex flex-wrap gap-2 mb-2">
+                <span *ngFor="let tl of proj.techLeads" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  {{ tl.fullName }}
+                  <button (click)="removeTl(proj.projectId, tl.userId)" class="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-blue-400 hover:bg-blue-200 hover:text-blue-500 focus:outline-none">
+                    <span class="sr-only">Remove</span>
+                    <i class="fa fa-times text-[10px]"></i>
+                  </button>
+                </span>
+              </div>
+              <button (click)="openAssignTlForm(proj.projectId)" class="text-xs text-blue-600 hover:text-blue-800">
+                <i class="fa fa-plus"></i> Assign TL
+              </button>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <button (click)="openEditForm(proj)" class="text-indigo-600 hover:text-indigo-900 mr-3">Edit</button>
+              <button (click)="deleteProject(proj.projectId)" class="text-red-600 hover:text-red-900">Delete</button>
+            </td>
+          </tr>
+          <tr *ngIf="projects.length === 0">
+            <td colspan="7" class="px-6 py-8 text-center text-gray-500">No projects found.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Project Form Modal -->
+<div *ngIf="showForm" class="fixed z-10 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" (click)="closeForm()"></div>
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+    <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-xl sm:w-full">
+      <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{{ editingProjectId ? 'Edit Project' : 'Add Project' }}</h3>
+        <form (ngSubmit)="saveProject()" #projForm="ngForm">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="mb-4">
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="projectCode">Project Code *</label>
+              <input type="text" id="projectCode" name="projectCode" [(ngModel)]="formData.projectCode" required class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="mb-4">
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="status">Status</label>
+              <select id="status" name="status" [(ngModel)]="formData.status" required class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                <option *ngFor="let s of statusOptions" [value]="s">{{ s }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="projectName">Project Name *</label>
+            <input type="text" id="projectName" name="projectName" [(ngModel)]="formData.projectName" required class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+          </div>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="pmUser">Project Manager</label>
+            <select id="pmUser" name="pmUser" [(ngModel)]="formData.projectManagerUserId" class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+              <option [ngValue]="undefined">None</option>
+              <option *ngFor="let user of users" [ngValue]="user.userId">{{ user.fullName }}</option>
+            </select>
+          </div>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="superUser">Supervisor</label>
+            <select id="superUser" name="superUser" [(ngModel)]="formData.supervisorUserId" class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+              <option [ngValue]="undefined">None</option>
+              <option *ngFor="let user of users" [ngValue]="user.userId">{{ user.fullName }}</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+        <button type="button" (click)="saveProject()" [disabled]="!formData.projectCode || !formData.projectName" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+          Save
+        </button>
+        <button type="button" (click)="closeForm()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Assign TL Modal -->
+<div *ngIf="showTlForm" class="fixed z-10 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" (click)="closeTlForm()"></div>
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+    <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+      <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Assign Tech Lead</h3>
+        <form>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="tlUser">Select User</label>
+            <select id="tlUser" name="tlUser" [(ngModel)]="tlFormData.userId" class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+              <option [ngValue]="0" disabled>Select a user...</option>
+              <option *ngFor="let user of users" [ngValue]="user.userId">{{ user.fullName }} ({{ user.email }})</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+        <button type="button" (click)="assignTl()" [disabled]="!tlFormData.userId" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+          Assign
+        </button>
+        <button type="button" (click)="closeTlForm()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
