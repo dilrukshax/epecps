@@ -8,7 +8,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3.4-06B6D4?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-A comprehensive employee performance evaluation system built with .NET 8 and Angular 20, featuring Azure AD authentication, goal tracking, multi-level reviews, and reporting capabilities.
+A .NET 8 and Angular 20 employee performance evaluation system featuring Azure AD authentication, goal tracking, multi-level reviews, and reporting capabilities.
 
 ![EPECPS System Dashboard](docs/img/Epecpsimg1.jpeg)
 
@@ -36,7 +36,7 @@ A comprehensive employee performance evaluation system built with .NET 8 and Ang
 
 ## Overview
 
-EPECPS is an enterprise-grade performance evaluation system that streamlines the employee review process with features like goal setting, peer reviews, multi-level approvals, and comprehensive reporting. The system integrates with Microsoft Azure AD for secure authentication and authorization.
+EPECPS is a performance evaluation system that streamlines the employee review process with features like goal setting, peer reviews, multi-level approvals, and reporting. The system integrates with Microsoft Azure AD for authentication and authorization.
 
 ## Features
 
@@ -47,7 +47,7 @@ EPECPS is an enterprise-grade performance evaluation system that streamlines the
 - **Dashboard & Analytics**: Real-time statistics and performance insights
 - **Email Notifications**: Automated notifications for workflow events
 - **Comprehensive Reporting**: Excel export with advanced filtering capabilities
-- **Azure AD Integration**: Enterprise-grade authentication and role-based access control
+- **Azure AD Integration**: Azure AD authentication and role-based access control
 
 ### Advanced Features
 - Score templates with customizable categories and items
@@ -851,7 +851,7 @@ For issues and questions:
 
 ## License
 
-[Specify your license here - MIT, Apache 2.0, etc.]
+This project is licensed under the MIT License — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
@@ -862,6 +862,10 @@ For issues and questions:
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: January 2025  
-**Maintained By**: Your Team Name
+## Author
+
+Dilan Dilruksha  
+Software Engineer | Backend & Full-Stack Development  
+Portfolio: https://dilandilruksha.dev  
+LinkedIn: https://www.linkedin.com/in/dilan-dilruksha  
+GitHub: https://github.com/dilrukshax
