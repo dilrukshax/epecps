@@ -102,31 +102,31 @@ Before you begin, ensure you have the following installed:
 
 ```
 epecps/
-??? backend/
-?   ??? Epecps.Api/              # ASP.NET Core Web API
-?   ?   ??? Controllers/         # API Controllers
-?   ?   ??? Program.cs           # Application entry point
-?   ?   ??? appsettings.json     # Configuration file
-?   ??? Epecps.Application/      # Application layer (DTOs, Interfaces)
-?   ?   ??? DTOs/                # Data Transfer Objects
-?   ?   ??? Interfaces/          # Service interfaces
-?   ??? Epecps.Domain/           # Domain layer (Entities)
-?   ?   ??? Entities/            # Domain models
-?   ??? Epecps.Infrastructure/   # Infrastructure layer (Data, Services)
-?       ??? Persistence/         # EF Core DbContext
-?       ??? Migrations/          # Database migrations
-?       ??? Services/            # Business logic services
-??? frontend/
-    ??? epecps-web/              # Angular application
-        ??? src/
-        ?   ??? app/             # Application components
-        ?   ?   ??? core/        # Core modules (auth, guards)
-        ?   ?   ??? services/    # API services
-        ?   ?   ??? models/      # TypeScript models
-        ?   ?   ??? employee/    # Employee feature module
-        ?   ?   ??? pages/       # Page components
-        ?   ??? environments/    # Environment configurations
-        ??? package.json         # npm dependencies
+├── backend/
+│   ├── Epecps.Api/              # ASP.NET Core Web API
+│   │   ├── Controllers/         # API Controllers
+│   │   ├── Program.cs           # Application entry point
+│   │   └── appsettings.json     # Configuration file
+│   ├── Epecps.Application/      # Application layer (DTOs, Interfaces)
+│   │   ├── DTOs/                # Data Transfer Objects
+│   │   └── Interfaces/          # Service interfaces
+│   ├── Epecps.Domain/           # Domain layer (Entities)
+│   │   └── Entities/            # Domain models
+│   └── Epecps.Infrastructure/   # Infrastructure layer (Data, Services)
+│       ├── Persistence/         # EF Core DbContext
+│       ├── Migrations/          # Database migrations
+│       └── Services/            # Business logic services
+└── frontend/
+    └── epecps-web/              # Angular application
+        ├── src/
+        │   ├── app/             # Application components
+        │   │   ├── core/        # Core modules (auth, guards)
+        │   │   ├── services/    # API services
+        │   │   ├── models/      # TypeScript models
+        │   │   ├── employee/    # Employee feature module
+        │   │   └── pages/       # Page components
+        │   └── environments/    # Environment configurations
+        └── package.json         # npm dependencies
 ```
 
 ## Getting Started
@@ -858,7 +858,6 @@ This project is licensed under the MIT License — see [LICENSE](LICENSE).
 - Microsoft Identity Platform
 - Angular Team
 - Entity Framework Core Team
-- All contributors
 
 ---
 
